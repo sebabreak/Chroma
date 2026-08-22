@@ -18,7 +18,7 @@
 //  sola quando il telefono è online), ma pulisce la cache vecchia invece
 //  di lasciarla lì a occupare spazio inutilmente.
 // ══════════════════════════════════════════════════════════════════
-const CACHE_NAME = 'sovrainterpretazione-v2';
+const CACHE_NAME = 'sovrainterpretazione-v3';
 
 const ASSETS = [
   './',
@@ -59,7 +59,14 @@ self.addEventListener('fetch', (event) => {
   if (req.method !== 'GET' || new URL(req.url).origin !== location.origin) return;
 
   event.respondWith(
-    fetch(req)
+    // { cache: 'no-store' }: ignora completamente la cache HTTP del browser
+    // e va sempre in rete a chiedere l'ultima versione. Senza questo, anche
+    // con la strategia "network-first" il browser potrebbe comunque
+    // rispondere con una copia già salvata nella sua cache interna (es.
+    // per via degli header Cache-Control di GitHub Pages) SENZA davvero
+    // ricontattare il server — facendo credere che il codice sia aggiornato
+    // quando in realtà gira ancora una versione precedente.
+    fetch(req, { cache: 'no-store' })
       .then(res => {
         caches.open(CACHE_NAME).then(cache => cache.put(req, res.clone()));
         return res;
