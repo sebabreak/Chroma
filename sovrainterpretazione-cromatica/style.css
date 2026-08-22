@@ -1,0 +1,367 @@
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300;1,400&display=swap');
+
+/* ══════════════════════════════════════════════════════════════════
+   SOVRAINTERPRETAZIONE CROMATICA — stili
+   Ogni blocco qui sotto corrisponde a un elemento con lo stesso id/
+   classe in index.html. La logica che li anima è in script.js.
+
+   MODIFICHE VISIVE PIÙ COMUNI:
+   - Sfocatura/intensità della nebulosa di colori    → #ambientCanvas (i colori/il movimento sono in script.js, updateAndDrawAmbient())
+   - Scurezza della vignettatura ai bordi            → #vignette
+   - Intensità della grana/rumore                    → #grain
+   - Colore/posizione del riquadro in alto a sinistra → #colorOverlay
+   - Aspetto dei quadratini di selezione colore      → #paletteSwatches, .swatch
+   - Dimensione del cerchio pulsante centrale       → #pulseCore
+   - Stile del testo di giudizio dell'AI            → #aiJudgment
+   - Stile della "traccia" che resta in alto dopo    → #aiTrace
+   - Spessore/posizione della striscia memoria       → #memoryStrip
+   ══════════════════════════════════════════════════════════════════ */
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-family: sans-serif;
+  color: white;
+  text-align: center;
+  cursor: crosshair;
+  overflow: hidden;
+  background-color: black;
+}
+
+/* la webcam non è mai visibile: serve solo come sorgente per il canvas in script.js */
+video { display: none; }
+
+/* ── NEBULOSA DI COLORI ─────────────────────────────────────────── */
+/* canvas su cui script.js (updateAndDrawAmbient, sezione 5) disegna
+   alcune macchie di colore morbide che inseguono la palette rilevata
+   dalla webcam e si muovono lentamente. Il blur e l'opacità qui sotto
+   sono ciò che le trasforma da cerchi netti a una nebulosa soffusa:
+   aumenta "blur" per macchie più diffuse, "opacity" per renderle più/meno presenti. */
+#ambientCanvas {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  filter: blur(80px) saturate(1.4);
+  opacity: 0.55;
+}
+
+/* ── VIGNETTATURA ───────────────────────────────────────────────── */
+/* scurisce i bordi dello schermo: dà profondità e porta lo sguardo verso il centro */
+#vignette {
+  position: fixed;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  background: radial-gradient(ellipse at 50% 55%, rgba(0,0,0,0) 35%, rgba(0,0,0,0.55) 100%);
+}
+
+/* ── GRANA ──────────────────────────────────────────────────────── */
+/* rumore statico molto leggero sopra a tutto: dà una consistenza da
+   pellicola invece del piatto digitale, in coerenza con le scanline sotto */
+#grain {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  pointer-events: none;
+  opacity: 0.05;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='140' height='140'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+  background-repeat: repeat;
+}
+
+/* ── CUORE PULSANTE ─────────────────────────────────────────────── */
+/* cambia colore/dimensione in base al colore rilevato e al "battito" (vedi loop() in script.js).
+   Il border-radius viene ridefinito ad ogni frame da script.js per dargli una
+   forma organica/amebica invece di un cerchio perfetto e immobile: la
+   transizione qui sotto ammorbidisce il passaggio da una forma all'altra. */
+#pulseCore {
+  position: absolute;
+  top: 38%; /* nella metà superiore dello schermo, sopra al testo del giudizio (#aiJudgment, più sotto) */
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 180px;
+  height: 180px;
+  border-radius: 50%;
+  background-color: black;
+  transition: background-color 0.2s ease, border-radius 0.35s ease-in-out;
+  box-shadow: 0 0 40px rgba(255,255,255,0.2);
+  z-index: 6;
+  pointer-events: none;
+}
+
+/* ── RIQUADRO COLORE DOMINANTE ──────────────────────────────────── */
+#colorOverlay {
+  position: absolute;
+  top: 10%;
+  left: 10%;
+  width: 120px;
+  height: 120px;
+  border-radius: 6px;
+  border: 2px solid rgba(255, 115, 0, 0.932);
+  background: black;
+  opacity: 1;
+  pointer-events: none;
+  z-index: 5;
+  transition: border-color 0.3s;
+}
+/* selezione manuale attiva (palette o punto sull'anteprima): bordo bianco invece che arancione */
+#colorOverlay.manual { border-color: rgba(255,255,255,0.95); }
+
+/* ── SELEZIONE MANUALE DEL COLORE ──────────────────────────────── */
+/* quadratini con i colori della palette rilevata (aggiornati in script.js,
+   sezione 11, updatePaletteSwatches()): cliccane uno per "bloccare" quel
+   colore come quello su cui il sistema/l'AI si concentra, al posto della
+   scelta automatica. L'ultimo quadratino (AUTO) annulla la selezione. */
+#paletteSwatches {
+  position: fixed;
+  top: calc(10% + 132px);
+  left: 10%;
+  z-index: 15;
+  display: flex;
+  gap: 6px;
+}
+.swatch {
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
+  border: 1px solid rgba(255,255,255,0.25);
+  cursor: pointer;
+  background: #1a1a1a;
+  transition: border-color 0.2s, transform 0.15s;
+}
+.swatch:hover { transform: scale(1.15); border-color: rgba(255,255,255,0.6); }
+.swatch.selected { border-color: #fff; border-width: 2px; box-shadow: 0 0 8px rgba(255,255,255,0.5); }
+.swatch.auto {
+  background: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Courier New', monospace;
+  font-size: 6px;
+  letter-spacing: 0.03em;
+  color: rgba(255,255,255,0.4);
+  border-style: dashed;
+}
+.swatch.auto.selected { border-style: solid; color: #fff; box-shadow: none; }
+
+/* ── ANTEPRIMA PIXELATA ─────────────────────────────────────────── */
+/* cliccabile: un clic su un punto lo seleziona come colore da seguire (script.js, sezione 11) */
+#preview {
+  position: fixed;
+  bottom: 100px;
+  right: 20px;
+  width: 160px;
+  height: 120px;
+  border: 1px solid rgba(255, 115, 0, 0.5);
+  border-radius: 4px;
+  opacity: 0.6;
+  cursor: crosshair;
+  image-rendering: pixelated;
+  z-index: 15;
+  transition: border-color 0.3s, opacity 0.3s;
+}
+#preview.manual { border-color: rgba(255,255,255,0.9); opacity: 0.85; }
+
+/* ── SLIDER RISOLUZIONE ─────────────────────────────────────────── */
+/* controlla quanti pixel vengono campionati per l'analisi colore (più a destra = più preciso ma più lento) */
+#resolutionSlider {
+  position: fixed;
+  top: 50%;
+  right: 20px;
+  transform: translateY(-50%) rotate(270deg);
+  width: 120px;
+  height: 3px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: rgba(255,255,255,0.15);
+  border-radius: 8px;
+  cursor: pointer;
+  z-index: 999;
+  outline: none;
+}
+#resolutionSlider::-webkit-slider-runnable-track {
+  height: 100%;
+  border-radius: 8px;
+  background: var(--track-color, rgba(255,255,255,0.2));
+}
+#resolutionSlider::-moz-range-track {
+  height: 100%;
+  border-radius: 8px;
+  background: var(--track-color, rgba(255,255,255,0.2));
+}
+#resolutionSlider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 12px; height: 12px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.7);
+  cursor: pointer;
+  margin-top: -4px;
+}
+#resolutionSlider::-moz-range-thumb {
+  width: 12px; height: 12px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.7);
+  border: none;
+  cursor: pointer;
+}
+
+/* ── BOTTONI ─────────────────────────────────────────────────────── */
+#muteBtn, #camBtn, #judgeBtn {
+  position: fixed;
+  z-index: 999;
+  background: transparent;
+  border: 1px solid rgba(255,255,255,0.2);
+  color: rgba(255,255,255,0.5);
+  font-family: 'Courier New', monospace;
+  font-size: 9px;
+  letter-spacing: 0.18em;
+  padding: 7px 14px;
+  cursor: pointer;
+  transition: all 0.25s;
+}
+#muteBtn:hover, #camBtn:hover, #judgeBtn:hover {
+  border-color: rgba(255,255,255,0.6);
+  color: #fff;
+}
+#muteBtn  { bottom: 20px; right: 20px; }
+#camBtn   { bottom: 20px; right: 130px; }
+#judgeBtn { bottom: 20px; left: 20px; }
+
+/* ── GIUDIZIO AI (OLLAMA) — grande, al centro dello schermo ───────── */
+/* mostrato/animato da showJudgment() in script.js */
+#aiJudgment {
+  position: fixed;
+  top: 64%; /* nella metà inferiore dello schermo, sotto al cerchio pulsante (#pulseCore, più sopra); la "traccia" in alto dopo non è toccata da questo valore */
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-family: 'Cormorant Garamond', serif;
+  /* la dimensione del testo si restringe da sola per i giudizi più lunghi
+     (calcolato in script.js, showJudgment(), tramite la variabile CSS
+     --judgment-scale impostata sull'elemento stesso). Qui sotto ci sono
+     solo i limiti: dimensione minima, dimensione legata alla larghezza
+     schermo, dimensione massima — esattamente come prima, ma moltiplicati
+     per quel fattore quando il testo è lungo. */
+  font-size: clamp(calc(1.3rem * var(--judgment-scale, 1)), calc(4.2vw * var(--judgment-scale, 1)), calc(3.6rem * var(--judgment-scale, 1)));
+  font-weight: 300;
+  font-style: italic;
+  text-align: center;
+  max-width: 75vw;
+  line-height: 1.5;
+  letter-spacing: 0.02em;
+  z-index: 25;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.5s, top 1.4s ease;
+  padding: 2.5rem 3rem;
+  background: rgba(0,0,0,0.78);
+  border-top: 1px solid rgba(255,255,255,0.1);
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+  /* rete di sicurezza: anche nel caso (raro, con la riduzione automatica
+     qui sopra) di un giudizio eccezionalmente lungo, il riquadro non
+     supera mai il 60% dell'altezza dello schermo — l'eventuale testo in
+     eccesso sfuma dolcemente invece di uscire bruscamente dallo schermo */
+  max-height: 60vh;
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(to bottom, black 82%, transparent 100%);
+  mask-image: linear-gradient(to bottom, black 82%, transparent 100%);
+}
+
+/* ── TRACCIA IN ALTO ─────────────────────────────────────────────── */
+/* testo residuo che resta visibile per un po' dopo ogni giudizio AI */
+#aiTrace {
+  position: fixed;
+  top: 10vh;
+  left: 50%;
+  transform: translateX(-50%);
+  font-family: 'Cormorant Garamond', serif;
+  font-size: clamp(0.9rem, 1.8vw, 1.4rem);
+  font-weight: 300;
+  font-style: italic;
+  text-align: center;
+  max-width: 70vw;
+  line-height: 1.9;
+  letter-spacing: 0.04em;
+  z-index: 22;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 1s;
+  padding: 0.8rem 2rem;
+  border-left: 2px solid rgba(255,255,255,0.15);
+}
+
+/* ── STRISCIA MEMORIA ────────────────────────────────────────────── */
+/* fila di segmenti colorati in fondo allo schermo: uno per ogni colore recente in dominantHistory (script.js) */
+#memoryStrip {
+  position: fixed;
+  bottom: 0; left: 0;
+  width: 100%; height: 3px;
+  z-index: 15;
+  display: flex;
+  gap: 1px;
+  pointer-events: none;
+}
+.mem-seg {
+  flex: 1;
+  transition: background 1.5s ease;
+}
+
+/* ── HUD ─────────────────────────────────────────────────────────── */
+#hud {
+  position: fixed;
+  top: 20px; left: 20px;
+  z-index: 15;
+  font-family: 'Courier New', monospace;
+  font-size: 9px;
+  letter-spacing: 0.18em;
+  color: rgba(255,255,255,0.2);
+  line-height: 2;
+  pointer-events: none;
+}
+#hudState { color: rgba(255,255,255,0.4); }
+
+/* ── MESSAGGIO DI DEBUG ──────────────────────────────────────────── */
+/* piccola scritta rossa in basso, usata per errori (webcam, Ollama). Vedi showDebug() in script.js */
+#debugMsg {
+  position: fixed;
+  bottom: 55px; left: 50%;
+  transform: translateX(-50%);
+  font-family: monospace;
+  font-size: 9px;
+  color: rgba(255,100,100,0.7);
+  letter-spacing: 0.05em;
+  z-index: 100;
+  opacity: 0;
+  transition: opacity 0.5s;
+  max-width: 80vw;
+  text-align: center;
+  pointer-events: none;
+}
+
+/* ── SCANLINES ───────────────────────────────────────────────────── */
+/* leggerissime righe orizzontali sopra tutto, effetto "schermo vecchio" */
+body::before {
+  content: '';
+  position: fixed; inset: 0;
+  background: repeating-linear-gradient(0deg, transparent, transparent 3px, rgba(0,0,0,0.04) 3px, rgba(0,0,0,0.04) 4px);
+  pointer-events: none;
+  z-index: 50;
+}
+
+/* ── SPINNER ─────────────────────────────────────────────────────── */
+/* rotellina mostrata sul bottone GIUDICA mentre Ollama sta rispondendo */
+.spin {
+  display: inline-block;
+  width: 8px; height: 8px;
+  border: 1px solid rgba(255,255,255,0.3);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spinning 0.7s linear infinite;
+  vertical-align: middle;
+  margin-right: 6px;
+}
+@keyframes spinning { to { transform: rotate(360deg); } }

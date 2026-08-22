@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <!-- viewport mobile: senza questo il telefono renderizza la pagina come se
+       fosse un desktop rimpicciolito invece di adattarla allo schermo reale.
+       viewport-fit=cover estende lo sfondo sotto la "notch"/le barre di sistema. -->
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+  <title>Sovrainterpretazione Cromatica</title>
+  <link rel="stylesheet" href="style.css">
+
+  <!-- PWA: rende l'app installabile sulla schermata Home del telefono
+       (vedi manifest.json e sw.js, registrato in script.js sezione 1) -->
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#000000">
+  <link rel="icon" href="icons/icon-192.png">
+
+  <!-- iOS non legge granché del manifest: questi meta/servono a Safari per
+       installare l'app a schermo intero con la sua icona -->
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Sovrainterp.">
+  <meta name="mobile-web-app-capable" content="yes">
+</head>
+
+<!--
+  STRUTTURA DELLA PAGINA — ogni elemento qui sotto ha una controparte
+  in style.css (aspetto) e/o script.js (comportamento). Cerca l'id
+  (es. "aiJudgment") in quei due file per trovare rapidamente cosa
+  lo riguarda. La mappa completa delle sezioni di script.js è nelle
+  prime righe di quel file.
+-->
+<body>
+  <!-- nebulosa di colori: macchie sfocate che seguono la palette rilevata dalla webcam, vedi script.js sezione 5 -->
+  <canvas id="ambientCanvas"></canvas>
+  <!-- vignettatura statica: scurisce leggermente i bordi per dare profondità e concentrare lo sguardo al centro -->
+  <div id="vignette"></div>
+  <!-- grana sottile sopra tutto, per un effetto "pellicola" più organico delle sole scanline -->
+  <div id="grain"></div>
+
+  <!-- webcam nascosta: è solo la sorgente per il canvas, non è mai visibile a schermo -->
+  <video id="video" autoplay></video>
+
+  <!-- riquadro in alto a sinistra: mostra il colore dominante rilevato nella scena (o quello scelto manualmente qui sotto) -->
+  <div id="colorOverlay"></div>
+
+  <!-- selezione manuale del colore: 5 quadratini con i colori rilevati nella
+       scena (script.js, sezione 5/9) — clicca per scegliere quello su cui il
+       sistema/l'AI si concentra. L'ultimo (AUTO) annulla la scelta manuale. -->
+  <div id="paletteSwatches">
+    <div class="swatch" data-index="0"></div>
+    <div class="swatch" data-index="1"></div>
+    <div class="swatch" data-index="2"></div>
+    <div class="swatch" data-index="3"></div>
+    <div class="swatch" data-index="4"></div>
+    <div class="swatch auto" title="Torna alla scelta automatica">AUTO</div>
+  </div>
+
+  <!-- cerchio pulsante al centro: il "cuore" dell'installazione -->
+  <div id="pulseCore"></div>
+
+  <!-- giudizio dell'AI (WebLLM, in locale nel browser) — appare grande al centro dello schermo -->
+  <div id="aiJudgment"></div>
+
+  <!-- dopo il giudizio, il testo sale e resta come traccia leggera in alto -->
+  <div id="aiTrace"></div>
+
+  <!-- striscia in fondo allo schermo: memoria degli ultimi colori osservati -->
+  <div id="memoryStrip"></div>
+
+  <!-- HUD in alto a sinistra: contatori e stato del sistema -->
+  <div id="hud">
+    <div>OBS <span id="hudObs">000</span></div>
+    <div>GIUDIZI <span id="hudJudge">000</span></div>
+    <div id="hudState">INATTIVO</div>
+  </div>
+
+  <!-- controlli -->
+  <button id="muteBtn">AUDIO OFF</button>
+  <button id="camBtn">CAM OFF</button>
+  <button id="judgeBtn">▸ GIUDICA</button>
+
+  <!-- anteprima pixelata di ciò che la webcam sta "vedendo" a bassa risoluzione.
+       Cliccaci sopra un punto per selezionare manualmente il colore di quel punto
+       (segue quel punto in tempo reale, script.js sezione 11) -->
+  <canvas id="preview"></canvas>
+  <!-- controlla la risoluzione di campionamento colore (script.js, sezione 4).
+       min="1": un solo pixel, riconoscimento colore istantaneo ma "grezzo".
+       max="140": tetto tenuto volutamente non troppo alto per non appesantire il sistema. -->
+  <input type="range" id="resolutionSlider" min="1" max="140" value="80" step="1" orient="vertical">
+
+  <!-- messaggio di errore/debug (webcam non accessibile, AI locale non disponibile, ecc.) -->
+  <div id="debugMsg"></div>
+
+  <script src="script.js"></script>
+</body>
+</html>
