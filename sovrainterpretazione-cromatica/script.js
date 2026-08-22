@@ -9,7 +9,7 @@
 //  direttamente a una sezione:
 //
 //   1. ELEMENTI DOM ................ riferimenti agli elementi di index.html
-//   2. AUDIO ........................ sintesi sonora generata dal colore
+//   (2. AUDIO — rimossa: l'installazione è puramente visiva, niente più suono)
 //   3. STATO ........................ variabili che tengono traccia di colore/tempo/AI
 //   4. CANVAS BASSA RISOLUZIONE ..... pixelazione video + campionamento colore
 //   5. SFONDO ANIMATO E PARTICELLE .. nebulosa di colori rilevati + i puntini che seguono il mouse
@@ -18,7 +18,7 @@
 //   8. MEMORIA ...................... striscia dei colori recenti in fondo allo schermo
 //   9. LOOP PRINCIPALE .............. gira ad ogni frame: è il cuore del programma
 //  10. GIUDIZIO AI (OLLAMA) ......... chiamata al modello sul PC (via tunnel) + prompt
-//  11. CONTROLLI .................... bottoni mute / cam / giudica, selezione manuale del colore, avvio al click
+//  11. CONTROLLI .................... bottoni cam / cambia fotocamera / giudica, selezione manuale del colore, avvio al click
 //
 //  MODIFICHE PIÙ COMUNI — dove intervenire:
 //  - Cambiare modello Ollama o i suoi parametri  → sezione 10, dentro requestJudgment()
@@ -53,8 +53,8 @@
 const video           = document.getElementById("video");
 const ambientCanvas     = document.getElementById("ambientCanvas");
 const actx               = ambientCanvas.getContext("2d");
-const muteBtn          = document.getElementById("muteBtn");
 const camBtn            = document.getElementById("camBtn");
+const switchCamBtn      = document.getElementById("switchCamBtn"); // inverte fotocamera anteriore/posteriore (sezione 11)
 const judgeBtn          = document.getElementById("judgeBtn");
 const colorOverlay      = document.getElementById("colorOverlay");
 const paletteSwatchesEl  = document.getElementById("paletteSwatches");
@@ -93,40 +93,10 @@ if ('serviceWorker' in navigator) {
   });
 }
 
-// ── 2. AUDIO ──────────────────────────────────────────────────────
-// due oscillatori semplici (Web Audio API) la cui altezza/volume
-// vengono modulati in tempo reale dal colore rilevato (vedi updateAudio)
-let audioCtx, oscillator, gainNode, filter, osc2, gain2;
-let isMuted = false;
-
-function initAudio() {
-  audioCtx    = new (window.AudioContext||window.webkitAudioContext)();
-  oscillator  = audioCtx.createOscillator();
-  gainNode    = audioCtx.createGain();
-  filter      = audioCtx.createBiquadFilter();
-  filter.type = 'lowpass'; filter.frequency.value=500;
-  oscillator.type='sine';
-  oscillator.connect(filter); filter.connect(gainNode); gainNode.connect(audioCtx.destination);
-  gainNode.gain.value=0.02; oscillator.start();
-
-  osc2  = audioCtx.createOscillator();
-  gain2 = audioCtx.createGain();
-  osc2.type='triangle';
-  osc2.connect(gain2); gain2.connect(audioCtx.destination);
-  gain2.gain.value=0.006; osc2.start();
-}
-
-// chiamata ad ogni frame dal loop principale: r,g,b = colore corrente, beat = intensità del "battito" (0-1)
-function updateAudio(r,g,b,beat) {
-  if(!audioCtx||isMuted) return;
-  const t=audioCtx.currentTime;
-  const bright=(r+g+b)/3;
-  gainNode.gain.setTargetAtTime(0.006+beat*0.08,t,0.05);
-  filter.frequency.setTargetAtTime(250+beat*1600,t,0.05);
-  oscillator.frequency.setTargetAtTime(80+bright*1.1+beat*45,t,0.08);
-  gain2.gain.setTargetAtTime(0.002+beat*0.02,t,0.1);
-  osc2.frequency.setTargetAtTime(40+(r-b)*0.25,t,0.15);
-}
+// (sezione 2, "AUDIO", rimossa: l'installazione ora è puramente visiva —
+// niente più sintesi sonora reattiva né tasto AUDIO ON/OFF. I numeri delle
+// sezioni successive sono rimasti quelli originali apposta, per restare
+// coerenti con eventuali appunti/versioni precedenti del progetto.)
 
 // ── 3. STATO ──────────────────────────────────────────────────────
 // colore del frame precedente/corrente, usati per calcolare quanto
@@ -163,6 +133,10 @@ let obsCount    = 0;     // numero di "osservazioni" (battiti) registrate
 let judgeCount  = 0;     // numero di giudizi AI generati finora
 let analyzing   = false; // true mentre è in corso una richiesta al modello AI locale (sezione 10)
 let camActive   = false;
+// fotocamera posteriore ('environment') o anteriore ('user') — vedi
+// switchCamBtn in sezione 11. Di default posteriore, più sensata per
+// un'installazione che "osserva" persone/oggetti davanti a chi la usa.
+let facingMode  = 'environment';
 let autoTimer   = 0;
 const AUTO_INTERVAL = 1800; // ogni quanti frame il sistema chiede un giudizio da solo (≈60s a 30fps). Abbassa per giudizi automatici più frequenti.
 // se un giudizio fallisce (sezione 10), l'auto-giudizio smette di ritentare
@@ -675,9 +649,6 @@ function loop() {
   const rad = i => 50 + Math.sin(wt*(0.7+i*0.13) + i*1.7) * wobble;
   pulseCore.style.borderRadius = `${rad(0)}% ${rad(1)}% ${rad(2)}% ${rad(3)}% / ${rad(4)}% ${rad(5)}% ${rad(6)}% ${rad(7)}%`;
 
-  // ── audio: aggiorna gli oscillatori in base al colore corrente e al battito ──
-  updateAudio(currentR|0,currentG|0,currentB|0,beat);
-
   // ── particelle: reagiscono al mouse, al battito e al colore rilevato (con scia fluida, vedi sezione 5) ──
   updateAndDrawParticles(pr, pg, pb, beat);
 
@@ -793,7 +764,7 @@ ${paletteDesc}
 Memoria recente: ${recentNames || 'nessuna osservazione precedente'}
 Stato: ${systemState} · Osservazioni: ${obsCount} · Giudizi: ${judgeCount}
 
-Rispondi ONLY con il giudizio: 2-4 frasi brevi, poetiche, disturbanti, arbitrarie.
+Rispondi ONLY con il giudizio: MASSIMO 2 frasi brevissime (poche parole ciascuna), poetiche, disturbanti, arbitrarie.
 Riferisci i colori a intenzioni, stati d'animo, diagnosi psicologiche inventate.
 Puoi giudicare ogni colore separatamente o la combinazione.
 Senza virgolette. In italiano. Frasi spezzate, non sempre complete.`;
@@ -805,7 +776,7 @@ Senza virgolette. In italiano. Frasi spezzate, non sempre complete.`;
       model: 'gemma3:4b',      // ← nome del modello Ollama da usare
       prompt: prompt,
       stream: false,
-      options: { temperature: 1.1, num_predict: 160 } // temperature = quanto "casuale"; num_predict = lunghezza massima risposta
+      options: { temperature: 1.1, num_predict: 70 } // temperature = quanto "casuale"; num_predict = lunghezza massima risposta (abbassata da 160: giudizi più corti, più adatti a uno schermo di telefono)
     });
     const data = await res.json();
     const txt = data.response?.trim() || 'Il campo si cancella prima di essere letto.';
@@ -844,8 +815,8 @@ Senza virgolette. In italiano. Frasi spezzate, non sempre complete.`;
 // JUDGMENT_LEN_MIN_SIZE scende fino a JUDGMENT_MIN_SCALE (fattore, non rem —
 // i rem veri e propri sono nel clamp() di #aiJudgment in style.css). Così un
 // giudizio lungo si legge tutto invece di sfondare il bordo dello schermo.
-const JUDGMENT_LEN_FULL_SIZE = 90;   // fino a questa lunghezza (caratteri): testo a dimensione piena
-const JUDGMENT_LEN_MIN_SIZE  = 340;  // da questa lunghezza in su: dimensione minima
+const JUDGMENT_LEN_FULL_SIZE = 60;   // fino a questa lunghezza (caratteri): testo a dimensione piena (abbassata insieme a num_predict, sezione 10: i giudizi ora sono più corti)
+const JUDGMENT_LEN_MIN_SIZE  = 220;  // da questa lunghezza in su: dimensione minima
 const JUDGMENT_MIN_SCALE     = 0.55; // dimensione minima, come frazione di quella piena (1 = piena, 0.55 = 55%)
 
 function judgmentFontScale(len) {
@@ -953,15 +924,21 @@ previewCanvas.addEventListener('click', e => {
 
 updatePaletteSwatches(); // stato iniziale: nessuna palette ancora, ma AUTO va mostrato come attivo fin da subito
 
-// primo click sulla pagina: attiva audio + webcam e avvia il loop
+// richiede lo stream della webcam con la fotocamera scelta (facingMode,
+// sezione 3): "ideal" invece di un vincolo rigido, così sui dispositivi
+// con una sola fotocamera (es. molti PC) funziona comunque, usando quella
+// disponibile invece di fallire perché non esiste una fotocamera "posteriore"
+function requestCameraStream() {
+  return navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: facingMode } } });
+}
+
+// primo click sulla pagina: attiva la webcam e avvia il loop
 document.body.addEventListener("click", function handler(e){
-  if(e.target.id==='muteBtn'||e.target.id==='camBtn'||e.target.id==='judgeBtn'||e.target.id==='preview'||e.target.closest('#paletteSwatches')) return;
+  if(e.target.id==='camBtn'||e.target.id==='switchCamBtn'||e.target.id==='judgeBtn'||e.target.id==='preview'||e.target.closest('#paletteSwatches')) return;
   if(camActive) return;
   document.body.removeEventListener("click",handler);
 
-  initAudio();
-
-  navigator.mediaDevices.getUserMedia({video:true})
+  requestCameraStream()
     .then(stream=>{
       window._camStream=stream;
       video.srcObject=stream;
@@ -973,22 +950,12 @@ document.body.addEventListener("click", function handler(e){
     .catch(()=>{ showDebug('Webcam non accessibile. Controlla i permessi del browser.'); });
 });
 
-// ── MUTE ──────────────────────────────────────────────────────────
-muteBtn.addEventListener("click",()=>{
-  if(!audioCtx) return;
-  isMuted=!isMuted;
-  gainNode.gain.setTargetAtTime(isMuted?0:0.02,audioCtx.currentTime,0.1);
-  gain2.gain.setTargetAtTime(isMuted?0:0.006,audioCtx.currentTime,0.1);
-  muteBtn.textContent=isMuted?'AUDIO ON':'AUDIO OFF';
-});
-
 // ── CAM TOGGLE ────────────────────────────────────────────────────
 camBtn.addEventListener("click", async()=>{
   if(!camActive && !window._camStream) {
     // prima attivazione (se l'utente usa il bottone invece del click sulla pagina)
     try {
-      initAudio();
-      const stream=await navigator.mediaDevices.getUserMedia({video:true});
+      const stream=await requestCameraStream();
       window._camStream=stream; video.srcObject=stream; await video.play();
       camActive=true; camBtn.textContent='CAM OFF';
       camBtn.style.borderColor=''; camBtn.style.color='';
@@ -1000,7 +967,7 @@ camBtn.addEventListener("click", async()=>{
   if(camActive){
     // riaccendi
     try {
-      const stream=await navigator.mediaDevices.getUserMedia({video:true});
+      const stream=await requestCameraStream();
       window._camStream=stream; video.srcObject=stream; await video.play();
       camBtn.textContent='CAM OFF'; camBtn.style.borderColor=''; camBtn.style.color='';
     } catch(e){ camActive=false; showDebug('Webcam non accessibile: '+e.message); }
@@ -1011,6 +978,23 @@ camBtn.addEventListener("click", async()=>{
     camBtn.textContent='CAM ON';
     camBtn.style.borderColor='rgba(255,80,80,0.5)';
     camBtn.style.color='rgba(255,120,120,0.7)';
+  }
+});
+
+// ── CAMBIA FOTOCAMERA (anteriore/posteriore) ──────────────────────
+// utile soprattutto da telefono, dove ci sono entrambe: ferma lo stream
+// attuale e ne richiede uno nuovo con facingMode invertito. Se la webcam
+// era spenta, si limita a memorizzare la preferenza per la prossima accensione.
+switchCamBtn.addEventListener("click", async()=>{
+  facingMode = facingMode === 'environment' ? 'user' : 'environment';
+  switchCamBtn.textContent = facingMode === 'environment' ? '⟲ POSTERIORE' : '⟲ ANTERIORE';
+  if (!camActive || !window._camStream) return; // solo preferenza salvata, si applica alla prossima accensione
+  try {
+    window._camStream.getTracks().forEach(t=>t.stop());
+    const stream = await requestCameraStream();
+    window._camStream = stream; video.srcObject = stream; await video.play();
+  } catch(e) {
+    showDebug('Impossibile cambiare fotocamera: '+e.message);
   }
 });
 
