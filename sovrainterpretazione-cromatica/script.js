@@ -678,7 +678,7 @@ function loop() {
 //     HTTPS (es. cloudflared o ngrok sul PC) che esponga la porta 11434 —
 //     aggiornalo ogni volta che il tunnel cambia indirizzo.
 const OLLAMA_LOCAL_URL  = "http://localhost:11434/api/generate";
-const OLLAMA_TUNNEL_URL = ""; // es. "https://parole-a-caso.trycloudflare.com/api/generate" — lascia vuoto finché non hai un tunnel attivo
+const OLLAMA_TUNNEL_URL = "https://chicago-hampshire-meet-honest.trycloudflare.com/api/generate"; // aggiorna questo indirizzo ogni volta che riavvii cloudflared (cambia ad ogni riavvio)
 
 // prova prima l'indirizzo locale (istantaneo se sei sul PC con Ollama); se
 // non risponde in fretta (o non sei sul PC), passa al tunnel — ma solo se
