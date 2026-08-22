@@ -1,9 +1,8 @@
 // ══════════════════════════════════════════════════════════════════
 //  SOVRAINTERPRETAZIONE CROMATICA
 //  Installazione interattiva: webcam → analisi colore → audio/visuale
-//  → giudizio generato da un'AI che gira interamente nel browser
-//  (WebLLM/WebGPU, sezione 10) basato sui colori visti. Nessun server:
-//  funziona anche su un telefono, offline dopo il primo caricamento.
+//  → giudizio generato da un'AI (Ollama) in esecuzione sul PC, raggiunta
+//  da qualunque dispositivo (anche un telefono) tramite un tunnel HTTPS.
 // ══════════════════════════════════════════════════════════════════
 //
 //  MAPPA DEL FILE — cerca questi titoli (Ctrl+F / Cmd+F) per saltare
@@ -18,11 +17,12 @@
 //   7. ESTRAZIONE PALETTE (K-MEANS) . trova i colori dominanti nel frame
 //   8. MEMORIA ...................... striscia dei colori recenti in fondo allo schermo
 //   9. LOOP PRINCIPALE .............. gira ad ogni frame: è il cuore del programma
-//  10. GIUDIZIO AI (WEBLLM, NEL BROWSER) . modello AI locale nel telefono/PC + prompt
+//  10. GIUDIZIO AI (OLLAMA) ......... chiamata al modello sul PC (via tunnel) + prompt
 //  11. CONTROLLI .................... bottoni mute / cam / giudica, selezione manuale del colore, avvio al click
 //
 //  MODIFICHE PIÙ COMUNI — dove intervenire:
-//  - Cambiare il modello AI o i suoi parametri   → sezione 10, costante MLC_MODEL_ID e dentro requestJudgment()
+//  - Cambiare modello Ollama o i suoi parametri  → sezione 10, dentro requestJudgment()
+//  - Cambiare l'indirizzo del tunnel             → sezione 10, costante OLLAMA_TUNNEL_URL
 //  - Cambiare il testo/personalità del giudizio  → sezione 10, variabile `prompt`
 //  - Rendere il riconoscimento colore più preciso → sezione 7, costanti in cima a extractPalette()
 //  - Cambiare quanto si rimpicciolisce il testo dei giudizi lunghi → sezione 10, costanti JUDGMENT_*
@@ -36,15 +36,17 @@
 //  - Cambiare come funziona la scelta manuale del colore → sezione 11, updatePaletteSwatches() e i due addEventListener('click', ...) subito sotto
 // ══════════════════════════════════════════════════════════════════
 
-// L'AI gira interamente nel browser tramite WebLLM (libreria caricata da
-// CDN al primo giudizio, sezione 10): niente server, niente PC acceso,
-// niente connessione internet dopo il primo download del modello. Serve
-// però un browser con supporto WebGPU (Chrome su Android recenti, Safari
-// su iOS/iPadOS aggiornati) — vedi il controllo in getEngine(), sezione 10.
+// Ollama gira sul PC (non nel telefono): il PC deve avere Ollama installato
+// e avviato ("ollama serve") con il modello scaricato (sezione 10), e deve
+// restare acceso mentre l'app è in uso. Per essere raggiunto da un telefono
+// serve un tunnel HTTPS (es. cloudflared/ngrok) che esponga la porta 11434
+// — vedi OLLAMA_LOCAL_URL/OLLAMA_TUNNEL_URL in sezione 10 e le istruzioni di configurazione a parte.
 //
 // Questo file è anche registrato come PWA (vedi sw.js e manifest.json):
 // aprendolo da telefono, il browser offre "Aggiungi a schermata Home" e
-// da lì si comporta come un'app installata, a schermo intero.
+// da lì si comporta come un'app installata, a schermo intero (l'interfaccia
+// funziona anche offline, ma il giudizio AI richiede sempre di raggiungere
+// il PC tramite il tunnel).
 
 // ── 1. ELEMENTI DOM ──────────────────────────────────────────────
 // riferimenti agli elementi HTML definiti in index.html
@@ -81,39 +83,13 @@ function showDebug(msg, duration = 6000) {
 
 // registra il service worker (sw.js): permette al browser di offrire
 // "Aggiungi a schermata Home" sul telefono e di aprire l'interfaccia anche
-// offline. Non riguarda l'AI (sezione 10), che ha una sua cache separata
-// gestita da WebLLM per i pesi del modello.
+// offline. Non riguarda l'AI (sezione 10): il giudizio richiede sempre di
+// raggiungere Ollama sul PC, quindi non funziona offline.
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('./sw.js').catch(err => {
       console.warn('Service worker non registrato:', err);
     });
-  });
-}
-
-// chiede al browser di NON cancellare in automatico i dati di questo sito
-// quando lo spazio sul telefono scarseggia. Senza questa richiesta, Chrome
-// considera la cache del modello AI (~880MB, sezione 10) "sacrificabile" e
-// può svuotarla da solo in background per fare spazio ad altre app — nel
-// qual caso il prossimo giudizio la riscarica tutta da capo, sembrando che
-// "ricarichi sempre" invece di restare salvata. Non è garantito che il
-// browser conceda la richiesta, ma aiuta.
-if (navigator.storage?.persist) {
-  navigator.storage.persist().then(granted => {
-    console.log(granted ? 'Storage persistente concessa: la cache del modello AI non dovrebbe essere cancellata automaticamente.' : 'Storage persistente NON concessa dal browser: la cache del modello AI potrebbe essere svuotata se lo spazio scarseggia.');
-  });
-}
-
-// controlla quanto spazio libero ha il browser per la cache: se sembra
-// insufficiente per il modello AI (~880MB, sezione 10), avvisa subito
-// invece di far scoprire il problema solo a download quasi finito
-if (navigator.storage?.estimate) {
-  navigator.storage.estimate().then(({ usage = 0, quota = 0 }) => {
-    const freeMB = Math.round((quota - usage) / (1024 * 1024));
-    console.log(`Spazio disponibile per la cache del browser: ~${freeMB}MB (quota totale ~${Math.round(quota/1024/1024)}MB)`);
-    if (quota > 0 && freeMB < 900) {
-      showDebug(`Attenzione: solo ~${freeMB}MB liberi per la cache del browser. Il modello AI pesa ~880MB: libera spazio sul telefono se il download continua a fallire.`, 10000);
-    }
   });
 }
 
@@ -191,9 +167,8 @@ let autoTimer   = 0;
 const AUTO_INTERVAL = 1800; // ogni quanti frame il sistema chiede un giudizio da solo (≈60s a 30fps). Abbassa per giudizi automatici più frequenti.
 // se un giudizio fallisce (sezione 10), l'auto-giudizio smette di ritentare
 // da solo finché l'osservatore non clicca manualmente GIUDICA: altrimenti,
-// se il problema è strutturale (es. GPU del telefono troppo debole per il
-// modello), riproverebbe in loop ogni minuto riscaricando inutilmente
-// centinaia di MB ogni volta.
+// se il problema è strutturale (es. PC spento, Ollama non avviato, tunnel
+// caduto), riproverebbe inutilmente ogni minuto in loop.
 let autoJudgmentSuspended = false;
 
 // memoria cromatica: dominantHistory alimenta la striscia in fondo allo
@@ -210,11 +185,6 @@ let manualSelection = null;
 // colore RGB risultante dalla selezione manuale in questo frame (ricalcolato
 // in loop(), sezione 9); null quando la selezione è automatica
 let selectedColor = null;
-
-// motore AI locale (WebLLM, sezione 10): creato pigramente alla prima
-// richiesta di giudizio, poi riutilizzato per tutte le successive
-let mlcEngine = null;
-let engineLoadingPromise = null; // evita di inizializzare il motore due volte in parallelo
 
 // ── 4. CANVAS BASSA RISOLUZIONE ───────────────────────────────────
 // il video viene "rimpicciolito" su un canvas invisibile: analizzare
@@ -719,73 +689,51 @@ function loop() {
   requestAnimationFrame(loop);
 }
 
-// ── 10. GIUDIZIO AI (WEBLLM, NEL BROWSER) ─────────────────────────
+// ── 10. GIUDIZIO AI (OLLAMA) ──────────────────────────────────────
 // Costruisce una descrizione testuale della palette di colori rilevata
-// e la manda a un piccolo modello linguistico che gira INTERAMENTE nel
-// browser (libreria WebLLM, https://webllm.mlc.ai) — nessun server,
-// nessuna connessione a un PC: funziona anche su un telefono, isolato.
-// La prima volta il modello va scaricato (qualche centinaio di MB,
-// serve internet); dopodiché il browser lo tiene in cache e tutto
-// funziona anche offline. Richiede un browser con supporto WebGPU
-// (Chrome su Android abbastanza recenti, Safari su iOS/iPadOS aggiornati).
+// e la manda a un modello Ollama in esecuzione sul PC, che risponde con
+// un "giudizio" poetico/disturbante mostrato al centro dello schermo.
 //
-// PER CAMBIARE MODELLO: modifica MLC_MODEL_ID qui sotto. La lista completa
-// dei modelli disponibili è in `webllm.prebuiltAppConfig.model_list`
-// (stampala in console per esplorarla). Modelli più grandi = giudizi
-// migliori ma download più lungo e più RAM richiesta sul telefono.
-// NOTA: "gemma3-1b-it-q4f16_1-MLC" (la scelta iniziale) usa un'architettura
-// "ibrida" (attenzione a finestra scorrevole + a contesto pieno insieme)
-// che WebLLM al momento non gestisce correttamente — dà sempre l'errore
-// "Only one of context_window_size and sliding_window_size can be
-// positive", non risolvibile con un override. Llama-3.2-1B-Instruct usa
-// un'architettura "normale" (nessuna finestra scorrevole), quindi non ha
-// questo problema.
-const MLC_MODEL_ID = "Llama-3.2-1B-Instruct-q4f16_1-MLC"; // ~880MB. Alternative: "Qwen2.5-1.5B-Instruct-q4f16_1-MLC" (più pesante, spesso più preciso), "SmolLM2-360M-Instruct-q4f16_1-MLC" (più leggero, meno raffinato, richiede meno memoria GPU — utile se il telefono fatica a caricare questo)
+// DUE INDIRIZZI, provati in ordine, così LO STESSO file funziona sia dal
+// PC dove gira Ollama sia dal telefono, senza dover cambiare nulla a mano
+// a seconda di dove apri la pagina:
+//  1. OLLAMA_LOCAL_URL  → funziona SOLO se il browser che fa la richiesta
+//     è sullo stesso PC dove gira Ollama (è quello che succede oggi da PC:
+//     "localhost" indica sempre "questo stesso dispositivo", quindi da un
+//     altro dispositivo come il telefono punterebbe a se stesso, non al PC).
+//  2. OLLAMA_TUNNEL_URL → usato SOLO come riserva, se il primo tentativo
+//     fallisce (cioè quando a fare la richiesta è un dispositivo diverso
+//     dal PC, es. il telefono). Va riempito con l'indirizzo di un tunnel
+//     HTTPS (es. cloudflared o ngrok sul PC) che esponga la porta 11434 —
+//     aggiornalo ogni volta che il tunnel cambia indirizzo.
+const OLLAMA_LOCAL_URL  = "http://localhost:11434/api/generate";
+const OLLAMA_TUNNEL_URL = ""; // es. "https://parole-a-caso.trycloudflare.com/api/generate" — lascia vuoto finché non hai un tunnel attivo
 
-// diventa true quando il download/preparazione dei file del modello arriva
-// al 100% (vedi initProgressCallback qui sotto). Serve solo per distinguere,
-// se poi qualcosa va storto, un fallimento di RETE (avvenuto prima del 100%)
-// da un fallimento nell'ESECUZIONE sul telefono (avvenuto dopo, quando i
-// file ci sono già ma la GPU non riesce a farli girare — tipicamente per
-// memoria GPU insufficiente su telefoni di fascia media/bassa)
-let modelFullyDownloadedOnce = false;
+// prova prima l'indirizzo locale (istantaneo se sei sul PC con Ollama); se
+// non risponde in fretta (o non sei sul PC), passa al tunnel — ma solo se
+// è stato configurato, altrimenti rilancia subito l'errore originale
+async function ollamaFetch(body) {
+  const tryUrl = (url, timeoutMs) => {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+    return fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+      signal: ctrl.signal,
+    }).finally(() => clearTimeout(timer));
+  };
 
-// crea (una sola volta) il motore WebLLM e lo restituisce. Se è già in
-// caricamento, aspetta quello in corso invece di iniziarne un secondo.
-function getEngine() {
-  if (mlcEngine) return Promise.resolve(mlcEngine);
-  if (engineLoadingPromise) return engineLoadingPromise;
-
-  engineLoadingPromise = (async () => {
-    if (!navigator.gpu) {
-      // niente WebGPU: il dispositivo/browser non può eseguire l'AI in locale
-      throw new Error('WEBGPU_UNSUPPORTED');
-    }
-    // la libreria viene caricata da CDN solo ora, al bisogno: così la pagina
-    // resta leggera finché non si chiede davvero un giudizio
-    const webllm = await import("https://esm.run/@mlc-ai/web-llm");
-    const engine = await webllm.CreateMLCEngine(MLC_MODEL_ID, {
-      initProgressCallback: (p) => {
-        // p.progress va da 0 a 1; p.text descrive cosa sta scaricando/preparando
-        const pct = Math.round((p.progress || 0) * 100);
-        judgeBtn.textContent = `AI… ${pct}%`;
-        showDebug(p.text || `Preparazione modello AI: ${pct}%`, 4000);
-        if (pct >= 100) modelFullyDownloadedOnce = true;
-      }
-    });
-    mlcEngine = engine;
-    return engine;
-  })();
-
-  // se il caricamento fallisce (es. niente internet al primo tentativo,
-  // oppure la GPU non regge il modello dopo averlo scaricato), dimentica il
-  // tentativo fallito così il prossimo click ne prova uno nuovo invece di
-  // restare bloccato per sempre sullo stesso errore
-  engineLoadingPromise.catch(() => { engineLoadingPromise = null; });
-
-  return engineLoadingPromise;
+  try {
+    return await tryUrl(OLLAMA_LOCAL_URL, 1200); // 1.2s: se Ollama è sullo stesso PC risponde molto prima
+  } catch (e) {
+    if (!OLLAMA_TUNNEL_URL) throw e; // nessun tunnel configurato: niente riserva, rilancia l'errore di prima
+    return await tryUrl(OLLAMA_TUNNEL_URL, 15000); // il tunnel può essere più lento del locale, margine più ampio
+  }
 }
 
+// PER CAMBIARE MODELLO OLLAMA: modifica `model: 'gemma3:4b'` qui sotto
+// con il nome di un modello che hai scaricato (es. 'llama3.2', 'mistral', ecc.)
 // PER CAMBIARE LA "PERSONALITÀ" DEL GIUDIZIO: modifica il testo di `prompt` più sotto.
 async function requestJudgment(silent=false) {
   if(analyzing) return;
@@ -851,36 +799,28 @@ Puoi giudicare ogni colore separatamente o la combinazione.
 Senza virgolette. In italiano. Frasi spezzate, non sempre complete.`;
 
   try {
-    // il motore AI locale (WebLLM, vedi getEngine() qui sopra): alla primissima
-    // chiamata scarica il modello (mostra progresso su judgeBtn/debugMsg),
-    // dalle volte successive è già pronto e risponde in pochi secondi
-    const engine = await getEngine();
-    const completion = await engine.chat.completions.create({
-      messages: [{ role: 'user', content: prompt }],
-      temperature: 1.1,
-      max_tokens: 160, // lunghezza massima della risposta: giudizi più lunghi stanno peggio a schermo anche col ridimensionamento automatico del testo
+    // chiamata a Ollama — prova prima l'indirizzo locale, poi il tunnel
+    // se serve (vedi ollamaFetch e i due OLLAMA_*_URL qui sopra)
+    const res = await ollamaFetch({
+      model: 'gemma3:4b',      // ← nome del modello Ollama da usare
+      prompt: prompt,
+      stream: false,
+      options: { temperature: 1.1, num_predict: 160 } // temperature = quanto "casuale"; num_predict = lunghezza massima risposta
     });
-    const txt = completion.choices[0]?.message?.content?.trim() || 'Il campo si cancella prima di essere letto.';
+    const data = await res.json();
+    const txt = data.response?.trim() || 'Il campo si cancella prima di essere letto.';
     judgeCount++;
     hudJudge.textContent=String(judgeCount).padStart(3,'0');
     await showJudgment(txt);
   } catch(e) {
-    // motore AI non disponibile: dispositivo senza WebGPU, download del
-    // modello fallito (nessuna connessione), oppure la GPU non riesce a
-    // eseguirlo dopo averlo scaricato (tipicamente memoria GPU insufficiente)
+    // Ollama non raggiungibile: PC spento, Ollama non avviato, oppure (da
+    // telefono/altro dispositivo) tunnel non configurato/caduto/scaduto
     console.error(e);
-    const eStr = String(e?.message || e);
-    let friendly;
-    if (eStr.includes('WEBGPU_UNSUPPORTED')) {
-      friendly = 'Questo browser/dispositivo non supporta WebGPU,\nnecessario per l\'AI in locale. Serve un telefono\ne un browser recenti (Chrome su Android, Safari su iOS aggiornati).';
-    } else if (modelFullyDownloadedOnce) {
-      // il download è arrivato al 100%: il problema NON è la connessione,
-      // è che il telefono ha scaricato il modello ma non riesce a farlo
-      // girare (di solito perché la GPU non ha abbastanza memoria)
-      friendly = 'Il modello è stato scaricato ma questo telefono\nnon riesce a eseguirlo (probabile memoria GPU insufficiente).\nProva un modello più leggero (vedi MLC_MODEL_ID nel codice)\no un altro dispositivo.';
-    } else {
-      friendly = 'AI locale non disponibile.\nControlla la connessione (serve al primo avvio\nper scaricare il modello) e riprova.';
-    }
+    const eStr = String(e);
+    const isNetworkError = eStr.includes('Failed to fetch') || eStr.includes('NetworkError') || eStr.includes('AbortError');
+    const friendly = isNetworkError
+      ? 'Impossibile raggiungere Ollama.\nSe sei sul PC: controlla che Ollama sia avviato ("ollama serve").\nSe sei su un altro dispositivo (es. telefono): serve un tunnel\nattivo, con OLLAMA_TUNNEL_URL aggiornato nel codice.'
+      : 'Ollama non risponde correttamente.\nControlla la console del browser per i dettagli.';
     // messaggio più lungo del solito: è l'unico modo per leggere l'errore
     // vero prima che sparisca, utile se serve segnalarlo per capire la causa esatta
     showDebug(eStr.slice(0,150), 15000);
@@ -888,9 +828,9 @@ Senza virgolette. In italiano. Frasi spezzate, non sempre complete.`;
 
     // non lasciare che il giudizio automatico (AUTO_INTERVAL, sezione 9)
     // continui a ritentare da solo ogni minuto dopo un fallimento: se il
-    // problema è strutturale (es. GPU troppo debole) si limiterebbe solo a
-    // riscaricare centinaia di MB in loop inutilmente. Un click manuale su
-    // GIUDICA riarma i tentativi automatici (vedi il listener più sotto).
+    // problema è strutturale (es. tunnel caduto) si limiterebbe solo a
+    // ritentare inutilmente in loop. Un click manuale su GIUDICA riarma i
+    // tentativi automatici (vedi il listener più sotto).
     autoJudgmentSuspended = true;
   }
 
