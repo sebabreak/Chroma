@@ -93,7 +93,7 @@ if ('serviceWorker' in navigator) {
 
 // chiede al browser di NON cancellare in automatico i dati di questo sito
 // quando lo spazio sul telefono scarseggia. Senza questa richiesta, Chrome
-// considera la cache del modello AI (~700MB, sezione 10) "sacrificabile" e
+// considera la cache del modello AI (~880MB, sezione 10) "sacrificabile" e
 // può svuotarla da solo in background per fare spazio ad altre app — nel
 // qual caso il prossimo giudizio la riscarica tutta da capo, sembrando che
 // "ricarichi sempre" invece di restare salvata. Non è garantito che il
@@ -105,14 +105,14 @@ if (navigator.storage?.persist) {
 }
 
 // controlla quanto spazio libero ha il browser per la cache: se sembra
-// insufficiente per il modello AI (~700MB, sezione 10), avvisa subito
+// insufficiente per il modello AI (~880MB, sezione 10), avvisa subito
 // invece di far scoprire il problema solo a download quasi finito
 if (navigator.storage?.estimate) {
   navigator.storage.estimate().then(({ usage = 0, quota = 0 }) => {
     const freeMB = Math.round((quota - usage) / (1024 * 1024));
     console.log(`Spazio disponibile per la cache del browser: ~${freeMB}MB (quota totale ~${Math.round(quota/1024/1024)}MB)`);
     if (quota > 0 && freeMB < 900) {
-      showDebug(`Attenzione: solo ~${freeMB}MB liberi per la cache del browser. Il modello AI pesa ~700MB: libera spazio sul telefono se il download continua a fallire.`, 10000);
+      showDebug(`Attenzione: solo ~${freeMB}MB liberi per la cache del browser. Il modello AI pesa ~880MB: libera spazio sul telefono se il download continua a fallire.`, 10000);
     }
   });
 }
@@ -733,7 +733,14 @@ function loop() {
 // dei modelli disponibili è in `webllm.prebuiltAppConfig.model_list`
 // (stampala in console per esplorarla). Modelli più grandi = giudizi
 // migliori ma download più lungo e più RAM richiesta sul telefono.
-const MLC_MODEL_ID = "gemma3-1b-it-q4f16_1-MLC"; // ~700MB — piccolo abbastanza per un telefono. Alternative: "Qwen2.5-1.5B-Instruct-q4f16_1-MLC" (più pesante, spesso più preciso), "SmolLM2-360M-Instruct-q4f16_1-MLC" (più leggero, meno raffinato, richiede meno memoria GPU — utile se il telefono fallisce sempre a caricare questo)
+// NOTA: "gemma3-1b-it-q4f16_1-MLC" (la scelta iniziale) usa un'architettura
+// "ibrida" (attenzione a finestra scorrevole + a contesto pieno insieme)
+// che WebLLM al momento non gestisce correttamente — dà sempre l'errore
+// "Only one of context_window_size and sliding_window_size can be
+// positive", non risolvibile con un override. Llama-3.2-1B-Instruct usa
+// un'architettura "normale" (nessuna finestra scorrevole), quindi non ha
+// questo problema.
+const MLC_MODEL_ID = "Llama-3.2-1B-Instruct-q4f16_1-MLC"; // ~880MB. Alternative: "Qwen2.5-1.5B-Instruct-q4f16_1-MLC" (più pesante, spesso più preciso), "SmolLM2-360M-Instruct-q4f16_1-MLC" (più leggero, meno raffinato, richiede meno memoria GPU — utile se il telefono fatica a caricare questo)
 
 // diventa true quando il download/preparazione dei file del modello arriva
 // al 100% (vedi initProgressCallback qui sotto). Serve solo per distinguere,
@@ -757,26 +764,15 @@ function getEngine() {
     // la libreria viene caricata da CDN solo ora, al bisogno: così la pagina
     // resta leggera finché non si chiede davvero un giudizio
     const webllm = await import("https://esm.run/@mlc-ai/web-llm");
-    const engine = await webllm.CreateMLCEngine(
-      MLC_MODEL_ID,
-      {
-        initProgressCallback: (p) => {
-          // p.progress va da 0 a 1; p.text descrive cosa sta scaricando/preparando
-          const pct = Math.round((p.progress || 0) * 100);
-          judgeBtn.textContent = `AI… ${pct}%`;
-          showDebug(p.text || `Preparazione modello AI: ${pct}%`, 4000);
-          if (pct >= 100) modelFullyDownloadedOnce = true;
-        }
-      },
-      // TERZO PARAMETRO (chatOpts): il file di configurazione di questo
-      // modello (gemma3-1b-it) ha di default sia context_window_size che
-      // sliding_window_size impostati entrambi positivi — cosa che WebLLM
-      // rifiuta con l'errore "Only one of context_window_size and
-      // sliding_window_size can be positive". Disattivando qui la sliding
-      // window (-1) resta valida solo la normale finestra di contesto
-      // (4096 token, più che sufficiente per i nostri prompt brevi).
-      { sliding_window_size: -1 }
-    );
+    const engine = await webllm.CreateMLCEngine(MLC_MODEL_ID, {
+      initProgressCallback: (p) => {
+        // p.progress va da 0 a 1; p.text descrive cosa sta scaricando/preparando
+        const pct = Math.round((p.progress || 0) * 100);
+        judgeBtn.textContent = `AI… ${pct}%`;
+        showDebug(p.text || `Preparazione modello AI: ${pct}%`, 4000);
+        if (pct >= 100) modelFullyDownloadedOnce = true;
+      }
+    });
     mlcEngine = engine;
     return engine;
   })();
