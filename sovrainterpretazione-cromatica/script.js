@@ -699,15 +699,17 @@ const OLLAMA_TUNNEL_URL = "https://stoop-situation-trifle.ngrok-free.dev/api/gen
 // niente Ollama in locale": lì la connessione a "localhost" fallisce subito
 // (connessione rifiutata), non c'è nulla da aspettare.
 //
-// NOTA su "ngrok-skip-browser-warning": ngrok gratuito, prima di far passare
-// la richiesta, normalmente mostrerebbe a chi visita il tunnel una paginetta
-// di avviso ("stai visitando un tunnel ngrok, clicca per continuare") — utile
-// per un umano nel browser, ma per la nostra richiesta automatica quella
-// pagina HTML arriverebbe al posto della risposta vera di Ollama, e il
-// codice fallirebbe cercando di leggerla come se fosse JSON. Questa
-// intestazione dice a ngrok di saltare l'avviso. Non serve per l'indirizzo
-// locale (Ollama la ignora semplicemente), quindi la mandiamo sempre, così
-// la stessa funzione va bene per entrambi gli indirizzi.
+// NOTA su ngrok e la sua paginetta di avviso: esiste solo per chi APRE il
+// link nel browser come una pagina normale — la documentazione di ngrok
+// stessa conferma che NON riguarda chi chiama le sue API/endpoint in modo
+// automatico (il nostro caso: una POST con JSON). Quindi qui non serve
+// nessuna intestazione speciale per aggirarla — anzi, un'intestazione
+// personalizzata come "ngrok-skip-browser-warning" andrebbe elencata anche
+// tra quelle ammesse dal CORS di Ollama (che ha un elenco fisso e non la
+// contiene): il browser farebbe passare il pre-controllo OPTIONS ma poi
+// bloccherebbe lui stesso la richiesta vera prima ancora di mandarla,
+// perché l'intestazione non è nella lista concordata — esattamente il bug
+// osservato su iPhone (OPTIONS 204, poi il POST non arrivava mai a Ollama).
 async function ollamaFetch(body) {
   const tryUrl = (url, timeoutMs) => {
     const ctrl = new AbortController();
@@ -716,7 +718,6 @@ async function ollamaFetch(body) {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'ngrok-skip-browser-warning': '1',
       },
       body: JSON.stringify(body),
       signal: ctrl.signal,
