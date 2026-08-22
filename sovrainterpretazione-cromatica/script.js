@@ -189,6 +189,12 @@ let analyzing   = false; // true mentre è in corso una richiesta al modello AI 
 let camActive   = false;
 let autoTimer   = 0;
 const AUTO_INTERVAL = 1800; // ogni quanti frame il sistema chiede un giudizio da solo (≈60s a 30fps). Abbassa per giudizi automatici più frequenti.
+// se un giudizio fallisce (sezione 10), l'auto-giudizio smette di ritentare
+// da solo finché l'osservatore non clicca manualmente GIUDICA: altrimenti,
+// se il problema è strutturale (es. GPU del telefono troppo debole per il
+// modello), riproverebbe in loop ogni minuto riscaricando inutilmente
+// centinaia di MB ogni volta.
+let autoJudgmentSuspended = false;
 
 // memoria cromatica: dominantHistory alimenta la striscia in fondo allo
 // schermo e la "memoria recente" citata nel prompt dell'AI (sezione 10)
@@ -706,8 +712,9 @@ function loop() {
   updateAndDrawParticles(pr, pg, pb, beat);
 
   // ── auto-giudizio: ogni AUTO_INTERVAL frame, chiede un giudizio all'AI locale senza bisogno del click ──
+  // (sospeso dopo un fallimento, vedi autoJudgmentSuspended qui sopra e nel catch di requestJudgment, sezione 10)
   autoTimer++;
-  if(autoTimer>=AUTO_INTERVAL && !analyzing){ autoTimer=0; requestJudgment(true); }
+  if(autoTimer>=AUTO_INTERVAL && !analyzing && !autoJudgmentSuspended){ autoTimer=0; requestJudgment(true); }
 
   requestAnimationFrame(loop);
 }
@@ -726,7 +733,15 @@ function loop() {
 // dei modelli disponibili è in `webllm.prebuiltAppConfig.model_list`
 // (stampala in console per esplorarla). Modelli più grandi = giudizi
 // migliori ma download più lungo e più RAM richiesta sul telefono.
-const MLC_MODEL_ID = "gemma3-1b-it-q4f16_1-MLC"; // ~700MB — piccolo abbastanza per un telefono. Alternative: "Qwen2.5-1.5B-Instruct-q4f16_1-MLC" (più pesante, spesso più preciso), "SmolLM2-360M-Instruct-q4f16_1-MLC" (più leggero, meno raffinato)
+const MLC_MODEL_ID = "gemma3-1b-it-q4f16_1-MLC"; // ~700MB — piccolo abbastanza per un telefono. Alternative: "Qwen2.5-1.5B-Instruct-q4f16_1-MLC" (più pesante, spesso più preciso), "SmolLM2-360M-Instruct-q4f16_1-MLC" (più leggero, meno raffinato, richiede meno memoria GPU — utile se il telefono fallisce sempre a caricare questo)
+
+// diventa true quando il download/preparazione dei file del modello arriva
+// al 100% (vedi initProgressCallback qui sotto). Serve solo per distinguere,
+// se poi qualcosa va storto, un fallimento di RETE (avvenuto prima del 100%)
+// da un fallimento nell'ESECUZIONE sul telefono (avvenuto dopo, quando i
+// file ci sono già ma la GPU non riesce a farli girare — tipicamente per
+// memoria GPU insufficiente su telefoni di fascia media/bassa)
+let modelFullyDownloadedOnce = false;
 
 // crea (una sola volta) il motore WebLLM e lo restituisce. Se è già in
 // caricamento, aspetta quello in corso invece di iniziarne un secondo.
@@ -748,15 +763,17 @@ function getEngine() {
         const pct = Math.round((p.progress || 0) * 100);
         judgeBtn.textContent = `AI… ${pct}%`;
         showDebug(p.text || `Preparazione modello AI: ${pct}%`, 4000);
+        if (pct >= 100) modelFullyDownloadedOnce = true;
       }
     });
     mlcEngine = engine;
     return engine;
   })();
 
-  // se il caricamento fallisce (es. niente internet al primo tentativo),
-  // dimentica il tentativo fallito così il prossimo click ne prova uno nuovo
-  // invece di restare bloccato per sempre sullo stesso errore
+  // se il caricamento fallisce (es. niente internet al primo tentativo,
+  // oppure la GPU non regge il modello dopo averlo scaricato), dimentica il
+  // tentativo fallito così il prossimo click ne prova uno nuovo invece di
+  // restare bloccato per sempre sullo stesso errore
   engineLoadingPromise.catch(() => { engineLoadingPromise = null; });
 
   return engineLoadingPromise;
@@ -842,14 +859,32 @@ Senza virgolette. In italiano. Frasi spezzate, non sempre complete.`;
     await showJudgment(txt);
   } catch(e) {
     // motore AI non disponibile: dispositivo senza WebGPU, download del
-    // modello fallito (nessuna connessione), oppure RAM insufficiente
+    // modello fallito (nessuna connessione), oppure la GPU non riesce a
+    // eseguirlo dopo averlo scaricato (tipicamente memoria GPU insufficiente)
     console.error(e);
     const eStr = String(e?.message || e);
-    const friendly = eStr.includes('WEBGPU_UNSUPPORTED')
-      ? 'Questo browser/dispositivo non supporta WebGPU,\nnecessario per l\'AI in locale. Serve un telefono\ne un browser recenti (Chrome su Android, Safari su iOS aggiornati).'
-      : 'AI locale non disponibile.\nControlla la connessione (serve al primo avvio\nper scaricare il modello) e riprova.';
-    showDebug(eStr.slice(0,150), 8000);
+    let friendly;
+    if (eStr.includes('WEBGPU_UNSUPPORTED')) {
+      friendly = 'Questo browser/dispositivo non supporta WebGPU,\nnecessario per l\'AI in locale. Serve un telefono\ne un browser recenti (Chrome su Android, Safari su iOS aggiornati).';
+    } else if (modelFullyDownloadedOnce) {
+      // il download è arrivato al 100%: il problema NON è la connessione,
+      // è che il telefono ha scaricato il modello ma non riesce a farlo
+      // girare (di solito perché la GPU non ha abbastanza memoria)
+      friendly = 'Il modello è stato scaricato ma questo telefono\nnon riesce a eseguirlo (probabile memoria GPU insufficiente).\nProva un modello più leggero (vedi MLC_MODEL_ID nel codice)\no un altro dispositivo.';
+    } else {
+      friendly = 'AI locale non disponibile.\nControlla la connessione (serve al primo avvio\nper scaricare il modello) e riprova.';
+    }
+    // messaggio più lungo del solito: è l'unico modo per leggere l'errore
+    // vero prima che sparisca, utile se serve segnalarlo per capire la causa esatta
+    showDebug(eStr.slice(0,150), 15000);
     if(!silent) await showJudgment(friendly);
+
+    // non lasciare che il giudizio automatico (AUTO_INTERVAL, sezione 9)
+    // continui a ritentare da solo ogni minuto dopo un fallimento: se il
+    // problema è strutturale (es. GPU troppo debole) si limiterebbe solo a
+    // riscaricare centinaia di MB in loop inutilmente. Un click manuale su
+    // GIUDICA riarma i tentativi automatici (vedi il listener più sotto).
+    autoJudgmentSuspended = true;
   }
 
   analyzing=false;
@@ -1033,7 +1068,10 @@ camBtn.addEventListener("click", async()=>{
 });
 
 // ── GIUDICA ───────────────────────────────────────────────────────
-judgeBtn.addEventListener("click",()=>requestJudgment(false));
+judgeBtn.addEventListener("click",()=>{
+  autoJudgmentSuspended = false; // un click manuale riarma i tentativi automatici (vedi sezione 3/9/10)
+  requestJudgment(false);
+});
 
 // avvia subito il loop (anche senza cam attiva, per animare le particelle di sfondo)
 requestAnimationFrame(loop);
