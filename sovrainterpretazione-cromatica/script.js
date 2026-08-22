@@ -91,6 +91,32 @@ if ('serviceWorker' in navigator) {
   });
 }
 
+// chiede al browser di NON cancellare in automatico i dati di questo sito
+// quando lo spazio sul telefono scarseggia. Senza questa richiesta, Chrome
+// considera la cache del modello AI (~700MB, sezione 10) "sacrificabile" e
+// può svuotarla da solo in background per fare spazio ad altre app — nel
+// qual caso il prossimo giudizio la riscarica tutta da capo, sembrando che
+// "ricarichi sempre" invece di restare salvata. Non è garantito che il
+// browser conceda la richiesta, ma aiuta.
+if (navigator.storage?.persist) {
+  navigator.storage.persist().then(granted => {
+    console.log(granted ? 'Storage persistente concessa: la cache del modello AI non dovrebbe essere cancellata automaticamente.' : 'Storage persistente NON concessa dal browser: la cache del modello AI potrebbe essere svuotata se lo spazio scarseggia.');
+  });
+}
+
+// controlla quanto spazio libero ha il browser per la cache: se sembra
+// insufficiente per il modello AI (~700MB, sezione 10), avvisa subito
+// invece di far scoprire il problema solo a download quasi finito
+if (navigator.storage?.estimate) {
+  navigator.storage.estimate().then(({ usage = 0, quota = 0 }) => {
+    const freeMB = Math.round((quota - usage) / (1024 * 1024));
+    console.log(`Spazio disponibile per la cache del browser: ~${freeMB}MB (quota totale ~${Math.round(quota/1024/1024)}MB)`);
+    if (quota > 0 && freeMB < 900) {
+      showDebug(`Attenzione: solo ~${freeMB}MB liberi per la cache del browser. Il modello AI pesa ~700MB: libera spazio sul telefono se il download continua a fallire.`, 10000);
+    }
+  });
+}
+
 // ── 2. AUDIO ──────────────────────────────────────────────────────
 // due oscillatori semplici (Web Audio API) la cui altezza/volume
 // vengono modulati in tempo reale dal colore rilevato (vedi updateAudio)
