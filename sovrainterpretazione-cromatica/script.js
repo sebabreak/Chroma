@@ -678,11 +678,22 @@ function loop() {
 //     HTTPS (es. cloudflared o ngrok sul PC) che esponga la porta 11434 —
 //     aggiornalo ogni volta che il tunnel cambia indirizzo.
 const OLLAMA_LOCAL_URL  = "http://localhost:11434/api/generate";
-const OLLAMA_TUNNEL_URL = "https://chicago-hampshire-meet-honest.trycloudflare.com/api/generate"; // aggiorna questo indirizzo ogni volta che riavvii cloudflared (cambia ad ogni riavvio)
+const OLLAMA_TUNNEL_URL = "https://requires-cnet-hormone-limiting.trycloudflare.com/api/generate"; // aggiorna questo indirizzo ogni volta che riavvii cloudflared (cambia ad ogni riavvio)
 
 // prova prima l'indirizzo locale (istantaneo se sei sul PC con Ollama); se
 // non risponde in fretta (o non sei sul PC), passa al tunnel — ma solo se
 // è stato configurato, altrimenti rilancia subito l'errore originale
+//
+// NOTA sul timeout locale: NON deve essere troppo corto. Se hai appena
+// (ri)avviato "ollama serve" (es. per cambiare OLLAMA_ORIGINS), il modello
+// va ricaricato in VRAM da zero alla prima richiesta, e questo può richiedere
+// qualche secondo — se il browser annulla la richiesta troppo presto,
+// Ollama la vede come "context canceled" e fallisce SEMPRE, anche restando
+// sul PC con tutto acceso e funzionante (bug osservato: con un timeout di
+// 1.2s il caricamento del modello veniva interrotto ogni volta a metà).
+// Un timeout di qualche secondo qui non rallenta il caso "sei sul telefono,
+// niente Ollama in locale": lì la connessione a "localhost" fallisce subito
+// (connessione rifiutata), non c'è nulla da aspettare.
 async function ollamaFetch(body) {
   const tryUrl = (url, timeoutMs) => {
     const ctrl = new AbortController();
@@ -696,10 +707,10 @@ async function ollamaFetch(body) {
   };
 
   try {
-    return await tryUrl(OLLAMA_LOCAL_URL, 1200); // 1.2s: se Ollama è sullo stesso PC risponde molto prima
+    return await tryUrl(OLLAMA_LOCAL_URL, 8000); // 8s: margine per un primo caricamento "a freddo" del modello in VRAM
   } catch (e) {
     if (!OLLAMA_TUNNEL_URL) throw e; // nessun tunnel configurato: niente riserva, rilancia l'errore di prima
-    return await tryUrl(OLLAMA_TUNNEL_URL, 15000); // il tunnel può essere più lento del locale, margine più ampio
+    return await tryUrl(OLLAMA_TUNNEL_URL, 20000); // il tunnel può essere più lento del locale, margine ancora più ampio
   }
 }
 
