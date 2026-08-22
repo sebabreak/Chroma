@@ -757,15 +757,26 @@ function getEngine() {
     // la libreria viene caricata da CDN solo ora, al bisogno: così la pagina
     // resta leggera finché non si chiede davvero un giudizio
     const webllm = await import("https://esm.run/@mlc-ai/web-llm");
-    const engine = await webllm.CreateMLCEngine(MLC_MODEL_ID, {
-      initProgressCallback: (p) => {
-        // p.progress va da 0 a 1; p.text descrive cosa sta scaricando/preparando
-        const pct = Math.round((p.progress || 0) * 100);
-        judgeBtn.textContent = `AI… ${pct}%`;
-        showDebug(p.text || `Preparazione modello AI: ${pct}%`, 4000);
-        if (pct >= 100) modelFullyDownloadedOnce = true;
-      }
-    });
+    const engine = await webllm.CreateMLCEngine(
+      MLC_MODEL_ID,
+      {
+        initProgressCallback: (p) => {
+          // p.progress va da 0 a 1; p.text descrive cosa sta scaricando/preparando
+          const pct = Math.round((p.progress || 0) * 100);
+          judgeBtn.textContent = `AI… ${pct}%`;
+          showDebug(p.text || `Preparazione modello AI: ${pct}%`, 4000);
+          if (pct >= 100) modelFullyDownloadedOnce = true;
+        }
+      },
+      // TERZO PARAMETRO (chatOpts): il file di configurazione di questo
+      // modello (gemma3-1b-it) ha di default sia context_window_size che
+      // sliding_window_size impostati entrambi positivi — cosa che WebLLM
+      // rifiuta con l'errore "Only one of context_window_size and
+      // sliding_window_size can be positive". Disattivando qui la sliding
+      // window (-1) resta valida solo la normale finestra di contesto
+      // (4096 token, più che sufficiente per i nostri prompt brevi).
+      { sliding_window_size: -1 }
+    );
     mlcEngine = engine;
     return engine;
   })();
