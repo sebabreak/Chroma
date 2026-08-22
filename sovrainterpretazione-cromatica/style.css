@@ -15,6 +15,7 @@
    - Stile del testo di giudizio dell'AI            → #aiJudgment
    - Stile della "traccia" che resta in alto dopo    → #aiTrace
    - Spessore/posizione della striscia memoria       → #memoryStrip
+   - Layout/dimensioni su schermi piccoli (telefono)  → media query "SCHERMI PICCOLI" in fondo al file
    ══════════════════════════════════════════════════════════════════ */
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -211,8 +212,12 @@ video { display: none; }
 }
 
 /* ── BOTTONI ─────────────────────────────────────────────────────── */
-#muteBtn, #camBtn, #judgeBtn {
+/* bottom qui sotto usa env(safe-area-inset-bottom): su telefoni con barra
+   di navigazione gestuale (iPhone senza tasto Home, molti Android) evita
+   che i bottoni finiscano nascosti sotto quella barra */
+#camBtn, #switchCamBtn, #judgeBtn {
   position: fixed;
+  bottom: calc(20px + env(safe-area-inset-bottom, 0px));
   z-index: 999;
   background: transparent;
   border: 1px solid rgba(255,255,255,0.2);
@@ -223,14 +228,15 @@ video { display: none; }
   padding: 7px 14px;
   cursor: pointer;
   transition: all 0.25s;
+  white-space: nowrap;
 }
-#muteBtn:hover, #camBtn:hover, #judgeBtn:hover {
+#camBtn:hover, #switchCamBtn:hover, #judgeBtn:hover {
   border-color: rgba(255,255,255,0.6);
   color: #fff;
 }
-#muteBtn  { bottom: 20px; right: 20px; }
-#camBtn   { bottom: 20px; right: 130px; }
-#judgeBtn { bottom: 20px; left: 20px; }
+#camBtn       { right: 20px; }
+#switchCamBtn { right: 130px; }
+#judgeBtn     { left: 20px; }
 
 /* ── GIUDIZIO AI (OLLAMA) — grande, al centro dello schermo ───────── */
 /* mostrato/animato da showJudgment() in script.js */
@@ -328,7 +334,7 @@ video { display: none; }
 /* piccola scritta rossa in basso, usata per errori (webcam, Ollama). Vedi showDebug() in script.js */
 #debugMsg {
   position: fixed;
-  bottom: 55px; left: 50%;
+  bottom: calc(55px + env(safe-area-inset-bottom, 0px)); left: 50%;
   transform: translateX(-50%);
   font-family: monospace;
   font-size: 9px;
@@ -365,3 +371,50 @@ body::before {
   margin-right: 6px;
 }
 @keyframes spinning { to { transform: rotate(360deg); } }
+
+/* ── SCHERMI PICCOLI (TELEFONO) ──────────────────────────────────── */
+/* Il layout sopra è pensato per schermi grandi (PC). Qui sotto solo le
+   differenze per schermi stretti: elementi rimpiccioliti/riposizionati
+   per non sovrapporsi ed entrare comodamente in una larghezza da telefono.
+   Soglia 600px = copre qualunque telefono in verticale. */
+@media (max-width: 600px) {
+  #pulseCore { width: 120px; height: 120px; }
+
+  #colorOverlay { width: 64px; height: 64px; }
+  #paletteSwatches { top: calc(10% + 76px); }
+  .swatch { width: 18px; height: 18px; }
+
+  /* l'anteprima si sposta in alto a destra: libera tutta la fascia in
+     basso per il solo bottone GIUDICA, ben visibile e facile da toccare */
+  #preview {
+    top: calc(20px + env(safe-area-inset-top, 0px));
+    right: 20px;
+    bottom: auto;
+    width: 100px;
+    height: 75px;
+  }
+
+  /* GIUDICA: unico bottone in basso, centrato — l'azione principale su un telefono */
+  #judgeBtn {
+    left: 50%;
+    right: auto;
+    transform: translateX(-50%);
+    font-size: 10px;
+    padding: 9px 18px;
+  }
+
+  /* CAM e cambia-fotocamera: piccola coppia in alto a destra, sotto l'anteprima */
+  #camBtn, #switchCamBtn {
+    bottom: auto;
+    right: 20px;
+    font-size: 8px;
+    padding: 6px 9px;
+  }
+  #camBtn       { top: calc(100px + env(safe-area-inset-top, 0px)); }
+  #switchCamBtn { top: calc(132px + env(safe-area-inset-top, 0px)); }
+
+  #aiJudgment { padding: 1.6rem 1.4rem; max-width: 88vw; }
+  #aiTrace    { max-width: 88vw; }
+
+  #resolutionSlider { width: 90px; }
+}
