@@ -5,12 +5,20 @@
 //  script.js) ha una sua cache separata, gestita internamente dalla
 //  libreria WebLLM la prima volta che viene scaricato.
 //
-//  QUANDO MODIFICHI index.html / style.css / script.js: alza il numero
-//  di CACHE_NAME qui sotto (es. v1 → v2), altrimenti i telefoni che
-//  hanno già installato l'app potrebbero continuare a vedere la
-//  versione vecchia dalla cache invece di quella aggiornata.
+//  STRATEGIA: "network-first" — prova sempre prima a scaricare la
+//  versione più recente da internet, e usa la cache solo come riserva
+//  se il telefono è offline. Così, finché il telefono ha connessione,
+//  vede sempre l'ultima versione caricata su GitHub senza bisogno di
+//  nessun accorgimento manuale; la cache serve solo quando manca la
+//  rete (uso "vero" da app installata, in giro senza connessione).
+//
+//  QUANDO MODIFICHI index.html / style.css / script.js: alza comunque il
+//  numero di CACHE_NAME qui sotto (es. v1 → v2). Non è più indispensabile
+//  per vedere le modifiche (la strategia network-first se ne occupa da
+//  sola quando il telefono è online), ma pulisce la cache vecchia invece
+//  di lasciarla lì a occupare spazio inutilmente.
 // ══════════════════════════════════════════════════════════════════
-const CACHE_NAME = 'sovrainterpretazione-v1';
+const CACHE_NAME = 'sovrainterpretazione-v2';
 
 const ASSETS = [
   './',
@@ -40,25 +48,22 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-// strategia "stale-while-revalidate": risponde subito con la cache (veloce,
-// funziona anche offline), poi in background scarica la versione aggiornata
-// e la salva per la prossima volta. Tocca SOLO le richieste verso questo
-// stesso sito: lascia passare senza toccarle le richieste verso esm.run e
-// verso i pesi del modello AI (Hugging Face/CDN di WebLLM), che gestiscono
-// già da soli la propria cache.
+// strategia "network-first, con la cache solo come riserva": prova sempre
+// prima la rete (così si vede subito l'ultima versione pubblicata), e
+// ricade sulla cache SOLO se la rete non risponde (telefono offline).
+// Tocca SOLO le richieste verso questo stesso sito: lascia passare senza
+// toccarle le richieste verso esm.run e verso i pesi del modello AI
+// (Hugging Face/CDN di WebLLM), che gestiscono già da soli la propria cache.
 self.addEventListener('fetch', (event) => {
   const req = event.request;
   if (req.method !== 'GET' || new URL(req.url).origin !== location.origin) return;
 
   event.respondWith(
-    caches.match(req).then(cached => {
-      const network = fetch(req)
-        .then(res => {
-          caches.open(CACHE_NAME).then(cache => cache.put(req, res.clone()));
-          return res;
-        })
-        .catch(() => cached); // offline e non in cache: fallisce silenziosamente
-      return cached || network;
-    })
+    fetch(req)
+      .then(res => {
+        caches.open(CACHE_NAME).then(cache => cache.put(req, res.clone()));
+        return res;
+      })
+      .catch(() => caches.match(req)) // offline: usa l'ultima copia salvata, se c'è
   );
 });
