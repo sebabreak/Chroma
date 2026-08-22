@@ -678,7 +678,11 @@ function loop() {
 //     HTTPS (es. cloudflared o ngrok sul PC) che esponga la porta 11434 —
 //     aggiornalo ogni volta che il tunnel cambia indirizzo.
 const OLLAMA_LOCAL_URL  = "http://localhost:11434/api/generate";
-const OLLAMA_TUNNEL_URL = "https://requires-cnet-hormone-limiting.trycloudflare.com/api/generate"; // aggiorna questo indirizzo ogni volta che riavvii cloudflared (cambia ad ogni riavvio)
+// dominio FISSO gratuito di ngrok (a differenza del tunnel "veloce" di
+// cloudflared usato prima, questo non cambia più a ogni riavvio — va
+// aggiornato qui solo se in futuro cambi account ngrok o dominio assegnato).
+// Per usarlo: sul PC, "ngrok http 11434 --url https://stoop-situation-trifle.ngrok-free.dev"
+const OLLAMA_TUNNEL_URL = "https://stoop-situation-trifle.ngrok-free.dev/api/generate";
 
 // prova prima l'indirizzo locale (istantaneo se sei sul PC con Ollama); se
 // non risponde in fretta (o non sei sul PC), passa al tunnel — ma solo se
@@ -694,13 +698,26 @@ const OLLAMA_TUNNEL_URL = "https://requires-cnet-hormone-limiting.trycloudflare.
 // Un timeout di qualche secondo qui non rallenta il caso "sei sul telefono,
 // niente Ollama in locale": lì la connessione a "localhost" fallisce subito
 // (connessione rifiutata), non c'è nulla da aspettare.
+//
+// NOTA su "ngrok-skip-browser-warning": ngrok gratuito, prima di far passare
+// la richiesta, normalmente mostrerebbe a chi visita il tunnel una paginetta
+// di avviso ("stai visitando un tunnel ngrok, clicca per continuare") — utile
+// per un umano nel browser, ma per la nostra richiesta automatica quella
+// pagina HTML arriverebbe al posto della risposta vera di Ollama, e il
+// codice fallirebbe cercando di leggerla come se fosse JSON. Questa
+// intestazione dice a ngrok di saltare l'avviso. Non serve per l'indirizzo
+// locale (Ollama la ignora semplicemente), quindi la mandiamo sempre, così
+// la stessa funzione va bene per entrambi gli indirizzi.
 async function ollamaFetch(body) {
   const tryUrl = (url, timeoutMs) => {
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), timeoutMs);
     return fetch(url, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'ngrok-skip-browser-warning': '1',
+      },
       body: JSON.stringify(body),
       signal: ctrl.signal,
     }).finally(() => clearTimeout(timer));
