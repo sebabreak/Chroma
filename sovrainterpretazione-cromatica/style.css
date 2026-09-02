@@ -16,6 +16,10 @@
    - Stile della "traccia" che resta in alto dopo    → #aiTrace
    - Spessore/posizione della striscia memoria       → #memoryStrip
    - Layout/dimensioni su schermi piccoli (telefono)  → media query "SCHERMI PICCOLI" in fondo al file
+   - Aspetto del pannello dati oggettivi              → #dataPanel e .data-*
+   - Aspetto della domanda umana/dei tasti d'umore    → #humanQuestion, .mood-chip
+   - Aspetto di "ti riconosci?"                       → #recognizeQuestion, .recognize-btns
+   - Aspetto/dimensione del ritratto cromatico         → #portraitPanel, #portraitCanvas
    ══════════════════════════════════════════════════════════════════ */
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -99,7 +103,7 @@ video { display: none; }
 #colorOverlay {
   position: absolute;
   top: 10%;
-  left: 10%;
+  left: 20px; /* stessa x di #hud qui sopra, così tutta la colonna a sinistra resta allineata */
   width: 120px;
   height: 120px;
   border-radius: 6px;
@@ -121,7 +125,7 @@ video { display: none; }
 #paletteSwatches {
   position: fixed;
   top: calc(10% + 132px);
-  left: 10%;
+  left: 20px; /* stessa x di #hud/#colorOverlay, colonna allineata */
   z-index: 15;
   display: flex;
   gap: 6px;
@@ -215,7 +219,7 @@ video { display: none; }
 /* bottom qui sotto usa env(safe-area-inset-bottom): su telefoni con barra
    di navigazione gestuale (iPhone senza tasto Home, molti Android) evita
    che i bottoni finiscano nascosti sotto quella barra */
-#camBtn, #switchCamBtn, #judgeBtn {
+#camBtn, #switchCamBtn {
   position: fixed;
   bottom: calc(20px + env(safe-area-inset-bottom, 0px));
   z-index: 999;
@@ -230,13 +234,36 @@ video { display: none; }
   transition: all 0.25s;
   white-space: nowrap;
 }
-#camBtn:hover, #switchCamBtn:hover, #judgeBtn:hover {
+#camBtn:hover, #switchCamBtn:hover {
   border-color: rgba(255,255,255,0.6);
   color: #fff;
 }
 #camBtn       { right: 20px; }
 #switchCamBtn { right: 130px; }
-#judgeBtn     { left: 20px; }
+
+/* GIUDICA: l'azione principale dell'installazione — deve essere
+   impossibile da non notare, quindi grande, centrata e sempre uguale
+   (non più un piccolo link agli angoli come cam/switch qui sopra) */
+#judgeBtn {
+  position: fixed;
+  bottom: calc(28px + env(safe-area-inset-bottom, 0px));
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 999;
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.45);
+  color: #fff;
+  font-family: 'Courier New', monospace;
+  font-size: 14px;
+  letter-spacing: 0.22em;
+  padding: 14px 32px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.25s;
+  white-space: nowrap;
+}
+#judgeBtn:hover:not(:disabled) { background: rgba(255,255,255,0.16); border-color: #fff; }
+#judgeBtn:disabled { opacity: 0.6; cursor: default; }
 
 /* ── GIUDIZIO AI (OLLAMA) — grande, al centro dello schermo ───────── */
 /* mostrato/animato da showJudgment() in script.js */
@@ -330,6 +357,40 @@ video { display: none; }
 }
 #hudState { color: rgba(255,255,255,0.4); }
 
+/* ── QR TELEFONO ─────────────────────────────────────────────────── */
+/* stessa colonna di #hud (left:20px): scansionandolo si apre la stessa
+   app su GitHub Pages, installabile come PWA anche sul telefono */
+#qrBox {
+  position: fixed;
+  bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+  left: 20px;
+  z-index: 999;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  text-decoration: none;
+  opacity: 0.85;
+  transition: opacity 0.25s;
+}
+#qrBox:hover { opacity: 1; }
+#qrCode {
+  display: block;
+  width: 72px;
+  height: 72px;
+  background: #fff; /* sfondo bianco fisso: il tema scuro non deve mai ridurre il contrasto dei moduli QR */
+  padding: 5px;
+  border-radius: 4px;
+  border: 1px solid rgba(255,255,255,0.25);
+}
+#qrLabel {
+  font-family: 'Courier New', monospace;
+  font-size: 8px;
+  letter-spacing: 0.1em;
+  color: rgba(255,255,255,0.45);
+  text-align: center;
+}
+
 /* ── MESSAGGIO DI DEBUG ──────────────────────────────────────────── */
 /* piccola scritta rossa in basso, usata per errori (webcam, Ollama). Vedi showDebug() in script.js */
 #debugMsg {
@@ -346,6 +407,190 @@ video { display: none; }
   max-width: 80vw;
   text-align: center;
   pointer-events: none;
+}
+
+/* ── DATI OGGETTIVI (script.js, sezione 12) ───────────────────────── */
+/* pannello "clinico" SEMPRE VISIBILE (non più una fase che appare e
+   sparisce): mostra i valori misurati in tempo reale, a sinistra, sotto
+   al riquadro colore/quadratini di selezione. Font monospace come l'HUD,
+   in contrasto netto con il serif corsivo del giudizio AI (#aiJudgment)
+   che appare al centro — è proprio questo contrasto visivo a segnare la
+   differenza tra dato e sovrainterpretazione, il cuore della ricerca.
+   Resta invisibile (opacity 0) solo finché non arriva il primo
+   aggiornamento da updateDataPanel() — da lì in poi non sparisce più. */
+#dataPanel {
+  position: fixed;
+  top: calc(10% + 170px);
+  /* stessa x di #hud/#colorOverlay (20px), spostata a sinistra della
+     propria imbottitura orizzontale (padding, 1.3rem): così il quadratino/
+     il testo DENTRO al pannello iniziano esattamente alla stessa x degli
+     altri elementi della colonna, invece di restare rientrati per via del
+     solo padding della card */
+  left: calc(20px - 1.3rem);
+  z-index: 20;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.8s ease;
+  background: rgba(0,0,0,0.72);
+  border: 1px solid rgba(255,255,255,0.12);
+  padding: 1.1rem 1.3rem;
+  width: 280px;
+  max-width: 40vw;
+  font-family: 'Courier New', monospace;
+  text-align: left;
+}
+.data-title {
+  font-size: 10px;
+  letter-spacing: 0.25em;
+  color: rgba(255,255,255,0.35);
+  margin-bottom: 0.9rem;
+}
+.data-dominant {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 1rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+}
+.data-swatch {
+  width: 16px; height: 16px;
+  border-radius: 3px;
+  border: 1px solid rgba(255,255,255,0.25);
+  flex-shrink: 0;
+}
+.data-swatch.big { width: 40px; height: 40px; }
+.data-dominant-name {
+  font-size: 15px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #fff;
+}
+.data-dominant-sub {
+  font-size: 10px;
+  color: rgba(255,255,255,0.45);
+  margin-top: 4px;
+}
+.data-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 11px;
+  color: rgba(255,255,255,0.7);
+  padding: 3px 0;
+}
+.data-pct  { width: 36px; color: rgba(255,255,255,0.9); }
+.data-name { flex: 1; text-transform: uppercase; letter-spacing: 0.04em; }
+.data-hex  { color: rgba(255,255,255,0.35); }
+
+/* ── DOMANDA UMANA (script.js, sezione 13) — pre-giudizio ─────────── */
+#humanQuestion {
+  position: fixed;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 24;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.6s ease;
+  text-align: center;
+  max-width: 90vw;
+}
+.question-label {
+  font-family: 'Cormorant Garamond', serif;
+  font-style: italic;
+  font-weight: 300;
+  font-size: clamp(1.1rem, 2.6vw, 1.7rem);
+  color: rgba(255,255,255,0.9);
+  margin-bottom: 1.4rem;
+}
+#moodChips {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin-bottom: 1rem;
+}
+.mood-chip {
+  /* sfondo scuro pieno (non trasparente): se dovesse capitare di finire
+     sopra al pannello dati oggettivi (#dataPanel, sempre visibile),
+     copre il testo sotto invece di "incrociarlo" a schermo */
+  background: rgba(8,8,10,0.92);
+  border: 1px solid rgba(255,255,255,0.25);
+  color: rgba(255,255,255,0.7);
+  font-family: 'Courier New', monospace;
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 8px 14px;
+  border-radius: 20px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.mood-chip:hover { border-color: #fff; color: #fff; }
+
+/* bottone "testuale", senza bordo — usato per azioni secondarie/facoltative
+   (salta la domanda, scarica il ritratto) */
+.ghost-btn {
+  background: transparent;
+  border: none;
+  color: rgba(255,255,255,0.35);
+  font-family: 'Courier New', monospace;
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.ghost-btn:hover { color: rgba(255,255,255,0.7); }
+
+/* ── "TI RICONOSCI?" (script.js, sezione 14) ──────────────────────── */
+#recognizeQuestion {
+  position: fixed;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 24;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.6s ease;
+  text-align: center;
+  max-width: 90vw;
+}
+.recognize-btns {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+}
+.recognize-btns button {
+  /* sfondo scuro pieno, stesso motivo di .mood-chip qui sopra */
+  background: rgba(8,8,10,0.92);
+  border: 1px solid rgba(255,255,255,0.3);
+  color: rgba(255,255,255,0.8);
+  font-family: 'Courier New', monospace;
+  font-size: 11px;
+  letter-spacing: 0.15em;
+  padding: 10px 20px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.recognize-btns button:hover { border-color: #fff; color: #fff; background: rgba(28,28,30,0.95); }
+
+/* ── RITRATTO CROMATICO (script.js, sezione 15) ───────────────────── */
+#portraitPanel {
+  position: fixed;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 24;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.8s ease;
+  text-align: center;
+}
+#portraitCanvas {
+  width: min(46vh, 46vw);
+  height: min(46vh, 46vw);
+  border-radius: 8px;
+  border: 1px solid rgba(255,255,255,0.15);
+  display: block;
+  margin: 0 auto 0.9rem auto;
 }
 
 /* ── SCANLINES ───────────────────────────────────────────────────── */
@@ -394,14 +639,25 @@ body::before {
     height: 75px;
   }
 
-  /* GIUDICA: unico bottone in basso, centrato — l'azione principale su un telefono */
+  /* GIUDICA: già centrato di default (vedi regola base sopra) — qui solo
+     una misura adatta a un telefono, comunque ben più grande di prima */
   #judgeBtn {
-    left: 50%;
-    right: auto;
-    transform: translateX(-50%);
-    font-size: 10px;
-    padding: 9px 18px;
+    font-size: 12px;
+    padding: 12px 24px;
   }
+
+  /* pannello dati oggettivi: più stretto e più in alto, per non scontrarsi
+     con i quadratini di selezione colore (più in alto su schermi piccoli) */
+  #dataPanel {
+    top: calc(10% + 100px);
+    left: calc(20px - 1rem); /* vedi nota sull'allineamento nella regola base di #dataPanel */
+    width: 58vw;
+    max-width: 240px;
+    min-width: 220px;
+    padding: 0.9rem 1rem;
+  }
+  .data-dominant-name { font-size: 13px; }
+  .data-row { font-size: 10px; gap: 6px; }
 
   /* CAM e cambia-fotocamera: piccola coppia in alto a destra, sotto l'anteprima */
   #camBtn, #switchCamBtn {
@@ -417,4 +673,16 @@ body::before {
   #aiTrace    { max-width: 88vw; }
 
   #resolutionSlider { width: 90px; }
+
+  /* QR: un po' più piccolo per non occupare troppo spazio su schermi stretti */
+  #qrCode { width: 56px; height: 56px; }
+  #qrLabel { font-size: 7px; }
+
+  /* sequenza interattiva (domanda/riconoscimento/ritratto): un po' più
+     compatta per entrare comodamente in uno schermo da telefono */
+  .question-label { margin-bottom: 1rem; }
+  .mood-chip { font-size: 9px; padding: 7px 11px; }
+  .recognize-btns { gap: 8px; }
+  .recognize-btns button { font-size: 10px; padding: 8px 14px; }
+  #portraitCanvas { width: 55vw; height: 55vw; }
 }
