@@ -93,6 +93,46 @@
   <!-- messaggio di errore/debug (webcam non accessibile, AI locale non disponibile, ecc.) -->
   <div id="debugMsg"></div>
 
+  <!-- QR in basso a sinistra: scansionandolo col telefono si apre la stessa
+       app (GitHub Pages), installabile anche lì come PWA (vedi manifest.json) -->
+  <a id="qrBox" href="https://sebabreak.github.io/Chroma/sovrainterpretazione-cromatica/" target="_blank" rel="noopener">
+    <img id="qrCode" src="icons/qr-telefono.png" alt="QR code per aprire l'app sul telefono">
+    <span id="qrLabel">installa su telefono</span>
+  </a>
+
+  <!-- SEQUENZA INTERATTIVA (script.js, sezioni 12-15), un elemento alla
+       volta, dallo stesso "palco" al centro dello schermo:
+       dati oggettivi → domanda umana → giudizio AI (#aiJudgment, sopra)
+       → "ti riconosci?" → ritratto cromatico -->
+
+  <!-- 1. dati oggettivi: nome colore, HEX, RGB, S/L, % area — nessuna interpretazione qui -->
+  <div id="dataPanel"></div>
+
+  <!-- 2. domanda umana, raccolta PRIMA del giudizio AI per poterla confrontare dopo -->
+  <div id="humanQuestion">
+    <div class="question-label">Cosa ti trasmettono questi colori?</div>
+    <div id="moodChips"></div>
+    <button id="moodSkip" class="ghost-btn" type="button">preferisco non rispondere</button>
+  </div>
+
+  <!-- 3. il giudizio AI vero e proprio è #aiJudgment, già definito sopra -->
+
+  <!-- 4. "ti riconosci?", mostrata subito dopo il giudizio -->
+  <div id="recognizeQuestion">
+    <div class="question-label">Ti riconosci in questa interpretazione?</div>
+    <div class="recognize-btns">
+      <button data-answer="si" type="button">SÌ</button>
+      <button data-answer="in parte" type="button">IN PARTE</button>
+      <button data-answer="no" type="button">NO</button>
+    </div>
+  </div>
+
+  <!-- 5. ritratto cromatico astratto generato dai dati di questa osservazione -->
+  <div id="portraitPanel">
+    <canvas id="portraitCanvas"></canvas>
+    <a id="portraitDownload" class="ghost-btn" download="ritratto-cromatico.png">salva il ritratto</a>
+  </div>
+
   <script src="script.js"></script>
 </body>
 </html>
