@@ -17,13 +17,18 @@
 //   7. ESTRAZIONE PALETTE (K-MEANS) . trova i colori dominanti nel frame
 //   8. MEMORIA ...................... striscia dei colori recenti in fondo allo schermo
 //   9. LOOP PRINCIPALE .............. gira ad ogni frame: è il cuore del programma
-//  10. GIUDIZIO AI (OLLAMA) ......... chiamata al modello sul PC (via tunnel) + prompt
+//  10. GIUDIZIO AI (OLLAMA) ......... snapshot dati + prompt + chiamata al modello (via tunnel) + auto-giudizio silenzioso + sequenza interattiva completa
 //  11. CONTROLLI .................... bottoni cam / cambia fotocamera / giudica, selezione manuale del colore, avvio al click
+//  12. DATI OGGETTIVI ............... pannello nome colore/HEX/RGB/S/L/% area, SEMPRE VISIBILE a sinistra, si aggiorna da solo
+//  13. DOMANDA UMANA ................ "cosa ti trasmettono questi colori?", raccolta prima del giudizio AI (timeout se non risponde nessuno)
+//  14. "TI RICONOSCI?" .............. sì/no/in parte, mostrata subito dopo il giudizio AI (timeout se non risponde nessuno)
+//  15. RITRATTO CROMATICO ........... immagine astratta generata dai dati della singola osservazione, scaricabile
+//  16. LOG RISPOSTE .................. registro in memoria delle risposte + esportazione CSV (tasto "E")
 //
 //  MODIFICHE PIÙ COMUNI — dove intervenire:
-//  - Cambiare modello Ollama o i suoi parametri  → sezione 10, dentro requestJudgment()
+//  - Cambiare modello Ollama o i suoi parametri  → sezione 10, dentro fetchAIJudgment()
 //  - Cambiare l'indirizzo del tunnel             → sezione 10, costante OLLAMA_TUNNEL_URL
-//  - Cambiare il testo/personalità del giudizio  → sezione 10, variabile `prompt`
+//  - Cambiare il testo/personalità del giudizio  → sezione 10, variabile `prompt` in fetchAIJudgment()
 //  - Rendere il riconoscimento colore più preciso → sezione 7, costanti in cima a extractPalette()
 //  - Cambiare quanto si rimpicciolisce il testo dei giudizi lunghi → sezione 10, costanti JUDGMENT_*
 //  - Cambiare i nomi dei colori o le soglie      → sezione 6, funzione colorName()
@@ -32,8 +37,13 @@
 //  - Cambiare colori/movimento/dimensione della nebulosa di sfondo → sezione 5, updateAndDrawAmbient() e costanti AMBIENT_*
 //  - Cambiare la lunghezza delle scie delle particelle → sezione 5, costante TRAIL_LENGTH
 //  - Cambiare il minimo/massimo della risoluzione webcam → index.html, input#resolutionSlider
-//  - Cambiare ogni quanto il sistema giudica da solo → sezione 3, costante AUTO_INTERVAL
+//  - Cambiare ogni quanto il sistema giudica da solo (auto-giudizio silenzioso) → sezione 3, costante AUTO_INTERVAL
 //  - Cambiare come funziona la scelta manuale del colore → sezione 11, updatePaletteSwatches() e i due addEventListener('click', ...) subito sotto
+//  - Cambiare le parole d'umore della domanda umana → sezione 13, costante MOOD_WORDS
+//  - Cambiare dopo quanto una domanda senza risposta prosegue da sola → sezioni 13/14, costanti *_TIMEOUT
+//  - Cambiare quanto resta visibile il ritratto prima di sfumare → sezione 15, costante PORTRAIT_DURATION
+//  - Cambiare l'aspetto del ritratto cromatico   → sezione 15, funzione renderPortrait()
+//  - Esportare le risposte raccolte (sensazione/giudizio/riconoscimento) → sezione 16: tasto "E" sulla tastiera, oppure exportResponseLog() dalla console
 // ══════════════════════════════════════════════════════════════════
 
 // Ollama gira sul PC (non nel telefono): il PC deve avere Ollama installato
@@ -380,7 +390,12 @@ function extractPalette(imageData, k, previousPalette = []) {
     const r = data[i], g = data[i+1], b = data[i+2];
     if (r + g + b > 30 && r + g + b < 740) pixels.push([r, g, b]);
   }
-  if (pixels.length < k) return previousPalette.length === k ? previousPalette : Array(k).fill([128,128,128]);
+  if (pixels.length < k) {
+    // troppo pochi pixel utili: nessuna percentuale d'area affidabile da
+    // calcolare in questo frame (vedi lastPaletteWeights, sezione 8/12)
+    lastPaletteWeights = Array(k).fill(null);
+    return previousPalette.length === k ? previousPalette : Array(k).fill([128,128,128]);
+  }
 
   // ── inizializzazione dei centroidi (i "semi" da cui parte il raggruppamento) ──
   let centroids;
@@ -452,11 +467,31 @@ function extractPalette(imageData, k, previousPalette = []) {
     });
   }
 
-  // ordina per saturazione decrescente: i colori più vividi/interessanti vengono descritti per primi all'AI
-  return centroids
-    .map(rgb => ({ rgb, sat: getSaturation(rgb) }))
-    .sort((a, b) => b.sat - a.sat)
-    .map(x => x.rgb);
+  // percentuale d'area di ciascun colore finale: quanti pixel campionati
+  // gli sono stati assegnati nell'ultima iterazione, sul totale. Serve SOLO
+  // al pannello "dati oggettivi" (sezione 12) — il giudizio AI non la usa.
+  // Va ricalcolata sui centroidi DEFINITIVI (quelli appena trovati sopra),
+  // non su quelli di inizio iterazione, altrimenti le percentuali
+  // sarebbero quelle di un raggruppamento già superato.
+  const finalCounts = Array(k).fill(0);
+  for (const p of pixels) {
+    let best = 0, bestD = Infinity;
+    for (let c = 0; c < k; c++) {
+      const d = colorDist(p, centroids[c]);
+      if (d < bestD) { bestD = d; best = c; }
+    }
+    finalCounts[best]++;
+  }
+
+  // ordina per saturazione decrescente: i colori più vividi/interessanti
+  // vengono descritti per primi all'AI — le percentuali (lastPaletteWeights)
+  // devono seguire lo stesso riordino, altrimenti finirebbero associate al
+  // colore sbagliato quando il pannello dati le legge insieme alla palette
+  const ordered = centroids
+    .map((rgb, i) => ({ rgb, sat: getSaturation(rgb), pct: finalCounts[i] / pixels.length }))
+    .sort((a, b) => b.sat - a.sat);
+  lastPaletteWeights = ordered.map(x => x.pct);
+  return ordered.map(x => x.rgb);
 }
 
 // distanza percettiva ("redmean") tra due colori RGB: più fedele a come
@@ -476,6 +511,15 @@ function getSaturation([r,g,b]) {
 
 // palette corrente (k colori), ricalcolata periodicamente dentro loop() (sezione 9)
 let currentPalette = [];
+// percentuale d'area di ciascun colore di currentPalette, stesso ordine
+// (impostata da extractPalette qui sopra); null dove non calcolabile.
+// Usata solo dal pannello "dati oggettivi" (sezione 12), mai dal prompt AI.
+let lastPaletteWeights = [];
+// true nel frame subito dopo un ricalcolo della palette: dice a loop()
+// (sezione 9) di aggiornare anche il pannello dati oggettivi (sezione 12),
+// che quindi si ridisegna solo quando i dati cambiano davvero, non ad ogni
+// frame — resta leggero anche con la sequenza interattiva in corso.
+let paletteDirty = false;
 
 // ── 8. MEMORIA ────────────────────────────────────────────────────
 // tiene traccia dei colori osservati nel tempo: alimenta la striscia
@@ -538,6 +582,7 @@ function loop() {
     const forceReseed = (paletteRecomputeCount % PALETTE_FORCE_RESEED_EVERY === 0);
     currentPalette = extractPalette(imgData, 5, forceReseed ? [] : currentPalette);
     updatePaletteSwatches(); // aggiorna i colori dei quadratini cliccabili (sezione 11)
+    paletteDirty = true;
   }
 
   // ── selezione manuale del colore (sezione 11) ──
@@ -559,6 +604,11 @@ function loop() {
   const domCol = selectedColor || (currentPalette.length > 0 ? currentPalette[0] : [r,g,b]);
   colorOverlay.style.backgroundColor=`rgb(${domCol[0]},${domCol[1]},${domCol[2]})`;
   resolutionSlider.style.setProperty("--track-color",`linear-gradient(to right, rgb(${r},${g},${b}) 0%, #555 100%)`);
+
+  // pannello dati oggettivi (sezione 12): resta sempre visibile e si
+  // aggiorna da solo quando i colori cambiano — non sparisce più ad ogni
+  // ciclo, per esplicita richiesta
+  if (paletteDirty) { updateDataPanel(domCol); paletteDirty = false; }
 
   // disegna l'anteprima pixelata in basso a destra
   pctx.imageSmoothingEnabled=false;
@@ -732,17 +782,34 @@ async function ollamaFetch(body) {
   }
 }
 
+// ── "istantanea" dei dati oggettivi ──────────────────────────────
+// Congela, nel momento esatto in cui GIUDICA viene premuto, la palette e
+// il colore dominante correnti: da qui in poi TUTTA la sequenza (pannello
+// dati → domanda umana → giudizio AI → ritratto) ragiona su questi stessi
+// valori, anche se nel frattempo l'inquadratura cambia. Senza questo,
+// l'AI potrebbe finire per descrivere colori diversi da quelli appena
+// mostrati all'osservatore nel pannello dati — proprio il tipo di
+// incoerenza che il confronto dato/interpretazione (sezione 12+) deve
+// evitare. Usata sia da requestJudgment() che da runFullSequence() qui sotto.
+function captureObjectiveSnapshot() {
+  const hasPalette = currentPalette.length > 0;
+  const palette = hasPalette ? currentPalette.slice(0, 5) : [[prevR??128, prevG??128, prevB??128]];
+  const weights = hasPalette && lastPaletteWeights.length === currentPalette.length
+    ? lastPaletteWeights.slice(0, palette.length)
+    : palette.map(() => null);
+  return { palette, weights, dominant: selectedColor || palette[0], selected: !!selectedColor, hasPalette };
+}
+
 // PER CAMBIARE MODELLO OLLAMA: modifica `model: 'gemma3:4b'` qui sotto
 // con il nome di un modello che hai scaricato (es. 'llama3.2', 'mistral', ecc.)
 // PER CAMBIARE LA "PERSONALITÀ" DEL GIUDIZIO: modifica il testo di `prompt` più sotto.
-async function requestJudgment(silent=false) {
-  if(analyzing) return;
-
-  analyzing=true;
-  judgeBtn.disabled=true;
-  judgeBtn.innerHTML='<span class="spin"></span>';
-
-  const nr=prevR??128, ng=prevG??128, nb=prevB??128;
+//
+// Costruisce il prompt a partire da uno snapshot congelato (vedi sopra) e
+// chiama Ollama. Restituisce il testo del giudizio, o rilancia l'errore
+// (gestito da chi la chiama: requestJudgment() per l'auto-giudizio
+// silenzioso, runFullSequence() per la sequenza interattiva completa,
+// sezione 12+) — questa funzione non tocca mai lo stato dei bottoni.
+async function fetchAIJudgment(snapshot) {
   const recentNames=[...new Set(dominantHistory.slice(-12).map(c=>colorName(c)))].join(', ');
   const isEarly=judgeCount<3, isLate=judgeCount>10;
 
@@ -757,22 +824,22 @@ async function requestJudgment(silent=false) {
   // per primo ed è segnalato come tale — è la parte a cui l'AI deve dare
   // più peso nel giudizio (vedi anche la riga dedicata più sotto nel prompt).
   let paletteDesc;
-  if (selectedColor) {
-    const others = currentPalette.filter(c => c !== selectedColor).slice(0, 3);
+  if (snapshot.selected) {
+    const others = snapshot.palette.filter(c => c !== snapshot.dominant).slice(0, 3);
     paletteDesc = [
-      paletteLine(selectedColor, "(scelto dall'osservatore — il colore su cui concentrare il giudizio)"),
+      paletteLine(snapshot.dominant, "(scelto dall'osservatore — il colore su cui concentrare il giudizio)"),
       ...others.map(rgb => paletteLine(rgb, '(colore secondario della scena)'))
     ].join('\n');
-  } else if (currentPalette.length > 0) {
+  } else if (snapshot.hasPalette) {
     const roles = [
       '(dominante — vestito o oggetto in primo piano)',
       '(secondo elemento — altro capo o superficie)',
       '(terzo elemento — sfondo o dettaglio)',
       '(dettaglio minore della scena)'
     ];
-    paletteDesc = currentPalette.slice(0,4).map((rgb, i) => paletteLine(rgb, roles[i])).join('\n');
+    paletteDesc = snapshot.palette.slice(0,4).map((rgb, i) => paletteLine(rgb, roles[i])).join('\n');
   } else {
-    paletteDesc = paletteLine([nr,ng,nb], '(colore medio scena)');
+    paletteDesc = paletteLine(snapshot.dominant, '(colore medio scena)');
   }
 
   // ── PROMPT: qui viene definita la "personalità" dell'AI. Modifica
@@ -785,7 +852,7 @@ Giudica le scelte cromatiche come se fossero decisioni psicologiche inconsce.
 Sei un sistema che vede troppo e comprende male. Questo è il tuo scopo.
 ${isEarly ? 'Stai iniziando. Il giudizio è ancora incerto.' : ''}
 ${isLate ? 'Hai visto molto. Il tuo giudizio si è indurito e reso più spietato.' : ''}
-${selectedColor ? "L'osservatore ha scelto di dirigere la tua attenzione su un colore preciso: concentra la parte più importante del giudizio su quello, prima degli altri." : ''}
+${snapshot.selected ? "L'osservatore ha scelto di dirigere la tua attenzione su un colore preciso: concentra la parte più importante del giudizio su quello, prima degli altri." : ''}
 
 Colori rilevati nella scena:
 ${paletteDesc}
@@ -798,40 +865,102 @@ Riferisci i colori a intenzioni, stati d'animo, diagnosi psicologiche inventate.
 Puoi giudicare ogni colore separatamente o la combinazione.
 Senza virgolette. In italiano. Frasi spezzate, non sempre complete.`;
 
+  // chiamata a Ollama — prova prima l'indirizzo locale, poi il tunnel
+  // se serve (vedi ollamaFetch e i due OLLAMA_*_URL qui sopra)
+  const res = await ollamaFetch({
+    model: 'gemma3:4b',      // ← nome del modello Ollama da usare
+    prompt: prompt,
+    stream: false,
+    options: { temperature: 1.1, num_predict: 70 } // temperature = quanto "casuale"; num_predict = lunghezza massima risposta (abbassata da 160: giudizi più corti, più adatti a uno schermo di telefono)
+  });
+  const data = await res.json();
+  return data.response?.trim() || 'Il campo si cancella prima di essere letto.';
+}
+
+// traduce un errore di fetchAIJudgment in un messaggio leggibile, e sospende
+// l'auto-giudizio se il problema è strutturale — condiviso da requestJudgment()
+// (auto-giudizio silenzioso) e runFullSequence() (sequenza interattiva)
+function describeJudgmentError(e) {
+  console.error(e);
+  const eStr = String(e);
+  const isNetworkError = eStr.includes('Failed to fetch') || eStr.includes('NetworkError') || eStr.includes('AbortError');
+  const friendly = isNetworkError
+    ? 'Impossibile raggiungere Ollama.\nSe sei sul PC: controlla che Ollama sia avviato ("ollama serve").\nSe sei su un altro dispositivo (es. telefono): serve un tunnel\nattivo, con OLLAMA_TUNNEL_URL aggiornato nel codice.'
+    : 'Ollama non risponde correttamente.\nControlla la console del browser per i dettagli.';
+  // messaggio più lungo del solito: è l'unico modo per leggere l'errore
+  // vero prima che sparisca, utile se serve segnalarlo per capire la causa esatta
+  showDebug(eStr.slice(0,150), 15000);
+  autoJudgmentSuspended = true;
+  return friendly;
+}
+
+// ── AUTO-GIUDIZIO (ambientale, silenzioso) ────────────────────────
+// Usata SOLO dall'auto-giudizio periodico (AUTO_INTERVAL, sezione 9): fa
+// vivere l'opera anche senza nessuno che interagisca, con lo stesso
+// giudizio AI di sempre ma SENZA la sequenza di ricerca (dati/domanda
+// umana/riconoscimento/ritratto, sezione 12+), che ha senso solo quando
+// c'è davvero qualcuno lì a rispondere. Quando invece è un visitatore a
+// premere GIUDICA di persona, viene chiamata runFullSequence() (sotto),
+// non questa.
+async function requestJudgment(silent=false) {
+  if(analyzing) return;
+
+  analyzing=true;
+  judgeBtn.disabled=true;
+  judgeBtn.innerHTML='<span class="spin"></span>';
+
   try {
-    // chiamata a Ollama — prova prima l'indirizzo locale, poi il tunnel
-    // se serve (vedi ollamaFetch e i due OLLAMA_*_URL qui sopra)
-    const res = await ollamaFetch({
-      model: 'gemma3:4b',      // ← nome del modello Ollama da usare
-      prompt: prompt,
-      stream: false,
-      options: { temperature: 1.1, num_predict: 70 } // temperature = quanto "casuale"; num_predict = lunghezza massima risposta (abbassata da 160: giudizi più corti, più adatti a uno schermo di telefono)
-    });
-    const data = await res.json();
-    const txt = data.response?.trim() || 'Il campo si cancella prima di essere letto.';
+    const snapshot = captureObjectiveSnapshot();
+    const txt = await fetchAIJudgment(snapshot);
     judgeCount++;
     hudJudge.textContent=String(judgeCount).padStart(3,'0');
     await showJudgment(txt);
   } catch(e) {
-    // Ollama non raggiungibile: PC spento, Ollama non avviato, oppure (da
-    // telefono/altro dispositivo) tunnel non configurato/caduto/scaduto
-    console.error(e);
-    const eStr = String(e);
-    const isNetworkError = eStr.includes('Failed to fetch') || eStr.includes('NetworkError') || eStr.includes('AbortError');
-    const friendly = isNetworkError
-      ? 'Impossibile raggiungere Ollama.\nSe sei sul PC: controlla che Ollama sia avviato ("ollama serve").\nSe sei su un altro dispositivo (es. telefono): serve un tunnel\nattivo, con OLLAMA_TUNNEL_URL aggiornato nel codice.'
-      : 'Ollama non risponde correttamente.\nControlla la console del browser per i dettagli.';
-    // messaggio più lungo del solito: è l'unico modo per leggere l'errore
-    // vero prima che sparisca, utile se serve segnalarlo per capire la causa esatta
-    showDebug(eStr.slice(0,150), 15000);
+    const friendly = describeJudgmentError(e);
     if(!silent) await showJudgment(friendly);
+  }
 
-    // non lasciare che il giudizio automatico (AUTO_INTERVAL, sezione 9)
-    // continui a ritentare da solo ogni minuto dopo un fallimento: se il
-    // problema è strutturale (es. tunnel caduto) si limiterebbe solo a
-    // ritentare inutilmente in loop. Un click manuale su GIUDICA riarma i
-    // tentativi automatici (vedi il listener più sotto).
-    autoJudgmentSuspended = true;
+  analyzing=false;
+  judgeBtn.disabled=false;
+  judgeBtn.textContent='▸ GIUDICA';
+}
+
+// ── SEQUENZA INTERATTIVA COMPLETA ─────────────────────────────────
+// Chiamata quando un visitatore preme GIUDICA di persona (vedi il listener
+// in sezione 11): a differenza dell'auto-giudizio silenzioso qui sopra,
+// attraversa le fasi della ricerca — domanda umana (sezione 13) → giudizio
+// AI → "ti riconosci?" (sezione 14) → ritratto cromatico (sezione 15) —
+// registrando la risposta a fine percorso (logResponse, sezione 16). I
+// dati oggettivi (sezione 12) non fanno più parte di questa sequenza:
+// restano sempre visibili a sinistra, indipendentemente da GIUDICA.
+async function runFullSequence() {
+  if(analyzing) return;
+
+  analyzing=true;
+  autoJudgmentSuspended=false; // un click manuale riarma anche l'auto-giudizio (vedi sezione 3/9)
+  judgeBtn.disabled=true;
+  judgeBtn.innerHTML='<span class="spin"></span>';
+
+  const snapshot = captureObjectiveSnapshot();
+
+  try {
+    // il pannello dati oggettivi (sezione 12) è sempre visibile da solo:
+    // si parte direttamente dalla domanda umana, un passaggio in meno
+    // rispetto a prima → sequenza più corta e più veloce
+    const humanFeeling = await showHumanQuestion();
+
+    judgeBtn.innerHTML='<span class="spin"></span>'; // resta "in caricamento" mentre l'AI risponde
+    const text = await fetchAIJudgment(snapshot);
+    judgeCount++;
+    hudJudge.textContent=String(judgeCount).padStart(3,'0');
+
+    await showJudgment(text);
+    const recognized = await showRecognizeQuestion();
+    logResponse({ humanFeeling, aiJudgment: text, recognized, snapshot });
+    await showPortrait(snapshot);
+  } catch(e) {
+    const friendly = describeJudgmentError(e);
+    await showJudgment(friendly);
   }
 
   analyzing=false;
@@ -1028,10 +1157,250 @@ switchCamBtn.addEventListener("click", async()=>{
 });
 
 // ── GIUDICA ───────────────────────────────────────────────────────
+// un visitatore che preme questo bottone attraversa la sequenza interattiva
+// completa (dati oggettivi → domanda → giudizio → riconoscimento → ritratto,
+// sezione 12+), non solo il giudizio secco — vedi runFullSequence(), sezione 10
 judgeBtn.addEventListener("click",()=>{
-  autoJudgmentSuspended = false; // un click manuale riarma i tentativi automatici (vedi sezione 3/9/10)
-  requestJudgment(false);
+  runFullSequence();
 });
 
 // avvia subito il loop (anche senza cam attiva, per animare le particelle di sfondo)
 requestAnimationFrame(loop);
+
+// ── 12. DATI OGGETTIVI ────────────────────────────────────────────
+// Pannello SEMPRE VISIBILE (non più una fase transitoria): mostra i
+// valori che il sistema misura DAVVERO — nome colore, HEX, RGB,
+// saturazione/luminosità, percentuale d'area di ciascun colore della
+// palette — senza nessuna interpretazione. Resta a sinistra, si
+// aggiorna da solo quando la palette cambia (chiamato da loop(),
+// sezione 9, tramite il flag paletteDirty) e non sparisce mai: prima
+// del primo aggiornamento resta semplicemente invisibile (opacity 0 in
+// style.css), poi resta visibile per sempre.
+const dataPanel = document.getElementById('dataPanel');
+
+function updateDataPanel(domCol) {
+  const hasPalette = currentPalette.length > 0;
+  const palette = hasPalette ? currentPalette : [domCol];
+  const weights = hasPalette && lastPaletteWeights.length === currentPalette.length
+    ? lastPaletteWeights
+    : palette.map(() => null);
+
+  // "dominante" qui = più area occupata (non il più saturo, criterio
+  // usato invece dal giudizio AI in fetchAIJudgment) — è il senso più
+  // oggettivo quando si mostrano esplicitamente delle percentuali, e non
+  // deve contraddire la lista sotto. Una scelta manuale dell'osservatore
+  // ha sempre la priorità: è esplicita, non automatica.
+  let displayDominant = domCol;
+  if (!selectedColor && weights.some(w => w != null)) {
+    let bestW = -1;
+    palette.forEach((rgb, i) => {
+      const w = weights[i] ?? -1;
+      if (w > bestW) { bestW = w; displayDominant = rgb; }
+    });
+  }
+  const [h, s, l] = toHsl(displayDominant);
+
+  const rows = palette.map((rgb, i) => {
+    const pct = weights[i] != null ? Math.round(weights[i] * 100) + '%' : '—';
+    return `<div class="data-row">
+      <span class="data-swatch" style="background:${toHex(rgb)}"></span>
+      <span class="data-pct">${pct}</span>
+      <span class="data-name">${colorName(rgb)}</span>
+      <span class="data-hex">${toHex(rgb)}</span>
+    </div>`;
+  }).join('');
+
+  dataPanel.innerHTML = `
+    <div class="data-title">DATI RILEVATI</div>
+    <div class="data-dominant">
+      <span class="data-swatch big" style="background:${toHex(displayDominant)}"></span>
+      <div>
+        <div class="data-dominant-name">${colorName(displayDominant)}</div>
+        <div class="data-dominant-sub">${toHex(displayDominant)} · RGB ${displayDominant.join(',')} · S ${s}% · L ${l}%</div>
+      </div>
+    </div>
+    <div class="data-palette">${rows}</div>
+  `;
+  dataPanel.style.opacity = '1'; // dal primo aggiornamento in poi resta sempre visibile
+}
+
+// ── PANNELLI A SCELTA (domanda umana / "ti riconosci?") ───────────
+// Helper condiviso da entrambi (sezioni 13-14): mostra un pannello,
+// risolve quando l'osservatore clicca uno dei bottoni al suo interno, o
+// da sola dopo `timeoutMs` se nessuno risponde. Il timeout è la parte
+// importante: senza, un visitatore che si allontana senza rispondere
+// blocca la sequenza per sempre, e il prossimo GIUDICA sembra "non
+// funzionare più" — è il problema segnalato.
+function showOverlayChoice(el, buttons, readAnswer, timeoutMs) {
+  return new Promise(resolve => {
+    el.style.opacity = '1';
+    el.style.pointerEvents = 'auto';
+    let done = false;
+    const timer = setTimeout(() => finish(null), timeoutMs);
+    function finish(answer) {
+      if (done) return;
+      done = true;
+      clearTimeout(timer);
+      el.style.opacity = '0';
+      el.style.pointerEvents = 'none';
+      buttons.forEach(b => b.onclick = null);
+      setTimeout(() => resolve(answer), 400);
+    }
+    buttons.forEach(btn => { btn.onclick = () => finish(readAnswer(btn)); });
+  });
+}
+
+// ── 13. DOMANDA UMANA ─────────────────────────────────────────────
+// Prima di mostrare il giudizio dell'AI, si chiede all'osservatore cosa
+// gli trasmettono i colori (pannello dati, sempre visibile a sinistra):
+// la risposta viene registrata (logResponse, sezione 16) e resta a
+// disposizione per il confronto uomo/macchina al centro della ricerca.
+// Parole scelte per coprire uno spettro ampio di stati d'animo, non solo
+// positivo/negativo — modificale pure per adattarle al tuo lessico.
+const MOOD_WORDS = ['calma','energia','malinconia','gioia','tensione','serenità','inquietudine','nostalgia'];
+const HUMAN_QUESTION_TIMEOUT = 9000; // ms senza risposta prima di proseguire da sola
+
+const humanQuestionEl = document.getElementById('humanQuestion');
+const moodChipsEl     = document.getElementById('moodChips');
+const moodSkipBtn     = document.getElementById('moodSkip');
+
+function showHumanQuestion() {
+  moodChipsEl.innerHTML = MOOD_WORDS.map(w => `<button class="mood-chip" type="button" data-word="${w}">${w}</button>`).join('');
+  const buttons = [...moodChipsEl.querySelectorAll('.mood-chip'), moodSkipBtn];
+  // moodSkipBtn non ha data-word ("preferisco non rispondere") → risposta null, come il timeout
+  return showOverlayChoice(humanQuestionEl, buttons, btn => btn.dataset.word || null, HUMAN_QUESTION_TIMEOUT);
+}
+
+// ── 14. "TI RICONOSCI IN QUESTA INTERPRETAZIONE?" ─────────────────
+// Mostrata subito dopo il giudizio AI (#aiJudgment): fa emergere la
+// distanza tra ciò che il sistema misura davvero (pannello dati) e ciò
+// che interpreta — il punto centrale della ricerca, per esplicita
+// richiesta della relatrice.
+const RECOGNIZE_QUESTION_TIMEOUT = 7000; // ms senza risposta prima di proseguire da sola
+const recognizeQuestionEl = document.getElementById('recognizeQuestion');
+
+function showRecognizeQuestion() {
+  const buttons = [...recognizeQuestionEl.querySelectorAll('[data-answer]')];
+  return showOverlayChoice(recognizeQuestionEl, buttons, btn => btn.dataset.answer, RECOGNIZE_QUESTION_TIMEOUT);
+}
+
+// ── 15. RITRATTO CROMATICO ASTRATTO ───────────────────────────────
+// Ultima fase: una composizione visiva generata SOLO dai dati oggettivi
+// congelati nello snapshot (sezione 10) — non dal fotogramma live della
+// webcam, che nel frattempo può essere già cambiato — così il ritratto
+// corrisponde davvero a quell'unica osservazione. Blob sfocati pesati per
+// percentuale d'area, sullo stesso principio della nebulosa di sfondo
+// (updateAndDrawAmbient, sezione 5) ma "fermati" in un singolo fotogramma
+// scaricabile: è l'opera che resta di quella specifica interpretazione,
+// utile anche come estensione da telefono (QR code) fuori dall'installazione.
+const portraitCanvas   = document.getElementById('portraitCanvas');
+const portraitCtx      = portraitCanvas.getContext('2d');
+const portraitDownload = document.getElementById('portraitDownload');
+const portraitPanel    = document.getElementById('portraitPanel');
+const PORTRAIT_SIZE     = 900;  // lato (px) del canvas quadrato generato
+const PORTRAIT_DURATION = 7000; // quanto resta visibile prima di sfumare (ms)
+
+function renderPortrait(snapshot) {
+  portraitCanvas.width  = PORTRAIT_SIZE;
+  portraitCanvas.height = PORTRAIT_SIZE;
+  portraitCtx.fillStyle = '#000';
+  portraitCtx.fillRect(0, 0, PORTRAIT_SIZE, PORTRAIT_SIZE);
+
+  // stesso trucco della nebulosa di sfondo (sezione 5): cerchi pieni netti,
+  // resi soffusi dal blur del context invece che dal blur CSS (qui il
+  // risultato va "congelato" in un'immagine scaricabile, non animato)
+  portraitCtx.filter = 'blur(70px) saturate(1.5)';
+  portraitCtx.globalCompositeOperation = 'lighter';
+
+  const n = snapshot.palette.length;
+  snapshot.palette.forEach((rgb, i) => {
+    const pct = snapshot.weights[i] != null ? snapshot.weights[i] : 1/n;
+    const angle = (i / n) * Math.PI * 2;
+    const spread = 0.30 * PORTRAIT_SIZE;
+    // colori con più area occupano più spazio e stanno più al centro:
+    // pct alto → raggio maggiore e posizione meno periferica
+    const x = PORTRAIT_SIZE/2 + Math.cos(angle) * spread * (0.55 - pct*0.4);
+    const y = PORTRAIT_SIZE/2 + Math.sin(angle) * spread * (0.55 - pct*0.4);
+    const r = PORTRAIT_SIZE * (0.16 + pct * 0.6);
+    portraitCtx.fillStyle = `rgb(${rgb[0]},${rgb[1]},${rgb[2]})`;
+    portraitCtx.beginPath();
+    portraitCtx.arc(x, y, r, 0, Math.PI*2);
+    portraitCtx.fill();
+  });
+
+  portraitCtx.filter = 'none';
+  portraitCtx.globalCompositeOperation = 'source-over';
+}
+
+function showPortrait(snapshot) {
+  return new Promise(resolve => {
+    renderPortrait(snapshot);
+    // NOTA iOS Safari: un tocco lungo su "salva il ritratto" apre l'immagine
+    // invece di scaricarla direttamente (limite del browser, non del codice) —
+    // da lì "Salva immagine" funziona comunque.
+    portraitDownload.href = portraitCanvas.toDataURL('image/png');
+    portraitPanel.style.opacity = '1';
+    portraitPanel.style.pointerEvents = 'auto';
+    setTimeout(() => {
+      portraitPanel.style.opacity = '0';
+      portraitPanel.style.pointerEvents = 'none';
+      setTimeout(resolve, 800);
+    }, PORTRAIT_DURATION);
+  });
+}
+
+// ── 16. LOG RISPOSTE ───────────────────────────────────────────────
+// Raccoglie ogni sessione completa (sensazione umana → giudizio AI →
+// riconoscimento) in memoria, per poterle esportare come dati di ricerca
+// per la tesi. Vive SOLO in memoria: si perde ricaricando la pagina, va
+// quindi esportato prima di chiudere/aggiornare l'installazione se questi
+// dati servono. Nessuna persistenza automatica finché non viene decisa
+// una modalità precisa (locale, server, ecc.) — vedi la nota in cima a
+// exportResponseLog().
+const responseLog = [];
+
+function logResponse({ humanFeeling, aiJudgment, recognized, snapshot }) {
+  responseLog.push({
+    timestamp: new Date().toISOString(),
+    dominante: colorName(snapshot.dominant),
+    hexDominante: toHex(snapshot.dominant),
+    sensazioneUmana: humanFeeling ?? '(nessuna risposta)',
+    giudizioAI: aiJudgment,
+    riconoscimento: recognized,
+  });
+}
+
+// Scarica il registro come CSV. Attivabile in due modi, ENTRAMBI discreti
+// (nessun bottone a schermo: il pubblico dell'installazione non deve
+// vederlo né poterlo attivare per sbaglio):
+//  - tasto "E" della tastiera (comodo da PC, es. a fine giornata espositiva)
+//  - dalla console del browser: exportResponseLog()
+// Se in futuro serve una persistenza vera (es. inviare ogni risposta a un
+// piccolo server invece di tenerle solo in memoria), è qui che va aggiunta:
+// logResponse() sopra resta l'unico punto che riceve ogni nuova risposta.
+function exportResponseLog() {
+  if (!responseLog.length) { showDebug('Nessuna risposta ancora registrata.'); return; }
+  const headers = ['timestamp','dominante','hexDominante','sensazioneUmana','giudizioAI','riconoscimento'];
+  const escape = v => `"${String(v).replace(/"/g,'""')}"`;
+  const csv = [headers.join(',')]
+    .concat(responseLog.map(row => headers.map(h => escape(row[h])).join(',')))
+    .join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `registro-risposte-${new Date().toISOString().slice(0,19).replace(/[:T]/g,'-')}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+  showDebug(`Esportate ${responseLog.length} risposte.`, 4000);
+}
+window.exportResponseLog = exportResponseLog; // richiamabile anche da console: exportResponseLog()
+
+document.addEventListener('keydown', e => {
+  // ignora la scorciatoia mentre si sta scrivendo in un campo di testo
+  // (qui non ce ne sono, ma è una sicurezza per eventuali aggiunte future)
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+  if (e.key === 'e' || e.key === 'E') exportResponseLog();
+});
