@@ -791,13 +791,28 @@ async function ollamaFetch(body) {
 // mostrati all'osservatore nel pannello dati — proprio il tipo di
 // incoerenza che il confronto dato/interpretazione (sezione 12+) deve
 // evitare. Usata sia da requestJudgment() che da runFullSequence() qui sotto.
+// scatta un fotogramma quadrato (ritagliato al centro) dalla webcam in
+// quell'istante — usata dal ritratto (sezione 15) per la foto vera "sotto"
+// al filtro colore. null se la webcam è spenta: il ritratto ricade allora
+// sulla sola composizione astratta di colori.
+function captureVideoFrame() {
+  if (!camActive || video.videoWidth === 0) return null;
+  const size = Math.min(video.videoWidth, video.videoHeight);
+  const sx = (video.videoWidth - size) / 2;
+  const sy = (video.videoHeight - size) / 2;
+  const canvas = document.createElement('canvas');
+  canvas.width = 480; canvas.height = 480; // risoluzione di cattura: ridotta, tanto va solo scalata nel ritratto
+  canvas.getContext('2d').drawImage(video, sx, sy, size, size, 0, 0, canvas.width, canvas.height);
+  return canvas;
+}
+
 function captureObjectiveSnapshot() {
   const hasPalette = currentPalette.length > 0;
   const palette = hasPalette ? currentPalette.slice(0, 5) : [[prevR??128, prevG??128, prevB??128]];
   const weights = hasPalette && lastPaletteWeights.length === currentPalette.length
     ? lastPaletteWeights.slice(0, palette.length)
     : palette.map(() => null);
-  return { palette, weights, dominant: selectedColor || palette[0], selected: !!selectedColor, hasPalette };
+  return { palette, weights, dominant: selectedColor || palette[0], selected: !!selectedColor, hasPalette, photo: captureVideoFrame() };
 }
 
 // PER CAMBIARE MODELLO OLLAMA: modifica `model: 'gemma3:4b'` qui sotto
@@ -1284,15 +1299,21 @@ function showRecognizeQuestion() {
   return showOverlayChoice(recognizeQuestionEl, buttons, btn => btn.dataset.answer, RECOGNIZE_QUESTION_TIMEOUT);
 }
 
-// ── 15. RITRATTO CROMATICO ASTRATTO ───────────────────────────────
-// Ultima fase: una composizione visiva generata SOLO dai dati oggettivi
-// congelati nello snapshot (sezione 10) — non dal fotogramma live della
-// webcam, che nel frattempo può essere già cambiato — così il ritratto
-// corrisponde davvero a quell'unica osservazione. Blob sfocati pesati per
-// percentuale d'area, sullo stesso principio della nebulosa di sfondo
-// (updateAndDrawAmbient, sezione 5) ma "fermati" in un singolo fotogramma
-// scaricabile: è l'opera che resta di quella specifica interpretazione,
-// utile anche come estensione da telefono (QR code) fuori dall'installazione.
+// ── 15. RITRATTO CROMATICO ───────────────────────────────────────
+// Ultima fase: la foto vera scattata al momento di GIUDICA (snapshot.photo,
+// sezione 10) con sopra un filtro colore generato dai dati oggettivi
+// congelati nello stesso snapshot — non dal fotogramma live della webcam,
+// che nel frattempo può essere già cambiato, così il ritratto corrisponde
+// davvero a quell'unica osservazione. Il filtro è fatto con blob sfocati
+// pesati per percentuale d'area (stesso principio della nebulosa di sfondo,
+// updateAndDrawAmbient sezione 5) ma applicati come TINTA sopra la foto,
+// non come forme opache: il volto/la scena restano riconoscibili, colorati
+// secondo l'interpretazione cromatica del momento. Se la webcam era spenta
+// (snapshot.photo è null), il filtro resta comunque visibile da solo, come
+// composizione puramente astratta. Il risultato è "fermato" in un singolo
+// fotogramma scaricabile — l'opera che resta di quella specifica
+// interpretazione, utile anche come estensione da telefono (QR code) fuori
+// dall'installazione.
 const portraitCanvas   = document.getElementById('portraitCanvas');
 const portraitCtx      = portraitCanvas.getContext('2d');
 const portraitDownload = document.getElementById('portraitDownload');
@@ -1306,11 +1327,21 @@ function renderPortrait(snapshot) {
   portraitCtx.fillStyle = '#000';
   portraitCtx.fillRect(0, 0, PORTRAIT_SIZE, PORTRAIT_SIZE);
 
-  // stesso trucco della nebulosa di sfondo (sezione 5): cerchi pieni netti,
-  // resi soffusi dal blur del context invece che dal blur CSS (qui il
-  // risultato va "congelato" in un'immagine scaricabile, non animato)
-  portraitCtx.filter = 'blur(70px) saturate(1.5)';
-  portraitCtx.globalCompositeOperation = 'lighter';
+  // 1) LA FOTO: lo scatto vero preso al momento di GIUDICA, già ritagliato
+  // a quadrato da captureVideoFrame() (sezione 10). Nessuna foto (webcam
+  // spenta in quel momento) → si passa dritti al solo filtro colore.
+  if (snapshot.photo) {
+    portraitCtx.drawImage(snapshot.photo, 0, 0, PORTRAIT_SIZE, PORTRAIT_SIZE);
+  }
+
+  // 2) IL FILTRO COLORE: stessi blob sfocati pesati per area di prima, ma
+  // in composite 'color' — prendono tonalità e saturazione dai blob
+  // lasciando intatta la luminosità (quindi i dettagli) della foto sotto.
+  // Senza foto, gli stessi blob restano semplicemente visibili come forme
+  // piene (composite 'source-over').
+  portraitCtx.filter = 'blur(80px) saturate(1.4)';
+  portraitCtx.globalCompositeOperation = snapshot.photo ? 'color' : 'source-over';
+  portraitCtx.globalAlpha = snapshot.photo ? 0.95 : 1;
 
   const n = snapshot.palette.length;
   snapshot.palette.forEach((rgb, i) => {
@@ -1329,6 +1360,7 @@ function renderPortrait(snapshot) {
   });
 
   portraitCtx.filter = 'none';
+  portraitCtx.globalAlpha = 1;
   portraitCtx.globalCompositeOperation = 'source-over';
 }
 
