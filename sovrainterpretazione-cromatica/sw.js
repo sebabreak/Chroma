@@ -18,7 +18,7 @@
 //  sola quando il telefono è online), ma pulisce la cache vecchia invece
 //  di lasciarla lì a occupare spazio inutilmente.
 // ══════════════════════════════════════════════════════════════════
-const CACHE_NAME = 'sovrainterpretazione-v3';
+const CACHE_NAME = 'sovrainterpretazione-v4';
 
 const ASSETS = [
   './',
@@ -28,6 +28,7 @@ const ASSETS = [
   './manifest.json',
   './icons/icon-192.png',
   './icons/icon-512.png',
+  './icons/qr-telefono.png',
 ];
 
 // all'installazione, scarica e mette in cache tutti i file dell'interfaccia
