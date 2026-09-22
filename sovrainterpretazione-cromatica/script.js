@@ -1635,6 +1635,25 @@ function closePageReaction() {
 }
 pageReactionCloseBtn.addEventListener('click', closePageReaction);
 
+// esposte su window solo per comodità di test dalla console del browser
+// (desktop o da telefono via debug remoto) — vedi istruzioni di test:
+// window.CHROMA_DEBUG.trigger('cap3') forza il popup di una pagina senza
+// bisogno di inquadrare i colori giusti; .match() mostra a quale firma
+// corrisponde la palette rilevata IN QUESTO ISTANTE, utile per capire se
+// una composizione stampata/mostrata a schermo viene letta correttamente
+window.CHROMA_DEBUG = {
+  signatures: PAGE_SIGNATURES,
+  trigger: (id) => {
+    const sig = PAGE_SIGNATURES.find(s => s.id === id);
+    if (!sig) { console.warn('id non trovato. Usa uno tra:', PAGE_SIGNATURES.map(s => s.id)); return; }
+    triggerPageReaction(sig);
+  },
+  close: closePageReaction,
+  match: () => matchPageSignature(currentPalette),
+  currentPalette: () => currentPalette,
+  resetCooldowns: () => { for (const k in pageCooldownUntil) delete pageCooldownUntil[k]; console.log('cooldown azzerati'); },
+};
+
 document.addEventListener('keydown', e => {
   // ignora la scorciatoia mentre si sta scrivendo in un campo di testo
   // (qui non ce ne sono, ma è una sicurezza per eventuali aggiunte future)
