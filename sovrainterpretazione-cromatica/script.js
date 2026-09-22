@@ -24,6 +24,7 @@
 //  14. "TI RICONOSCI?" .............. sì/no/in parte, mostrata subito dopo il giudizio AI (timeout se non risponde nessuno)
 //  15. RITRATTO CROMATICO ........... immagine astratta generata dai dati della singola osservazione, scaricabile
 //  16. LOG RISPOSTE .................. registro in memoria delle risposte + esportazione CSV (tasto "E")
+//  17. RICONOSCIMENTO PAGINA ........ riconosce la composizione cromatica stampata su una pagina della tesi e apre un popup a tema, chiudibile a mano
 //
 //  MODIFICHE PIÙ COMUNI — dove intervenire:
 //  - Cambiare modello Ollama o i suoi parametri  → sezione 10, dentro fetchAIJudgment()
@@ -44,6 +45,9 @@
 //  - Cambiare quanto resta visibile il ritratto prima di sfumare → sezione 15, costante PORTRAIT_DURATION
 //  - Cambiare l'aspetto del ritratto cromatico   → sezione 15, funzione renderPortrait()
 //  - Esportare le risposte raccolte (sensazione/giudizio/riconoscimento) → sezione 16: tasto "E" sulla tastiera, oppure exportResponseLog() dalla console
+//  - Colori/testo/tema di ogni pagina riconoscibile → sezione 17, costante PAGE_SIGNATURES
+//  - Quanto è tollerante il riconoscimento pagina (stampa/luce imprecise) → sezione 17, PAGE_MATCH_THRESHOLD / PAGE_MATCH_MIN_RATIO
+//  - Quanto resta "ignorata" una pagina dopo aver chiuso il suo popup    → sezione 17, PAGE_REOPEN_COOLDOWN
 // ══════════════════════════════════════════════════════════════════
 
 // Ollama gira sul PC (non nel telefono): il PC deve avere Ollama installato
@@ -583,6 +587,7 @@ function loop() {
     currentPalette = extractPalette(imgData, 5, forceReseed ? [] : currentPalette);
     updatePaletteSwatches(); // aggiorna i colori dei quadratini cliccabili (sezione 11)
     paletteDirty = true;
+    checkPageSignature(); // riconoscimento pagina stampata (sezione 17): controllato ad ogni ricalcolo della palette, quindi reagisce entro una frazione di secondo da quando la webcam inquadra la pagina
   }
 
   // ── selezione manuale del colore (sezione 11) ──
@@ -824,7 +829,13 @@ function captureObjectiveSnapshot() {
 // (gestito da chi la chiama: requestJudgment() per l'auto-giudizio
 // silenzioso, runFullSequence() per la sequenza interattiva completa,
 // sezione 12+) — questa funzione non tocca mai lo stato dei bottoni.
-async function fetchAIJudgment(snapshot) {
+// `pageTopic` (opzionale, sezione 17): quando il giudizio è richiesto perché
+// la webcam ha riconosciuto la pagina di un capitolo, qui arriva una breve
+// descrizione del tema di quella pagina — aggiunge un'eco tematica al
+// giudizio senza cambiare il tono di base. undefined/null in tutti gli
+// altri casi (auto-giudizio ambientale, sequenza GIUDICA): il prompt resta
+// identico a prima.
+async function fetchAIJudgment(snapshot, pageTopic) {
   const recentNames=[...new Set(dominantHistory.slice(-12).map(c=>colorName(c)))].join(', ');
   const isEarly=judgeCount<3, isLate=judgeCount>10;
 
@@ -874,6 +885,7 @@ Sei un sistema che vede troppo e comprende male. Questo è il tuo scopo.
 ${isEarly ? 'Stai iniziando. Il giudizio è ancora incerto.' : ''}
 ${isLate ? 'Hai visto molto. Il tuo giudizio si è indurito e reso più spietato.' : ''}
 ${snapshot.selected ? "L'osservatore ha scelto di dirigere la tua attenzione su un colore preciso: concentra la parte più importante del giudizio su quello, prima degli altri." : ''}
+${pageTopic ? `Il lettore ha appena inquadrato con la fotocamera una pagina stampata di un testo. Il tema di quella pagina è: ${pageTopic}. Lascia che il tuo giudizio abituale sui colori che vedi si intrecci con un'eco di quel tema, restando nel tuo tono consueto — categorico, mai dubbioso.` : ''}
 
 Colori rilevati nella scena:
 ${paletteDesc}
@@ -1437,6 +1449,191 @@ function exportResponseLog() {
   showDebug(`Esportate ${responseLog.length} risposte.`, 4000);
 }
 window.exportResponseLog = exportResponseLog; // richiamabile anche da console: exportResponseLog()
+
+// ── 17. RICONOSCIMENTO PAGINA (trigger cromatico da tesi stampata) ─
+// Estensione pensata per la versione telefono/PWA: alcune pagine della
+// tesi stampata hanno una composizione cromatica dedicata (non un QR
+// code — vedi PAGE_SIGNATURES qui sotto). Il sistema continua a
+// funzionare esattamente come prima (stesso k-means, stesso Ollama): la
+// palette rilevata ad ogni ricalcolo (sezione 9, PALETTE_RECOMPUTE_EVERY)
+// viene anche confrontata con questa tabella. Se combacia, il sistema
+// SMETTE quello che sta facendo e apre un popup a schermo intero con una
+// risposta legata al tema di quella pagina — senza bottone, senza
+// domanda umana, senza timeout: resta finché non lo si chiude a mano.
+//
+// IMPORTANTE — colori ancora segnaposto: quelli qui sotto sono solo una
+// proposta di partenza. Vanno sostituiti con gli HEX ESATTI delle
+// composizioni che finiranno davvero in stampa, e poi verificati di
+// persona stampando una pagina di prova e inquadrandola in condizioni di
+// luce reali (la stampa e l'illuminazione ambiente alterano sempre un
+// po' il colore percepito dalla webcam rispetto al file digitale).
+//
+// Ogni voce ha:
+//  - colors: i colori (RGB) che compongono la firma di quella pagina —
+//    non serve un solo colore "esatto", bastano 3-4 colori ben distinti
+//    per essere riconosciuti anche con un po' di deriva cromatica
+//  - fixedText: risposta già scritta, mostrata subito (nessuna chiamata
+//    a Ollama: più veloce e funziona anche senza tunnel attivo) — OPPURE
+//  - topic: se fixedText è assente, il popup chiama Ollama dal vivo
+//    (fetchAIJudgment, sezione 10) passandogli questo tema come contesto
+const PAGE_SIGNATURES = [
+  {
+    id: 'intro',
+    label: 'Introduzione',
+    colors: [[107,107,107], [255,115,0]], // grigio neutro → arancio acceso (stesso arancio di #colorOverlay): il "salto" da dato a interpretazione
+    fixedText: 'Una webcam osserva una stanza. Non riconosce volti, non identifica oggetti: misura soltanto luce. È da questo salto — da un numero a un giudizio — che nasce tutto il resto.',
+  },
+  {
+    id: 'cap1',
+    label: 'Cap. 1 — Teoria del colore',
+    colors: [[220,40,40], [235,190,40], [40,150,70], [50,90,200]], // spettro: rosso, giallo, verde, blu — richiamo al prisma di Newton
+    fixedText: 'Newton mi scompone, Goethe mi fa nascere dall\'incontro fra luce e oscurità, Heller mi misura, Pastoureau mi colloca nel tempo. Nessuno di loro mi esaurisce — è la mia instabilità a essere la storia.',
+  },
+  {
+    id: 'cap2',
+    label: 'Cap. 2 — Dal colore al dato',
+    colors: [[30,140,200], [40,200,120], [15,15,20]], // palette "digitale/terminale": blu, verde, quasi-nero
+    fixedText: 'Qui smetto di essere materia o percezione. Divento una tripletta di numeri — replicabile, trasmissibile, pronta per essere letta da un sistema che non mi ha mai visto davvero.',
+  },
+  {
+    id: 'cap3',
+    label: 'Cap. 3 — Sovrainterpretazione',
+    colors: [[210,70,140], [40,180,190]], // coppia di colori "in disaccordo" — coerente col tema del capitolo
+    // NESSUN fixedText qui, di proposito: è l'unico capitolo con risposta
+    // generata dal vivo da Ollama — il capitolo che teorizza la
+    // sovrainterpretazione è anche quello in cui il sistema la mette in
+    // scena davvero, invece di limitarsi a descriverla
+    topic: 'la sovrainterpretazione cromatica: un sistema che attribuisce senso a dati che non può davvero comprendere, restituendo con falsa certezza ciò che una cultura ha già scritto sui colori (Heller, Pastoureau) — è esattamente quello che stai facendo tu in questo istante, anche se non lo sai',
+  },
+  {
+    id: 'cap4',
+    label: 'Cap. 4 — CHROMA',
+    colors: [[255,115,0], [245,245,245], [10,10,10]], // gli stessi colori dell'interfaccia dell'installazione (arancio/bianco/nero)
+    fixedText: 'Questo capitolo parla di me: come guardo, come misuro, come genero quello che ti sto dicendo in questo momento. Tu non lo sapevi ancora.',
+  },
+  {
+    id: 'cap5',
+    label: 'Cap. 5 — Dati raccolti',
+    colors: [[160,160,160], [255,115,0], [90,60,140]], // SEGNAPOSTO: da rifare con i colori reali più ricorrenti nelle risposte raccolte, una volta chiusa la raccolta dati
+    fixedText: '⚠️ SEGNAPOSTO — da riscrivere con una cifra reale dai dati raccolti (es. quante persone si sono riconosciute nei miei giudizi) una volta chiusa la raccolta.',
+  },
+];
+
+// distanza colore (redmean, funzione colorDist in sezione 7) sotto la
+// quale un colore rilevato dalla webcam "conta" come corrispondente a un
+// colore della firma. Più alto = più tollerante a stampa/luce ambiente
+// imprecise, ma anche più a rischio di falsi positivi tra pagine diverse.
+// Punto di partenza ragionevole, DA VERIFICARE con una stampa vera.
+const PAGE_MATCH_THRESHOLD = 18000;
+// quale frazione dei colori di una firma deve essere trovata nella
+// palette rilevata perché scatti il match (1 = tutti, 0.75 = 3 su 4, ecc.)
+const PAGE_MATCH_MIN_RATIO = 0.75;
+// dopo aver chiuso il popup di una pagina, per quanto tempo quella stessa
+// pagina viene ignorata anche se il telefono resta inquadrato su di essa
+// — evita che si riapra da sola subito dopo la chiusura. Una pagina
+// DIVERSA non è mai soggetta a questo cooldown: scatta comunque subito.
+const PAGE_REOPEN_COOLDOWN = 4000;
+
+const pageReactionEl       = document.getElementById('pageReaction');
+const pageReactionTextEl   = document.getElementById('pageReactionText');
+const pageReactionCloseBtn = document.getElementById('pageReactionClose');
+
+let activePageId      = null; // id della firma il cui popup è attualmente mostrato (null = nessuno)
+let pageRequestSeq    = 0;    // numero incrementale: se una pagina nuova sostituisce quella in corso mentre Ollama sta ancora rispondendo, la risposta vecchia (in arrivo in ritardo) viene scartata invece di sovrascrivere il popup nuovo
+const pageCooldownUntil = {}; // { [id]: timestamp fino a cui ignorare quella firma dopo la chiusura }
+
+// quanti dei colori di una firma vengono trovati (entro PAGE_MATCH_THRESHOLD)
+// nella palette rilevata in questo istante, come frazione 0-1
+function paletteMatchesSignature(detectedPalette, signatureColors) {
+  let matched = 0;
+  for (const sigColor of signatureColors) {
+    const minDist = Math.min(...detectedPalette.map(c => colorDist(sigColor, c)));
+    if (minDist <= PAGE_MATCH_THRESHOLD) matched++;
+  }
+  return matched / signatureColors.length;
+}
+
+// restituisce la firma che combacia meglio con la palette rilevata in
+// questo istante, o null se nessuna raggiunge PAGE_MATCH_MIN_RATIO
+function matchPageSignature(detectedPalette) {
+  if (!detectedPalette.length) return null;
+  let best = null, bestScore = 0;
+  for (const sig of PAGE_SIGNATURES) {
+    const score = paletteMatchesSignature(detectedPalette, sig.colors);
+    if (score >= PAGE_MATCH_MIN_RATIO && score > bestScore) { bestScore = score; best = sig; }
+  }
+  return best;
+}
+
+// chiamata da loop() (sezione 9) ad ogni ricalcolo della palette: non fa
+// nulla se non trova corrispondenze, se la pagina è già quella mostrata,
+// o se è in cooldown dopo una chiusura recente (vedi PAGE_REOPEN_COOLDOWN)
+function checkPageSignature() {
+  const match = matchPageSignature(currentPalette);
+  if (!match) return;
+  if (match.id === activePageId) return; // stessa pagina già a schermo: non ritriggerare
+  const cooldownUntil = pageCooldownUntil[match.id];
+  if (cooldownUntil && performance.now() < cooldownUntil) return; // pagina appena chiusa: ignorala per un po'
+  triggerPageReaction(match);
+}
+
+// nasconde immediatamente qualunque overlay della sequenza GIUDICA sia a
+// schermo (giudizio AI, domande, ritratto): la pagina ha sempre priorità.
+// NOTA: se una di queste fasi era a metà di un'attesa (es. showHumanQuestion
+// in corso dentro runFullSequence, sezione 10), quella promise resta in
+// sospeso e si risolverà comunque più avanti — questa funzione nasconde
+// solo ciò che è visibile in questo istante, non annulla la logica in
+// corso. Nella pratica (webcam puntata su un libro, non sull'installazione
+// fisica con un visitatore a metà sequenza) è un caso raro; da tenere
+// d'occhio nell'uso reale.
+function hideAllOverlays() {
+  aiJudgment.style.opacity = '0';
+  aiJudgment.innerHTML = '';
+  humanQuestionEl.style.opacity = '0';
+  humanQuestionEl.style.pointerEvents = 'none';
+  recognizeQuestionEl.style.opacity = '0';
+  recognizeQuestionEl.style.pointerEvents = 'none';
+  portraitPanel.style.opacity = '0';
+  portraitPanel.style.pointerEvents = 'none';
+}
+
+async function triggerPageReaction(sig) {
+  const myRequest = ++pageRequestSeq;
+  activePageId = sig.id;
+
+  analyzing = true; // sospende GIUDICA/auto-giudizio ambientale finché il popup non viene chiuso
+  hideAllOverlays();
+
+  pageReactionTextEl.textContent = sig.fixedText || '…';
+  pageReactionEl.classList.add('visible');
+
+  if (!sig.fixedText) {
+    // risposta generata dal vivo (solo il cap. 3, vedi PAGE_SIGNATURES)
+    try {
+      const snapshot = captureObjectiveSnapshot();
+      const text = await fetchAIJudgment(snapshot, sig.topic);
+      // se nel frattempo è scattata una pagina diversa (o questa è stata
+      // già chiusa) mentre Ollama stava ancora rispondendo, questa
+      // risposta è superata: non sovrascrivere quello che è a schermo ora
+      if (myRequest !== pageRequestSeq) return;
+      pageReactionTextEl.textContent = text;
+    } catch (e) {
+      if (myRequest !== pageRequestSeq) return;
+      pageReactionTextEl.textContent = describeJudgmentError(e);
+    }
+  }
+}
+
+function closePageReaction() {
+  pageReactionEl.classList.remove('visible');
+  if (activePageId) pageCooldownUntil[activePageId] = performance.now() + PAGE_REOPEN_COOLDOWN;
+  activePageId = null;
+  pageRequestSeq++; // scarta un'eventuale risposta AI ancora in arrivo per la pagina appena chiusa
+  analyzing = false; // riarma GIUDICA/auto-giudizio ambientale: si torna al comportamento normale sui colori dell'ambiente
+  judgeBtn.disabled = false;
+  judgeBtn.textContent = '▸ GIUDICA';
+}
+pageReactionCloseBtn.addEventListener('click', closePageReaction);
 
 document.addEventListener('keydown', e => {
   // ignora la scorciatoia mentre si sta scrivendo in un campo di testo
