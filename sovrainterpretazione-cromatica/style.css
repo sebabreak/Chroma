@@ -373,9 +373,19 @@ video { display: none; }
 #hudState { color: rgba(255,255,255,0.4); }
 
 /* ── QR TELEFONO ─────────────────────────────────────────────────── */
-/* stessa colonna di #hud (left:20px): scansionandolo si apre la stessa
-   app su GitHub Pages, installabile come PWA anche sul telefono */
+/* stessa colonna di #hud (left:20px): un clic lo ingrandisce al centro
+   (#qrModal qui sotto) invece di navigare via — comodo per mostrarlo a
+   tutta la sala durante l'esposizione. #qrBox è un <button>, non più un
+   <a>: le prime 8 proprietà qui sotto (background/border/font/ecc.)
+   sono solo un reset per fargli perdere l'aspetto di default del
+   browser e restare identico a prima. */
 #qrBox {
+  background: none;
+  border: none;
+  font: inherit;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+
   position: fixed;
   bottom: calc(20px + env(safe-area-inset-bottom, 0px));
   left: 20px;
@@ -384,7 +394,6 @@ video { display: none; }
   flex-direction: column;
   align-items: center;
   gap: 4px;
-  text-decoration: none;
   opacity: 0.85;
   transition: opacity 0.25s;
 }
@@ -404,6 +413,55 @@ video { display: none; }
   letter-spacing: 0.1em;
   color: rgba(255,255,255,0.45);
   text-align: center;
+}
+
+/* popup QR ingrandito — stesso identico pattern di
+   #pageReactionBackdrop/#pageReaction (vedi quella sezione più sotto):
+   sfondo a piena pagina che scurisce tutto il resto, popup sopra,
+   nessun timeout automatico (script.js gestisce la classe .visible) */
+#qrModalBackdrop {
+  position: fixed; inset: 0;
+  z-index: 999; /* sopra a #qrBox stesso (999), che così sparisce sotto lo sfondo quando il popup è aperto */
+  background: rgba(8,7,6,0.94);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.4s ease;
+}
+#qrModalBackdrop.visible { opacity: 1; pointer-events: auto; }
+
+#qrModal {
+  position: fixed;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 1000;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.4s ease;
+  text-align: center;
+  background: #fff; /* card bianca: il QR ha bisogno di contrasto netto, e un bordo bianco funge anche da "quiet zone" per una lettura affidabile */
+  padding: 2.2rem 2.2rem 1.6rem;
+  border-radius: 8px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+}
+#qrModal.visible { opacity: 1; pointer-events: auto; }
+#qrModalClose {
+  position: absolute;
+  top: 10px; right: 12px;
+  color: #262220;
+  border-color: rgba(0,0,0,0.25);
+}
+#qrModalImg {
+  display: block;
+  width: min(60vw, 60vh, 440px);
+  height: min(60vw, 60vh, 440px);
+  margin: 0 auto;
+}
+#qrModalLabel {
+  font-family: 'Courier New', monospace;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  color: #4a443e;
+  margin-top: 1rem;
 }
 
 /* ── MESSAGGIO DI DEBUG ──────────────────────────────────────────── */
