@@ -60,7 +60,7 @@
   <!-- cerchio pulsante al centro: il "cuore" dell'installazione -->
   <div id="pulseCore"></div>
 
-  <!-- giudizio dell'AI (WebLLM, in locale nel browser) — appare grande al centro dello schermo -->
+  <!-- giudizio dell’AI (Ollama sul PC) — appare grande al centro dello schermo -->
   <div id="aiJudgment"></div>
 
   <!-- dopo il giudizio, il testo sale e resta come traccia leggera in alto -->
@@ -93,12 +93,20 @@
   <!-- messaggio di errore/debug (webcam non accessibile, AI locale non disponibile, ecc.) -->
   <div id="debugMsg"></div>
 
-  <!-- QR in basso a sinistra: scansionandolo col telefono si apre la stessa
-       app (GitHub Pages), installabile anche lì come PWA (vedi manifest.json) -->
-  <a id="qrBox" href="https://sebabreak.github.io/Chroma/sovrainterpretazione-cromatica/" target="_blank" rel="noopener">
-    <img id="qrCode" src="qr-telefono.png" alt="QR code per aprire l'app sul telefono">
+  <!-- QR: al click si ingrandisce al centro invece di aprire CHROMA -->
+  <a id="qrBox" href="https://sebabreak.github.io/Chroma/sovrainterpretazione-cromatica/"
+     aria-haspopup="dialog" aria-controls="qrModal">
+    <img id="qrCode" src="qr-telefono.png" alt="QR code per aprire CHROMA sul telefono">
     <span id="qrLabel">installa su telefono</span>
   </a>
+
+  <!-- overlay QR -->
+  <div id="qrModalBackdrop" aria-hidden="true"></div>
+  <div id="qrModal" role="dialog" aria-modal="true" aria-hidden="true" aria-label="QR code CHROMA">
+    <button id="qrModalClose" class="ghost-btn" type="button">chiudi ✕</button>
+    <img id="qrModalImage" src="qr-telefono.png" alt="QR code CHROMA ingrandito">
+    <div id="qrModalText">scansiona per aprire CHROMA sul telefono</div>
+  </div>
 
   <!-- SEQUENZA INTERATTIVA (script.js, sezioni 12-15), un elemento alla
        volta, dallo stesso "palco" al centro dello schermo:
