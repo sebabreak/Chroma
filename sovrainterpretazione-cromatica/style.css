@@ -766,3 +766,487 @@ body::before {
   #pageReaction { padding: 2rem 1.6rem 1.7rem; width: min(560px, 90vw); }
   #pageReactionText { font-size: 1.05rem; }
 }
+
+/* ══════════════════════════════════════════════════════════════════
+   CHROMA — RESPONSIVE LAYOUT
+   Base: CSS originale dell'utente.
+   Obiettivi:
+   - desktop: anteprima webcam più grande
+   - tablet/telefono: niente QR
+   - tablet/telefono: DATI RILEVATI in basso a sinistra
+   - palette + colore principale immediatamente sopra i dati
+   - webcam + CAM/switch in alto a destra
+   - GIUDICA separato dai dati, in basso a destra (portrait/tablet)
+     e in basso al centro (landscape)
+   - alleggerimento GPU su mobile senza cambiare la logica JS
+   ══════════════════════════════════════════════════════════════════ */
+
+html, body {
+  width: 100%;
+  min-height: 100%;
+}
+
+body {
+  height: 100dvh;
+  min-height: 100svh;
+}
+
+/* ── DESKTOP ────────────────────────────────────────────────────── */
+@media (min-width: 1101px) {
+  #preview {
+    width: clamp(240px, 19vw, 320px);
+    height: auto;
+    max-width: 320px;
+    max-height: 240px;
+    right: 24px;
+    bottom: 88px;
+    opacity: 0.78;
+  }
+}
+
+/* ── TABLET + TELEFONO ──────────────────────────────────────────── */
+@media (max-width: 1100px) {
+
+  /* sul dispositivo mobile il QR per "aprire sul telefono" non serve */
+  #qrBox {
+    display: none !important;
+  }
+
+  /* piccola ottimizzazione GPU: il blur da 80px è costoso sui telefoni */
+  #ambientCanvas {
+    filter: blur(48px) saturate(1.25);
+    opacity: 0.50;
+  }
+
+  /* la grana SVG animata/composita non è essenziale su mobile */
+  #grain {
+    display: none;
+  }
+
+  /* DATI RILEVATI: blocco compatto in basso a sinistra */
+  #dataPanel {
+    top: auto;
+    left: 12px;
+    bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+    width: min(58vw, 270px);
+    max-width: none;
+    min-width: 0;
+    padding: 0.7rem 0.8rem;
+  }
+
+  .data-title {
+    font-size: 8px;
+    margin-bottom: 0.55rem;
+  }
+
+  .data-dominant {
+    gap: 9px;
+    margin-bottom: 0.55rem;
+    padding-bottom: 0.55rem;
+  }
+
+  .data-swatch.big {
+    width: 34px;
+    height: 34px;
+  }
+
+  .data-dominant-name {
+    font-size: 12px;
+  }
+
+  .data-dominant-sub {
+    font-size: 8px;
+    line-height: 1.3;
+  }
+
+  .data-row {
+    gap: 5px;
+    font-size: 8px;
+    padding: 2px 0;
+  }
+
+  .data-pct {
+    width: 27px;
+  }
+
+  /* negli elementi secondari l'HEX è ridondante e allarga molto la card */
+  .data-hex {
+    display: none;
+  }
+
+  /* colore principale + palette: diventano un'unica "fascia" sopra i dati */
+  #colorOverlay {
+    top: auto;
+    left: 12px;
+    bottom: calc(216px + env(safe-area-inset-bottom, 0px));
+    width: 58px;
+    height: 58px;
+  }
+
+  #paletteSwatches {
+    top: auto;
+    left: 80px;
+    bottom: calc(233px + env(safe-area-inset-bottom, 0px));
+    gap: 5px;
+  }
+
+  .swatch {
+    width: 18px;
+    height: 18px;
+  }
+
+  /* webcam e controlli: un solo gruppo in alto a destra */
+  #preview {
+    top: calc(14px + env(safe-area-inset-top, 0px));
+    right: 14px;
+    bottom: auto;
+    width: auto;
+    height: auto;
+    max-width: 128px;
+    max-height: 96px;
+    opacity: 0.78;
+  }
+
+  #camBtn,
+  #switchCamBtn {
+    right: 14px;
+    bottom: auto;
+    font-size: 7px;
+    padding: 5px 8px;
+  }
+
+  #camBtn {
+    top: calc(116px + env(safe-area-inset-top, 0px));
+  }
+
+  #switchCamBtn {
+    top: calc(146px + env(safe-area-inset-top, 0px));
+  }
+
+  /* evita che lo slider attraversi il gruppo webcam */
+  #resolutionSlider {
+    right: 10px;
+    top: 52%;
+    width: 82px;
+  }
+
+  /* spazio centrale lasciato al "cuore" e alle frasi */
+  #pulseCore {
+    width: 112px;
+    height: 112px;
+    top: 37%;
+  }
+
+  /* GIUDICA vive nell'angolo opposto ai dati */
+  #judgeBtn {
+    left: auto;
+    right: 14px;
+    transform: none;
+    bottom: calc(18px + env(safe-area-inset-bottom, 0px));
+    font-size: 10px;
+    padding: 10px 18px;
+  }
+
+  #aiJudgment {
+    max-width: 88vw;
+    padding: 1.25rem 1.1rem;
+  }
+
+  #aiTrace {
+    max-width: 82vw;
+  }
+
+  #portraitCanvas {
+    width: min(62vw, 380px);
+    height: min(62vw, 380px);
+  }
+
+  #pageReaction {
+    width: min(620px, 90vw);
+    max-height: 88dvh;
+  }
+}
+
+/* ── TELEFONO VERTICALE ─────────────────────────────────────────── */
+@media (max-width: 600px) and (orientation: portrait) {
+
+  #hud {
+    top: calc(14px + env(safe-area-inset-top, 0px));
+    left: 14px;
+    font-size: 7px;
+    line-height: 1.7;
+  }
+
+  #dataPanel {
+    left: 10px;
+    bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+    width: 57vw;
+    max-width: 218px;
+    padding: 0.62rem 0.68rem;
+  }
+
+  .data-title {
+    font-size: 7px;
+  }
+
+  .data-swatch.big {
+    width: 30px;
+    height: 30px;
+  }
+
+  .data-dominant-name {
+    font-size: 11px;
+  }
+
+  .data-dominant-sub,
+  .data-row {
+    font-size: 7px;
+  }
+
+  .data-row {
+    gap: 4px;
+  }
+
+  .data-pct {
+    width: 24px;
+  }
+
+  #colorOverlay {
+    left: 10px;
+    bottom: calc(198px + env(safe-area-inset-bottom, 0px));
+    width: 54px;
+    height: 54px;
+  }
+
+  #paletteSwatches {
+    left: 73px;
+    bottom: calc(214px + env(safe-area-inset-bottom, 0px));
+    gap: 4px;
+  }
+
+  .swatch {
+    width: 17px;
+    height: 17px;
+  }
+
+  #preview {
+    top: calc(14px + env(safe-area-inset-top, 0px));
+    right: 12px;
+    max-width: 112px;
+    max-height: 88px;
+  }
+
+  #camBtn,
+  #switchCamBtn {
+    right: 12px;
+  }
+
+  #camBtn {
+    top: calc(106px + env(safe-area-inset-top, 0px));
+  }
+
+  #switchCamBtn {
+    top: calc(136px + env(safe-area-inset-top, 0px));
+  }
+
+  #resolutionSlider {
+    right: -2px;
+    top: 48%;
+    width: 76px;
+  }
+
+  #pulseCore {
+    left: 69%;
+    top: 42%;
+    width: 100px;
+    height: 100px;
+  }
+
+  #judgeBtn {
+    right: 12px;
+    bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+    font-size: 9px;
+    padding: 9px 14px;
+  }
+
+  #aiJudgment {
+    top: 60%;
+    max-width: 90vw;
+    max-height: 38vh;
+    padding: 1rem 0.9rem;
+    line-height: 1.35;
+    font-size: clamp(
+      calc(1rem * var(--judgment-scale, 1)),
+      calc(5vw * var(--judgment-scale, 1)),
+      calc(1.5rem * var(--judgment-scale, 1))
+    );
+  }
+
+  #humanQuestion,
+  #recognizeQuestion {
+    top: 56%;
+    max-width: 92vw;
+  }
+
+  .question-label {
+    font-size: 1rem;
+    margin-bottom: 0.8rem;
+  }
+
+  #moodChips {
+    gap: 5px;
+  }
+
+  .mood-chip {
+    font-size: 8px;
+    padding: 6px 8px;
+  }
+
+  .recognize-btns button {
+    font-size: 9px;
+    padding: 7px 10px;
+  }
+}
+
+/* ── TELEFONO / TABLET ORIZZONTALE ──────────────────────────────── */
+@media (orientation: landscape) and (max-height: 700px) and (max-width: 1100px) {
+
+  #hud {
+    top: calc(10px + env(safe-area-inset-top, 0px));
+    left: 18px;
+    font-size: 7px;
+    line-height: 1.6;
+  }
+
+  /* in landscape il pannello deve essere ancora più basso/compatto */
+  #dataPanel {
+    left: 12px;
+    bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+    width: min(31vw, 260px);
+    padding: 0.55rem 0.7rem;
+  }
+
+  .data-title {
+    margin-bottom: 0.4rem;
+  }
+
+  .data-dominant {
+    margin-bottom: 0.4rem;
+    padding-bottom: 0.4rem;
+  }
+
+  .data-swatch.big {
+    width: 28px;
+    height: 28px;
+  }
+
+  .data-row {
+    font-size: 7px;
+    padding: 1px 0;
+  }
+
+  #colorOverlay {
+    left: 12px;
+    bottom: calc(176px + env(safe-area-inset-bottom, 0px));
+    width: 48px;
+    height: 48px;
+  }
+
+  #paletteSwatches {
+    left: 69px;
+    bottom: calc(190px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .swatch {
+    width: 16px;
+    height: 16px;
+  }
+
+  #preview {
+    top: calc(10px + env(safe-area-inset-top, 0px));
+    right: 14px;
+    max-width: 160px;
+    max-height: 100px;
+  }
+
+  #camBtn {
+    top: calc(116px + env(safe-area-inset-top, 0px));
+  }
+
+  #switchCamBtn {
+    top: calc(146px + env(safe-area-inset-top, 0px));
+  }
+
+  #resolutionSlider {
+    right: 178px;
+    top: 53%;
+    width: 76px;
+  }
+
+  #pulseCore {
+    left: 53%;
+    top: 40%;
+    width: 125px;
+    height: 125px;
+  }
+
+  /* in landscape il centro basso è libero e più naturale per l'azione */
+  #judgeBtn {
+    left: 53%;
+    right: auto;
+    transform: translateX(-50%);
+    bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+  }
+
+  #aiJudgment {
+    left: 54%;
+    top: 66%;
+    max-width: 50vw;
+    max-height: 42vh;
+    padding: 0.8rem 1rem;
+    line-height: 1.28;
+    font-size: clamp(
+      calc(0.9rem * var(--judgment-scale, 1)),
+      calc(2.5vw * var(--judgment-scale, 1)),
+      calc(1.4rem * var(--judgment-scale, 1))
+    );
+  }
+
+  #aiTrace {
+    left: 54%;
+    max-width: 48vw;
+  }
+
+  #humanQuestion,
+  #recognizeQuestion {
+    left: 54%;
+    top: 55%;
+    max-width: 52vw;
+  }
+
+  .question-label {
+    font-size: 0.95rem;
+    margin-bottom: 0.6rem;
+  }
+
+  .mood-chip {
+    font-size: 7px;
+    padding: 5px 7px;
+  }
+
+  .recognize-btns button {
+    font-size: 8px;
+    padding: 6px 9px;
+  }
+
+  #portraitCanvas {
+    width: min(58vh, 36vw);
+    height: min(58vh, 36vw);
+  }
+
+  #pageReaction {
+    width: min(620px, 78vw);
+    max-height: 86dvh;
+    padding: 1.2rem 1.5rem 1rem;
+  }
+}
