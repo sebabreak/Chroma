@@ -155,13 +155,20 @@ video { display: none; }
 .swatch.auto.selected { border-style: solid; color: #fff; box-shadow: none; }
 
 /* ── ANTEPRIMA PIXELATA ─────────────────────────────────────────── */
-/* cliccabile: un clic su un punto lo seleziona come colore da seguire (script.js, sezione 11) */
+/* cliccabile: un clic su un punto lo seleziona come colore da seguire (script.js, sezione 11).
+   Solo "width" fissata: "height:auto" lascia che il riquadro segua il VERO
+   aspect ratio del canvas (script.js, updateLowResDimensions) — un valore
+   fisso qui causerebbe di nuovo la stessa distorsione che quella funzione
+   risolve lato campionamento, specialmente su telefono dove la webcam
+   raramente trasmette davvero in 4:3. */
 #preview {
   position: fixed;
   bottom: 100px;
   right: 20px;
-  width: 160px;
-  height: 120px;
+  width: auto;
+  height: auto;
+  max-width: 160px;
+  max-height: 120px;
   border: 1px solid rgba(255, 115, 0, 0.5);
   border-radius: 4px;
   opacity: 0.6;
@@ -671,13 +678,18 @@ body::before {
   .swatch { width: 18px; height: 18px; }
 
   /* l'anteprima si sposta in alto a destra: libera tutta la fascia in
-     basso per il solo bottone GIUDICA, ben visibile e facile da toccare */
+     basso per il solo bottone GIUDICA, ben visibile e facile da toccare.
+     max-width/max-height (non width/height fissi) come nella regola base
+     sopra — sul telefono il video è spesso molto verticale, un'altezza
+     fissa lo farebbe uscire dal riquadro previsto */
   #preview {
     top: calc(20px + env(safe-area-inset-top, 0px));
     right: 20px;
     bottom: auto;
-    width: 100px;
-    height: 75px;
+    width: auto;
+    height: auto;
+    max-width: 100px;
+    max-height: 90px;
   }
 
   /* GIUDICA: già centrato di default (vedi regola base sopra) — qui solo
