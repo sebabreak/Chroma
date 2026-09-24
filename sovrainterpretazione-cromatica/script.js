@@ -1704,9 +1704,40 @@ window.CHROMA_DEBUG = {
   resetCooldowns: () => { for (const k in pageCooldownUntil) delete pageCooldownUntil[k]; console.log('cooldown azzerati'); },
 };
 
+// ── 18. QR INGRANDITO ──────────────────────────────────────────────
+// #qrBox non è più un link che apre l'app in un'altra scheda: un clic
+// ingrandisce lo stesso QR al centro dello schermo (#qrModal), pensato
+// per mostrarlo a tutta la sala durante l'esposizione della tesi senza
+// uscire dall'app. Stesso pattern di #pageReactionBackdrop/#pageReaction
+// (sezione 17): sfondo che scurisce tutto, popup sopra, nessun timeout —
+// resta finché non lo si chiude a mano.
+const qrBoxBtn        = document.getElementById('qrBox');
+const qrModal         = document.getElementById('qrModal');
+const qrModalBackdrop = document.getElementById('qrModalBackdrop');
+const qrModalClose    = document.getElementById('qrModalClose');
+
+function openQrModal() {
+  qrModal.classList.add('visible');
+  qrModalBackdrop.classList.add('visible');
+}
+function closeQrModal() {
+  qrModal.classList.remove('visible');
+  qrModalBackdrop.classList.remove('visible');
+}
+qrBoxBtn.addEventListener('click', openQrModal);
+qrModalClose.addEventListener('click', closeQrModal);
+qrModalBackdrop.addEventListener('click', closeQrModal); // clic fuori dal popup = stesso effetto del bottone "chiudi"
+
 document.addEventListener('keydown', e => {
   // ignora la scorciatoia mentre si sta scrivendo in un campo di testo
   // (qui non ce ne sono, ma è una sicurezza per eventuali aggiunte future)
   if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
   if (e.key === 'e' || e.key === 'E') exportResponseLog();
+  if (e.key === 'Escape') {
+    closeQrModal(); // innocuo anche se già chiuso
+    // closePageReaction() invece NON va chiamata a vuoto: resetta anche
+    // "analyzing" e riabilita GIUDICA, il che interromperebbe un giudizio
+    // AI normale in corso se il popup pagina non è nemmeno aperto
+    if (pageReactionEl.classList.contains('visible')) closePageReaction();
+  }
 });
