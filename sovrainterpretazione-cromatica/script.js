@@ -1572,6 +1572,7 @@ const PAGE_MATCH_MIN_RATIO = 0.75;
 const PAGE_REOPEN_COOLDOWN = 4000;
 
 const pageReactionEl       = document.getElementById('pageReaction');
+const pageReactionBackdrop = document.getElementById('pageReactionBackdrop');
 const pageReactionTextEl   = document.getElementById('pageReactionText');
 const pageReactionCloseBtn = document.getElementById('pageReactionClose');
 
@@ -1643,6 +1644,7 @@ async function triggerPageReaction(sig) {
 
   pageReactionTextEl.textContent = sig.fixedText || '…';
   pageReactionEl.classList.add('visible');
+  pageReactionBackdrop.classList.add('visible');
 
   if (!sig.fixedText) {
     // risposta generata dal vivo (solo il cap. 3, vedi PAGE_SIGNATURES)
@@ -1663,6 +1665,7 @@ async function triggerPageReaction(sig) {
 
 function closePageReaction() {
   pageReactionEl.classList.remove('visible');
+  pageReactionBackdrop.classList.remove('visible');
   if (activePageId) pageCooldownUntil[activePageId] = performance.now() + PAGE_REOPEN_COOLDOWN;
   activePageId = null;
   pageRequestSeq++; // scarta un'eventuale risposta AI ancora in arrivo per la pagina appena chiusa
@@ -1671,6 +1674,7 @@ function closePageReaction() {
   judgeBtn.textContent = '▸ GIUDICA';
 }
 pageReactionCloseBtn.addEventListener('click', closePageReaction);
+pageReactionBackdrop.addEventListener('click', closePageReaction); // clic fuori dal popup = stesso effetto del bottone "chiudi"
 
 // esposte su window solo per comodità di test dalla console del browser
 // (desktop o da telefono via debug remoto) — vedi istruzioni di test:
