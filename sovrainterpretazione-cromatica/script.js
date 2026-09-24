@@ -182,10 +182,21 @@ let selectedColor = null;
 // Il range dello slider è definito in index.html (min/max dell'input
 // #resolutionSlider) — Math.max(1, ...) qui sotto è solo una sicurezza
 // per evitare un canvas alto 0px se in futuro il min venisse abbassato oltre 1.
+//
+// TARGET_ASPECT è il formato (4:3) a cui viene RITAGLIATO ogni fotogramma
+// prima di campionarlo (vedi drawVideoCover qui sotto) — NON è un tentativo
+// di indovinare/inseguire il vero aspect ratio della webcam (un approccio
+// provato e poi scartato: se la webcam trasmette in un formato molto
+// diverso da 4:3, il riquadro #preview finiva per rimpicciolirsi per
+// rispettarlo — visto sia su telefono che su PC). Ritagliare invece di
+// stirare/inseguire risolve la distorsione SENZA rendere la dimensione
+// del riquadro imprevedibile: resta sempre 4:3, su qualunque dispositivo.
+const TARGET_ASPECT = 0.75;
 let lowResWidth  = Math.max(1, parseInt(resolutionSlider.value));
-let lowResHeight = 1; // valore reale calcolato da updateLowResDimensions() qui sotto, appena il video è pronto
+let lowResHeight = Math.max(1, Math.round(lowResWidth * TARGET_ASPECT));
 const lowResCanvas = document.createElement("canvas");
 const lowResCtx    = lowResCanvas.getContext("2d");
+lowResCanvas.width = lowResWidth; lowResCanvas.height = lowResHeight;
 
 // dimensione interna FISSA e volutamente piccola per il canvas #preview
 // (il riquadro pixelato cliccabile) — INDIPENDENTE dallo slider di
@@ -196,26 +207,29 @@ const lowResCtx    = lowResCanvas.getContext("2d");
 // image-rendering:pixelated in style.css) — pochi pixel bastano e
 // costano meno ad ogni frame, senza perdere nulla in precisione di
 // campionamento (quella resta governata solo dallo slider).
-const PREVIEW_RASTER_WIDTH = 64;
+const PREVIEW_RASTER_WIDTH  = 64;
+const PREVIEW_RASTER_HEIGHT = Math.max(1, Math.round(PREVIEW_RASTER_WIDTH * TARGET_ASPECT));
+previewCanvas.width = PREVIEW_RASTER_WIDTH; previewCanvas.height = PREVIEW_RASTER_HEIGHT;
 
-// ricalcola le dimensioni di lowResCanvas E di #preview in base al VERO
-// aspect ratio della webcam (video.videoWidth/videoHeight), non più un
-// 4:3 fisso — quel valore fisso è la causa dell'anteprima "stretchata"
-// su telefono: la fotocamera di un telefono raramente trasmette davvero
-// in 4:3 (spesso è più stretta in verticale, o molto più larga in
-// orizzontale), quindi forzare il fotogramma dentro un riquadro 4:3 lo
-// deformava. Finché il video non è ancora pronto, usa 0.75 (4:3) come
-// stima di partenza ragionevole.
-function updateLowResDimensions() {
-  const aspect = (video.videoWidth && video.videoHeight) ? (video.videoHeight / video.videoWidth) : 0.75;
-  lowResHeight = Math.max(1, Math.round(lowResWidth * aspect));
-  lowResCanvas.width = lowResWidth; lowResCanvas.height = lowResHeight;
-
-  const previewH = Math.max(1, Math.round(PREVIEW_RASTER_WIDTH * aspect));
-  previewCanvas.width = PREVIEW_RASTER_WIDTH; previewCanvas.height = previewH;
+// disegna il video in un canvas RITAGLIANDOLO (mai stirandolo) per
+// riempire esattamente destW×destH: stesso principio già usato altrove
+// per il ritratto cromatico (captureVideoFrame(), sezione 10 — lì è un
+// ritaglio quadrato, qui invece è a formato TARGET_ASPECT). Se la webcam
+// è più larga del necessario, taglia i lati; se è più alta, taglia
+// sopra/sotto — sempre centrato.
+function drawVideoCover(ctx, destW, destH) {
+  const vw = video.videoWidth, vh = video.videoHeight;
+  if (!vw || !vh) return;
+  const targetAspect = destW / destH;
+  const srcAspect = vw / vh;
+  let sx, sy, sw, sh;
+  if (srcAspect > targetAspect) { // sorgente più larga del formato voluto: ritaglia i lati
+    sh = vh; sw = vh * targetAspect; sx = (vw - sw) / 2; sy = 0;
+  } else { // sorgente più alta del formato voluto: ritaglia sopra/sotto
+    sw = vw; sh = vw / targetAspect; sx = 0; sy = (vh - sh) / 2;
+  }
+  ctx.drawImage(video, sx, sy, sw, sh, 0, 0, destW, destH);
 }
-updateLowResDimensions();
-let lastVideoW = 0, lastVideoH = 0; // per rilevare, dentro loop() (sezione 9), quando l'aspect ratio reale della webcam cambia (avvio, cambio fotocamera, rotazione del telefono) e va ricalcolato
 
 // lo slider verticale a destra permette di cambiare questa risoluzione a mano.
 // Al minimo (1 pixel) il colore "medio scena" (r,g,b in loop(), sezione 9)
@@ -224,8 +238,9 @@ let lastVideoW = 0, lastVideoH = 0; // per rilevare, dentro loop() (sezione 9), 
 // sezione 7) invece ha bisogno di più pixel: sotto i 5 campioni utili resta
 // semplicemente ferma sull'ultimo risultato valido, senza errori.
 resolutionSlider.addEventListener("input", e => {
-  lowResWidth = Math.max(1, parseInt(e.target.value));
-  updateLowResDimensions();
+  lowResWidth  = Math.max(1, parseInt(e.target.value));
+  lowResHeight = Math.max(1, Math.round(lowResWidth * TARGET_ASPECT));
+  lowResCanvas.width = lowResWidth; lowResCanvas.height = lowResHeight;
 });
 
 // ── 5. SFONDO ANIMATO E PARTICELLE ────────────────────────────────
@@ -596,17 +611,11 @@ function loop() {
     return;
   }
 
-  // l'aspect ratio reale della webcam può cambiare a stream già avviato
-  // (cambio fotocamera anteriore/posteriore, rotazione del telefono su
-  // alcuni browser): controllo economico (due confronti), ricalcola le
-  // dimensioni solo quando serve davvero
-  if (video.videoWidth !== lastVideoW || video.videoHeight !== lastVideoH) {
-    lastVideoW = video.videoWidth; lastVideoH = video.videoHeight;
-    updateLowResDimensions();
-  }
-
   // ── campiona il colore medio del frame ──
-  lowResCtx.drawImage(video,0,0,lowResCanvas.width,lowResCanvas.height);
+  // drawVideoCover (sezione 4) ritaglia il fotogramma al formato
+  // TARGET_ASPECT invece di stirarlo dentro lowResCanvas — qualunque sia
+  // il vero aspect ratio della webcam, qui non viene mai distorto
+  drawVideoCover(lowResCtx, lowResCanvas.width, lowResCanvas.height);
   const imgData=lowResCtx.getImageData(0,0,lowResCanvas.width,lowResCanvas.height);
   const data=imgData.data;
   let r=0,g=0,b=0;
