@@ -161,14 +161,22 @@ video { display: none; }
    fisso qui causerebbe di nuovo la stessa distorsione che quella funzione
    risolve lato campionamento, specialmente su telefono dove la webcam
    raramente trasmette davvero in 4:3. */
+/* cliccabile: un clic su un punto lo seleziona come colore da seguire (script.js, sezione 11).
+   Dimensione FISSA + object-fit:cover (non più width/height:auto con
+   max-width/max-height): quella combinazione faceva rimpicciolire il
+   riquadro ogni volta che la webcam non trasmetteva davvero in 4:3 —
+   sia su telefono che su PC. object-fit:cover ritaglia il contenuto per
+   riempire comunque queste dimensioni, senza stirarlo. Questa è solo la
+   regola di base/fallback: dai 795px in su e sotto i 1101px ci sono
+   regole più specifiche qui sotto che la sostituiscono con dimensioni
+   pensate per quella fascia. */
 #preview {
   position: fixed;
   bottom: 100px;
   right: 20px;
-  width: auto;
-  height: auto;
-  max-width: 160px;
-  max-height: 120px;
+  width: 160px;
+  height: 120px;
+  object-fit: cover;
   border: 1px solid rgba(255, 115, 0, 0.5);
   border-radius: 4px;
   opacity: 0.6;
@@ -694,78 +702,7 @@ body::before {
    differenze per schermi stretti: elementi rimpiccioliti/riposizionati
    per non sovrapporsi ed entrare comodamente in una larghezza da telefono.
    Soglia 600px = copre qualunque telefono in verticale. */
-@media (max-width: 600px) {
-  #pulseCore { width: 120px; height: 120px; }
 
-  #colorOverlay { width: 64px; height: 64px; }
-  #paletteSwatches { top: calc(10% + 76px); }
-  .swatch { width: 18px; height: 18px; }
-
-  /* l'anteprima si sposta in alto a destra: libera tutta la fascia in
-     basso per il solo bottone GIUDICA, ben visibile e facile da toccare.
-     max-width/max-height (non width/height fissi) come nella regola base
-     sopra — sul telefono il video è spesso molto verticale, un'altezza
-     fissa lo farebbe uscire dal riquadro previsto */
-  #preview {
-    top: calc(20px + env(safe-area-inset-top, 0px));
-    right: 20px;
-    bottom: auto;
-    width: auto;
-    height: auto;
-    max-width: 100px;
-    max-height: 90px;
-  }
-
-  /* GIUDICA: già centrato di default (vedi regola base sopra) — qui solo
-     una misura adatta a un telefono, comunque ben più grande di prima */
-  #judgeBtn {
-    font-size: 12px;
-    padding: 12px 24px;
-  }
-
-  /* pannello dati oggettivi: più stretto e più in alto, per non scontrarsi
-     con i quadratini di selezione colore (più in alto su schermi piccoli) */
-  #dataPanel {
-    top: calc(10% + 100px);
-    left: calc(20px - 1rem); /* vedi nota sull'allineamento nella regola base di #dataPanel */
-    width: 58vw;
-    max-width: 240px;
-    min-width: 220px;
-    padding: 0.9rem 1rem;
-  }
-  .data-dominant-name { font-size: 13px; }
-  .data-row { font-size: 10px; gap: 6px; }
-
-  /* CAM e cambia-fotocamera: piccola coppia in alto a destra, sotto l'anteprima */
-  #camBtn, #switchCamBtn {
-    bottom: auto;
-    right: 20px;
-    font-size: 8px;
-    padding: 6px 9px;
-  }
-  #camBtn       { top: calc(100px + env(safe-area-inset-top, 0px)); }
-  #switchCamBtn { top: calc(132px + env(safe-area-inset-top, 0px)); }
-
-  #aiJudgment { padding: 1.6rem 1.4rem; max-width: 88vw; }
-  #aiTrace    { max-width: 88vw; }
-
-  #resolutionSlider { width: 90px; }
-
-  /* QR: un po' più piccolo per non occupare troppo spazio su schermi stretti */
-  #qrCode { width: 56px; height: 56px; }
-  #qrLabel { font-size: 7px; }
-
-  /* sequenza interattiva (domanda/riconoscimento/ritratto): un po' più
-     compatta per entrare comodamente in uno schermo da telefono */
-  .question-label { margin-bottom: 1rem; }
-  .mood-chip { font-size: 9px; padding: 7px 11px; }
-  .recognize-btns { gap: 8px; }
-  .recognize-btns button { font-size: 10px; padding: 8px 14px; }
-  #portraitCanvas { width: 55vw; height: 55vw; }
-
-  #pageReaction { padding: 2rem 1.6rem 1.7rem; width: min(560px, 90vw); }
-  #pageReactionText { font-size: 1.05rem; }
-}
 
 /* ══════════════════════════════════════════════════════════════════
    CHROMA — RESPONSIVE V3
@@ -793,10 +730,15 @@ body {
 /* ── DESKTOP ────────────────────────────────────────────────────── */
 @media (min-width: 1101px) {
   #preview {
+    /* width E height ora entrambi espliciti (clamp proporzionato a 4:3,
+       non più height:auto+max-height): quella combinazione faceva
+       RIMPICCIOLIRE il riquadro ogni volta che la webcam non trasmetteva
+       davvero in 4:3 — object-fit:cover ritaglia il contenuto per
+       riempire comunque queste dimensioni, senza mai stirarlo né
+       rimpicciolire il riquadro stesso */
     width: clamp(250px, 20vw, 330px);
-    height: auto;
-    max-width: 330px;
-    max-height: 248px;
+    height: clamp(188px, 15vw, 248px);
+    object-fit: cover;
     right: 24px;
     bottom: 88px;
     opacity: 0.8;
@@ -804,6 +746,18 @@ body {
 }
 
 /* ── TABLET + TELEFONO ──────────────────────────────────────────── */
+
+/* NOTA: questo blocco (mobile generale, ≤600px) è stato spostato qui,
+   DOPO il blocco "TABLET + TELEFONO" (≤1100px) qui sopra, invece di
+   restare prima come nel file originale. Motivo: a parità di
+   specificità del selettore, in CSS vince sempre la regola scritta più
+   in basso nel file — indipendentemente da quale @media sia più
+   stretto. Con il blocco ≤600 PRIMA del ≤1100 (ordine originale), ogni
+   proprietà che i due definivano entrambi (aiJudgment, dataPanel,
+   judgeBtn, paletteSwatches, ecc.) veniva decisa dal blocco ≤1100 anche
+   sui telefoni più stretti — il blocco ≤600, pur essendo quello
+   "giusto" per un telefono, restava silenziosamente ignorato. Ora che
+   viene dopo, vince lui, com'era chiaramente l'intento. */
 @media (max-width: 1100px) {
 
   #qrBox {
@@ -891,17 +845,15 @@ body {
     height: 18px;
   }
 
-  /* gruppo CAMERA: stessa larghezza, tutto allineato a destra */
-  #preview {
-    top: calc(14px + env(safe-area-inset-top, 0px));
-    right: 14px;
-    bottom: auto;
-    width: 140px;
-    height: auto;
-    max-width: 140px;
-    max-height: 105px;
-    opacity: 0.8;
-  }
+  /* #preview NON è più qui per lo stesso motivo di sopra (vedi nota
+     nel blocco @media (max-width: 600px)) — governata dai blocchi V4.
+     #camBtn/#switchCamBtn qui sotto (140px) restano scritti ma sono
+     A LORO VOLTA sovrascritti dai blocchi V4 più avanti in questo file,
+     che impostano una larghezza propria (94px verticale / 164px
+     orizzontale) coerente con le rispettive dimensioni di #preview lì —
+     quindi non c'è un vero disallineamento in pratica, solo altro
+     codice morto: questi 140px qui non vengono mai realmente applicati
+     sotto i 1101px. */
 
   #camBtn,
   #switchCamBtn {
@@ -974,6 +926,69 @@ body {
     max-height: 88dvh;
   }
 }
+@media (max-width: 600px) {
+  #pulseCore { width: 120px; height: 120px; }
+
+  #colorOverlay { width: 64px; height: 64px; }
+  #paletteSwatches { top: calc(10% + 76px); }
+  .swatch { width: 18px; height: 18px; }
+
+  /* #preview NON è più qui: sotto i 1101px la dimensione/posizione del
+     riquadro webcam è governata dai blocchi "RESPONSIVE V4" più avanti
+     in questo file (portrait/landscape, object-fit:cover) — una regola
+     #preview qui verrebbe comunque sovrascritta da quelli, quindi è
+     stata tolta invece di lasciarla come codice morto/fuorviante. */
+
+  /* GIUDICA: già centrato di default (vedi regola base sopra) — qui solo
+     una misura adatta a un telefono, comunque ben più grande di prima */
+  #judgeBtn {
+    font-size: 12px;
+    padding: 12px 24px;
+  }
+
+  /* pannello dati oggettivi: più stretto e più in alto, per non scontrarsi
+     con i quadratini di selezione colore (più in alto su schermi piccoli) */
+  #dataPanel {
+    top: calc(10% + 100px);
+    left: calc(20px - 1rem); /* vedi nota sull'allineamento nella regola base di #dataPanel */
+    width: 58vw;
+    max-width: 240px;
+    min-width: 220px;
+    padding: 0.9rem 1rem;
+  }
+  .data-dominant-name { font-size: 13px; }
+  .data-row { font-size: 10px; gap: 6px; }
+
+  /* CAM e cambia-fotocamera: piccola coppia in alto a destra, sotto l'anteprima */
+  #camBtn, #switchCamBtn {
+    bottom: auto;
+    right: 20px;
+    font-size: 8px;
+    padding: 6px 9px;
+  }
+  #camBtn       { top: calc(100px + env(safe-area-inset-top, 0px)); }
+  #switchCamBtn { top: calc(132px + env(safe-area-inset-top, 0px)); }
+
+  #aiJudgment { padding: 1.6rem 1.4rem; max-width: 88vw; }
+  #aiTrace    { max-width: 88vw; }
+
+  #resolutionSlider { width: 90px; }
+
+  /* QR: un po' più piccolo per non occupare troppo spazio su schermi stretti */
+  #qrCode { width: 56px; height: 56px; }
+  #qrLabel { font-size: 7px; }
+
+  /* sequenza interattiva (domanda/riconoscimento/ritratto): un po' più
+     compatta per entrare comodamente in uno schermo da telefono */
+  .question-label { margin-bottom: 1rem; }
+  .mood-chip { font-size: 9px; padding: 7px 11px; }
+  .recognize-btns { gap: 8px; }
+  .recognize-btns button { font-size: 10px; padding: 8px 14px; }
+  #portraitCanvas { width: 55vw; height: 55vw; }
+
+  #pageReaction { padding: 2rem 1.6rem 1.7rem; width: min(560px, 90vw); }
+  #pageReactionText { font-size: 1.05rem; }
+}
 
 /* ── TELEFONO VERTICALE ─────────────────────────────────────────── */
 @media (max-width: 600px) and (orientation: portrait) {
@@ -1037,29 +1052,9 @@ body {
     height: 17px;
   }
 
-  /* CAMERA: più compatta e leggermente più interna dal bordo */
-  #preview {
-    top: calc(16px + env(safe-area-inset-top, 0px));
-    right: 14px;
-    width: 118px;
-    max-width: 118px;
-    max-height: 88px;
-  }
-
-  #camBtn,
-  #switchCamBtn {
-    right: 14px;
-    width: 118px;
-    min-width: 118px;
-  }
-
-  #camBtn {
-    top: calc(111px + env(safe-area-inset-top, 0px));
-  }
-
-  #switchCamBtn {
-    top: calc(143px + env(safe-area-inset-top, 0px));
-  }
+  /* #preview e #camBtn/#switchCamBtn (dimensioni E posizione top) NON
+     sono più qui: anche in questo breakpoint vincono sempre i blocchi
+     V4 più avanti nel file (stesso motivo delle note sopra). */
 
   #resolutionSlider {
     right: -1px;
@@ -1178,29 +1173,9 @@ body {
     height: 16px;
   }
 
-  /* landscape quasi funzionava: tengo la stessa logica ma allineo il gruppo */
-  #preview {
-    top: calc(10px + env(safe-area-inset-top, 0px));
-    right: 14px;
-    width: 154px;
-    max-width: 154px;
-    max-height: 96px;
-  }
-
-  #camBtn,
-  #switchCamBtn {
-    right: 14px;
-    width: 154px;
-    min-width: 154px;
-  }
-
-  #camBtn {
-    top: calc(112px + env(safe-area-inset-top, 0px));
-  }
-
-  #switchCamBtn {
-    top: calc(144px + env(safe-area-inset-top, 0px));
-  }
+  /* #preview e #camBtn/#switchCamBtn (dimensioni E posizione top) NON
+     sono più qui: in landscape vince sempre il blocco V4 più avanti nel
+     file (stesso motivo delle note sopra). */
 
   #resolutionSlider {
     right: 180px;
