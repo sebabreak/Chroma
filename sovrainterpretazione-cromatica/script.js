@@ -1,1703 +1,3603 @@
-// ══════════════════════════════════════════════════════════════════
-//  SOVRAINTERPRETAZIONE CROMATICA
-//  Installazione interattiva: webcam → analisi colore → audio/visuale
-//  → giudizio generato da un'AI (Ollama) in esecuzione sul PC, raggiunta
-//  da qualunque dispositivo (anche un telefono) tramite un tunnel HTTPS.
-// ══════════════════════════════════════════════════════════════════
-//
-//  MAPPA DEL FILE — cerca questi titoli (Ctrl+F / Cmd+F) per saltare
-//  direttamente a una sezione:
-//
-//   1. ELEMENTI DOM ................ riferimenti agli elementi di index.html
-//   (2. AUDIO — rimossa: l'installazione è puramente visiva, niente più suono)
-//   3. STATO ........................ variabili che tengono traccia di colore/tempo/AI
-//   4. CANVAS BASSA RISOLUZIONE ..... pixelazione video + campionamento colore
-//   5. SFONDO ANIMATO E PARTICELLE .. nebulosa di colori rilevati + i puntini che seguono il mouse
-//   6. UTILS COLORE ................. conversioni RGB → HSL → nome colore
-//   7. ESTRAZIONE PALETTE (K-MEANS) . trova i colori dominanti nel frame
-//   8. MEMORIA ...................... striscia dei colori recenti in fondo allo schermo
-//   9. LOOP PRINCIPALE .............. gira ad ogni frame: è il cuore del programma
-//  10. GIUDIZIO AI (OLLAMA) ......... snapshot dati + prompt + chiamata al modello (via tunnel) + auto-giudizio silenzioso + sequenza interattiva completa
-//  11. CONTROLLI .................... bottoni cam / cambia fotocamera / giudica, selezione manuale del colore, avvio al click
-//  12. DATI OGGETTIVI ............... pannello nome colore/HEX/RGB/S/L/% area, SEMPRE VISIBILE a sinistra, si aggiorna da solo
-//  13. DOMANDA UMANA ................ "cosa ti trasmettono questi colori?", raccolta prima del giudizio AI (timeout se non risponde nessuno)
-//  14. "TI RICONOSCI?" .............. sì/no/in parte, mostrata subito dopo il giudizio AI (timeout se non risponde nessuno)
-//  15. RITRATTO CROMATICO ........... immagine astratta generata dai dati della singola osservazione, scaricabile
-//  16. LOG RISPOSTE .................. registro in memoria delle risposte + esportazione CSV (tasto "E")
-//  17. RICONOSCIMENTO PAGINA ........ riconosce la composizione cromatica stampata su una pagina della tesi e apre un popup a tema, chiudibile a mano
-//
-//  MODIFICHE PIÙ COMUNI — dove intervenire:
-//  - Cambiare modello Ollama o i suoi parametri  → sezione 10, dentro fetchAIJudgment()
-//  - Cambiare l'indirizzo del tunnel             → sezione 10, costante OLLAMA_TUNNEL_URL
-//  - Cambiare il testo/personalità del giudizio  → sezione 10, variabile `prompt` in fetchAIJudgment()
-//  - Rendere il riconoscimento colore più preciso → sezione 7, costanti in cima a extractPalette()
-//  - Cambiare quanto si rimpicciolisce il testo dei giudizi lunghi → sezione 10, costanti JUDGMENT_*
-//  - Cambiare i nomi dei colori o le soglie      → sezione 6, funzione colorName()
-//  - Cambiare velocità/forma del "battito cardiaco" → sezione 3, costanti BEAT_*
-//  - Cambiare quanto il cerchio si deforma (forma organica) → sezione 3, costanti ORGANIC_WOBBLE_*
-//  - Cambiare colori/movimento/dimensione della nebulosa di sfondo → sezione 5, updateAndDrawAmbient() e costanti AMBIENT_*
-//  - Cambiare la lunghezza delle scie delle particelle → sezione 5, costante TRAIL_LENGTH
-//  - Cambiare il minimo/massimo della risoluzione webcam → index.html, input#resolutionSlider
-//  - Cambiare ogni quanto il sistema giudica da solo (auto-giudizio silenzioso) → sezione 3, costante AUTO_INTERVAL
-//  - Cambiare come funziona la scelta manuale del colore → sezione 11, updatePaletteSwatches() e i due addEventListener('click', ...) subito sotto
-//  - Cambiare le parole d'umore della domanda umana → sezione 13, costante MOOD_WORDS
-//  - Cambiare dopo quanto una domanda senza risposta prosegue da sola → sezioni 13/14, costanti *_TIMEOUT
-//  - Cambiare quanto resta visibile il ritratto prima di sfumare → sezione 15, costante PORTRAIT_DURATION
-//  - Cambiare l'aspetto del ritratto cromatico   → sezione 15, funzione renderPortrait()
-//  - Esportare le risposte raccolte (sensazione/giudizio/riconoscimento) → sezione 16: tasto "E" sulla tastiera, oppure exportResponseLog() dalla console
-//  - Colori/testo/tema di ogni pagina riconoscibile → sezione 17, costante PAGE_SIGNATURES
-//  - Quanto è tollerante il riconoscimento pagina (stampa/luce imprecise) → sezione 17, PAGE_MATCH_THRESHOLD / PAGE_MATCH_MIN_RATIO
-//  - Quanto resta "ignorata" una pagina dopo aver chiuso il suo popup    → sezione 17, PAGE_REOPEN_COOLDOWN
-// ══════════════════════════════════════════════════════════════════
+// ================================================================
+// CHROMA
+// webcam → colore → dati → interpretazione → interazione
+// ================================================================
 
-// Ollama gira sul PC (non nel telefono): il PC deve avere Ollama installato
-// e avviato ("ollama serve") con il modello scaricato (sezione 10), e deve
-// restare acceso mentre l'app è in uso. Per essere raggiunto da un telefono
-// serve un tunnel HTTPS (es. cloudflared/ngrok) che esponga la porta 11434
-// — vedi OLLAMA_LOCAL_URL/OLLAMA_TUNNEL_URL in sezione 10 e le istruzioni di configurazione a parte.
-//
-// Questo file è anche registrato come PWA (vedi sw.js e manifest.json):
-// aprendolo da telefono, il browser offre "Aggiungi a schermata Home" e
-// da lì si comporta come un'app installata, a schermo intero (l'interfaccia
-// funziona anche offline, ma il giudizio AI richiede sempre di raggiungere
-// il PC tramite il tunnel).
 
-// ── 1. ELEMENTI DOM ──────────────────────────────────────────────
-// riferimenti agli elementi HTML definiti in index.html
-const video           = document.getElementById("video");
-const ambientCanvas     = document.getElementById("ambientCanvas");
-const actx               = ambientCanvas.getContext("2d");
-const camBtn            = document.getElementById("camBtn");
-const switchCamBtn      = document.getElementById("switchCamBtn"); // inverte fotocamera anteriore/posteriore (sezione 11)
-const judgeBtn          = document.getElementById("judgeBtn");
-const colorOverlay      = document.getElementById("colorOverlay");
-const paletteSwatchesEl  = document.getElementById("paletteSwatches");
-const swatchEls          = Array.from(paletteSwatchesEl.querySelectorAll(".swatch")); // le prime 5 = colori palette, l'ultima = AUTO
-const pulseCore         = document.getElementById("pulseCore");
-const previewCanvas     = document.getElementById("preview");
-const pctx              = previewCanvas.getContext("2d");
-const resolutionSlider  = document.getElementById("resolutionSlider");
-const aiJudgment        = document.getElementById("aiJudgment");
-const aiTrace           = document.getElementById("aiTrace");
-const memoryStrip       = document.getElementById("memoryStrip");
-const hudObs             = document.getElementById("hudObs");
-const hudJudge           = document.getElementById("hudJudge");
-const hudState           = document.getElementById("hudState");
-const debugMsg           = document.getElementById("debugMsg");
+// ================================================================
+// 1. ELEMENTI HTML
+// ================================================================
 
-// piccolo messaggio rosso in basso, usato per mostrare errori (webcam
-// non accessibile, modello AI non disponibile, ecc.) senza bloccare l'interfaccia
-// con un alert(). Sparisce da solo dopo `duration` millisecondi.
-function showDebug(msg, duration = 6000) {
-  if (!debugMsg) return;
-  debugMsg.textContent = msg;
-  debugMsg.style.opacity = '1';
-  setTimeout(() => { debugMsg.style.opacity = '0'; }, duration);
-}
+const $ = id =>
+  document.getElementById(id);
 
-// registra il service worker (sw.js): permette al browser di offrire
-// "Aggiungi a schermata Home" sul telefono e di aprire l'interfaccia anche
-// offline. Non riguarda l'AI (sezione 10): il giudizio richiede sempre di
-// raggiungere Ollama sul PC, quindi non funziona offline.
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('./sw.js').catch(err => {
-      console.warn('Service worker non registrato:', err);
-    });
-  });
-}
 
-// (sezione 2, "AUDIO", rimossa: l'installazione ora è puramente visiva —
-// niente più sintesi sonora reattiva né tasto AUDIO ON/OFF. I numeri delle
-// sezioni successive sono rimasti quelli originali apposta, per restare
-// coerenti con eventuali appunti/versioni precedenti del progetto.)
+const video =
+  $('video');
 
-// ── 3. STATO ──────────────────────────────────────────────────────
-// colore del frame precedente/corrente, usati per calcolare quanto
-// "cambia" la scena da un istante all'altro (delta) e reagire di conseguenza
-let prevR = null, prevG = null, prevB = null;
-let currentR = 0, currentG = 0, currentB = 0;
+const ambientCanvas =
+  $('ambientCanvas');
 
-// "umore" del sistema: cambia in base a quanto/come varia il colore (vedi loop, sezione 9)
-let systemState = "neutrale";
+const ambientCtx =
+  ambientCanvas.getContext('2d');
 
-// timing del "battito cardiaco" visivo/sonoro (cerchio pulsante + audio)
-let heartbeatPhase     = 0;
-let heartbeatInterval  = 140; // ricalcolato ad ogni frame in base al delta colore (min 80, max 180)
-let heartbeatIntensity = 40;  // quanto "esplode" il pulseCore ad ogni battito
+const preview =
+  $('preview');
 
-// forma del battito (curva "beat" usata in loop(), sezione 9): un battito
-// vero ha una salita rapida seguita da un decadimento morbido, poi un
-// secondo colpo più debole ("lub-dub"). Cambia questi numeri per regolare
-// tempi e intensità senza toccare la logica in loop().
-const BEAT_ATTACK        = 4;    // frame di salita al picco (sistole) — più basso = colpo più secco
-const BEAT_DECAY         = 24;   // frame di discesa dal picco — più alto = discesa più lenta/morbida
-const BEAT_NOTCH_GAP     = 40;   // pausa tra il battito principale e l'eco secondario
-const BEAT_DUB_DECAY     = 14;   // frame di discesa dell'eco secondario ("dub")
-const BEAT_DUB_INTENSITY = 0.35; // intensità dell'eco secondario rispetto al battito principale (0-1)
+const previewCtx =
+  preview.getContext('2d');
 
-// quanto il cerchio pulsante si deforma in modo organico/amebico invece di
-// restare un cerchio perfetto (vedi loop(), sezione 9). Valori in punti
-// percentuali di border-radius: più alti = forma più irregolare.
-const ORGANIC_WOBBLE_BASE = 10; // deformazione "di riposo", sempre presente
-const ORGANIC_WOBBLE_BEAT = 14; // deformazione extra durante il battito
+const colorOverlay =
+  $('colorOverlay');
 
-// contatori e stato del ciclo di giudizio AI
-let obsCount    = 0;     // numero di "osservazioni" (battiti) registrate
-let judgeCount  = 0;     // numero di giudizi AI generati finora
-let analyzing   = false; // true mentre è in corso una richiesta al modello AI locale (sezione 10)
-let camActive   = false;
-// fotocamera posteriore ('environment') o anteriore ('user') — vedi
-// switchCamBtn in sezione 11. Di default posteriore, più sensata per
-// un'installazione che "osserva" persone/oggetti davanti a chi la usa.
-let facingMode  = 'environment';
-let autoTimer   = 0;
-const AUTO_INTERVAL = 1800; // ogni quanti frame il sistema chiede un giudizio da solo (≈60s a 30fps). Abbassa per giudizi automatici più frequenti.
-// se un giudizio fallisce (sezione 10), l'auto-giudizio smette di ritentare
-// da solo finché l'osservatore non clicca manualmente GIUDICA: altrimenti,
-// se il problema è strutturale (es. PC spento, Ollama non avviato, tunnel
-// caduto), riproverebbe inutilmente ogni minuto in loop.
-let autoJudgmentSuspended = false;
+const paletteBox =
+  $('paletteSwatches');
 
-// memoria cromatica: dominantHistory alimenta la striscia in fondo allo
-// schermo e la "memoria recente" citata nel prompt dell'AI (sezione 10)
-const dominantHistory = [];
-const colorMemory     = [];
+const swatches =
+  [...paletteBox.querySelectorAll('.swatch')];
 
-// selezione manuale del colore (vedi sezione 11 per i click che la
-// impostano): se presente, sostituisce la scelta automatica ovunque nel
-// sistema (riquadro colore, palette per l'AI). null = scelta automatica.
-//  - { type: 'palette', index }  → uno dei colori estratti dal k-means (sezione 7)
-//  - { type: 'point', xFrac, yFrac } → un punto preciso dell'anteprima video (0-1, 0-1)
-let manualSelection = null;
-// colore RGB risultante dalla selezione manuale in questo frame (ricalcolato
-// in loop(), sezione 9); null quando la selezione è automatica
+const pulseCore =
+  $('pulseCore');
+
+const resolutionSlider =
+  $('resolutionSlider');
+
+const camBtn =
+  $('camBtn');
+
+const switchCamBtn =
+  $('switchCamBtn');
+
+const judgeBtn =
+  $('judgeBtn');
+
+const aiJudgment =
+  $('aiJudgment');
+
+const aiTrace =
+  $('aiTrace');
+
+const memoryStrip =
+  $('memoryStrip');
+
+const hudObs =
+  $('hudObs');
+
+const hudJudge =
+  $('hudJudge');
+
+const hudState =
+  $('hudState');
+
+const debugMsg =
+  $('debugMsg');
+
+const dataPanel =
+  $('dataPanel');
+
+const humanQuestion =
+  $('humanQuestion');
+
+const moodChips =
+  $('moodChips');
+
+const moodSkip =
+  $('moodSkip');
+
+const recognizeQuestion =
+  $('recognizeQuestion');
+
+const portraitPanel =
+  $('portraitPanel');
+
+const portraitCanvas =
+  $('portraitCanvas');
+
+const portraitCtx =
+  portraitCanvas.getContext('2d');
+
+const portraitDownload =
+  $('portraitDownload');
+
+
+// ================================================================
+// 2. PRESTAZIONI
+// ================================================================
+
+const MOBILE =
+  matchMedia('(pointer: coarse)').matches ||
+  innerWidth <= 1100;
+
+
+const PERF = MOBILE
+  ? {
+      sampleStep: 16,
+      kmeansIterations: 7,
+      paletteFrames: 10,
+      ambientFrames: 2,
+      portraitSize: 600,
+      autoJudge: false
+    }
+  : {
+      sampleStep: 8,
+      kmeansIterations: 12,
+      paletteFrames: 6,
+      ambientFrames: 1,
+      portraitSize: 900,
+      autoJudge: true
+    };
+
+
+// ================================================================
+// 3. STATO
+// ================================================================
+
+let camActive = false;
+
+let facingMode =
+  'environment';
+
+let stream = null;
+
+let frame = 0;
+
+let obsCount = 0;
+
+let judgeCount = 0;
+
+let analyzing = false;
+
+let currentPalette = [];
+
+let paletteWeights = [];
+
 let selectedColor = null;
 
-// ── 4. CANVAS BASSA RISOLUZIONE ───────────────────────────────────
-// il video viene "rimpicciolito" su un canvas invisibile: analizzare
-// pochi pixel invece del video intero è molto più veloce, ed è anche
-// la fonte dei pixel usati per l'estrazione della palette (sezione 7).
-// Più alta è la risoluzione, più preciso (ma più lento) il campionamento.
-// Il range dello slider è definito in index.html (min/max dell'input
-// #resolutionSlider) — Math.max(1, ...) qui sotto è solo una sicurezza
-// per evitare un canvas alto 0px se in futuro il min venisse abbassato oltre 1.
-let lowResWidth  = Math.max(1, parseInt(resolutionSlider.value));
-let lowResHeight = 1; // valore reale calcolato da updateLowResDimensions() qui sotto, appena il video è pronto
-const lowResCanvas = document.createElement("canvas");
-const lowResCtx    = lowResCanvas.getContext("2d");
+let manualSelection = null;
 
-// dimensione interna FISSA e volutamente piccola per il canvas #preview
-// (il riquadro pixelato cliccabile) — INDIPENDENTE dallo slider di
-// risoluzione. Prima veniva disegnato alla stessa risoluzione usata per
-// il campionamento colore (fino a 140×105px, ricalcolati e ridisegnati
-// ad ogni frame): inutilmente pesante su telefono, dato che il riquadro
-// a schermo è comunque piccolo e "pixelato" di proposito (vedi
-// image-rendering:pixelated in style.css) — pochi pixel bastano e
-// costano meno ad ogni frame, senza perdere nulla in precisione di
-// campionamento (quella resta governata solo dallo slider).
-const PREVIEW_RASTER_WIDTH = 64;
+let currentRGB =
+  [100,100,100];
 
-// ricalcola le dimensioni di lowResCanvas E di #preview in base al VERO
-// aspect ratio della webcam (video.videoWidth/videoHeight), non più un
-// 4:3 fisso — quel valore fisso è la causa dell'anteprima "stretchata"
-// su telefono: la fotocamera di un telefono raramente trasmette davvero
-// in 4:3 (spesso è più stretta in verticale, o molto più larga in
-// orizzontale), quindi forzare il fotogramma dentro un riquadro 4:3 lo
-// deformava. Finché il video non è ancora pronto, usa 0.75 (4:3) come
-// stima di partenza ragionevole.
-function updateLowResDimensions() {
-  const aspect = (video.videoWidth && video.videoHeight) ? (video.videoHeight / video.videoWidth) : 0.75;
-  lowResHeight = Math.max(1, Math.round(lowResWidth * aspect));
-  lowResCanvas.width = lowResWidth; lowResCanvas.height = lowResHeight;
+let previousRGB = null;
 
-  const previewH = Math.max(1, Math.round(PREVIEW_RASTER_WIDTH * aspect));
-  previewCanvas.width = PREVIEW_RASTER_WIDTH; previewCanvas.height = previewH;
-}
-updateLowResDimensions();
-let lastVideoW = 0, lastVideoH = 0; // per rilevare, dentro loop() (sezione 9), quando l'aspect ratio reale della webcam cambia (avvio, cambio fotocamera, rotazione del telefono) e va ricalcolato
+let systemState =
+  'neutrale';
 
-// lo slider verticale a destra permette di cambiare questa risoluzione a mano.
-// Al minimo (1 pixel) il colore "medio scena" (r,g,b in loop(), sezione 9)
-// è istantaneo e coincide col singolo pixel letto — il modo più veloce e
-// diretto per riconoscere il colore. La palette a k colori (extractPalette,
-// sezione 7) invece ha bisogno di più pixel: sotto i 5 campioni utili resta
-// semplicemente ferma sull'ultimo risultato valido, senza errori.
-resolutionSlider.addEventListener("input", e => {
-  lowResWidth = Math.max(1, parseInt(e.target.value));
-  updateLowResDimensions();
-});
+let heartbeat = 0;
 
-// ── 5. SFONDO ANIMATO E PARTICELLE ────────────────────────────────
+let autoTimer = 0;
 
-// -- nebulosa di colori --
-// #ambientCanvas (vedi style.css) è sfocato via CSS: qui disegniamo solo
-// dei cerchi pieni, è il blur del CSS a trasformarli in macchie soffuse.
-// Ogni "blob" insegue uno dei colori della palette rilevata dalla webcam
-// (extractPalette, sezione 7): lo sfondo è letteralmente fatto dei colori
-// che il sistema sta "vedendo" in quel momento, uniti in una nebulosa che
-// si muove lentamente. Finché la webcam non è attiva usa una palette
-// tenue di riserva, così anche la schermata iniziale non è piatta nera.
-const AMBIENT_BLOB_COUNT = 5; // deve combaciare con k in extractPalette(imgData, 5, ...) per usare tutta la palette
-const AMBIENT_DRIFT_SPEED = 0.006; // velocità della deriva dei blob: più basso = movimento più lento/calmo
-const AMBIENT_COLOR_EASE  = 0.02;  // quanto velocemente ogni blob insegue il suo colore-bersaglio (0-1, più alto = più reattivo)
-const AMBIENT_IDLE_COLORS = [ // colori usati finché la webcam non ha ancora prodotto una palette
-  [40,40,75], [70,30,60], [20,55,70], [55,50,25], [30,60,50]
-];
-const ambientBlobs = Array.from({ length: AMBIENT_BLOB_COUNT }, (_, i) => ({
-  color: AMBIENT_IDLE_COLORS[i].slice(), // colore mostrato ora (si avvicina gradualmente al bersaglio, mai uno scatto)
-  freqX: 0.15 + Math.random()*0.12,      // velocità di deriva orizzontale, diversa per ogni blob
-  freqY: 0.13 + Math.random()*0.12,
-  phaseX: Math.random()*Math.PI*2,       // punto di partenza del movimento, diverso per ogni blob
-  phaseY: Math.random()*Math.PI*2,
-}));
+const AUTO_INTERVAL = 1800;
 
-ambientCanvas.width  = window.innerWidth;
-ambientCanvas.height = window.innerHeight;
+const colorHistory = [];
 
-// ricalcola e disegna la posizione/colore di ogni blob. Chiamata una volta
-// per frame da loop() (sezione 9), sempre — anche prima che la webcam sia attiva.
-function updateAndDrawAmbient() {
-  const w = ambientCanvas.width, h = ambientCanvas.height;
-  actx.clearRect(0, 0, w, h);
-  actx.globalCompositeOperation = 'lighter'; // dove due macchie si sovrappongono, si illuminano a vicenda: effetto nebulosa
-
-  const t = frameCount * AMBIENT_DRIFT_SPEED;
-  const baseRadius = Math.min(w, h) * 0.3;
-
-  ambientBlobs.forEach((blob, i) => {
-    const target = currentPalette[i] || AMBIENT_IDLE_COLORS[i];
-    blob.color = blob.color.map((v, c) => v + (target[c] - v) * AMBIENT_COLOR_EASE);
-
-    const x = w * (0.5 + 0.34 * Math.sin(t*blob.freqX*6 + blob.phaseX));
-    const y = h * (0.5 + 0.34 * Math.cos(t*blob.freqY*6 + blob.phaseY));
-    const r = baseRadius * (0.85 + 0.15 * Math.sin(t*3 + i)); // leggero "respiro" del raggio
-
-    actx.fillStyle = `rgb(${blob.color[0]|0},${blob.color[1]|0},${blob.color[2]|0})`;
-    actx.beginPath();
-    actx.arc(x, y, r, 0, Math.PI*2);
-    actx.fill();
-  });
-
-  actx.globalCompositeOperation = 'source-over';
-}
-
-// -- particelle --
-// i puntini che si muovono sullo sfondo e reagiscono al mouse e al colore
-const particlesCanvas = document.createElement("canvas");
-const particlesCtx    = particlesCanvas.getContext("2d");
-particlesCanvas.width  = window.innerWidth;
-particlesCanvas.height = window.innerHeight;
-particlesCanvas.style.cssText = "position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:4;";
-document.body.appendChild(particlesCanvas);
-
-const PARTICLE_COUNT = 180; // aumenta/diminuisci per più o meno puntini
-const TRAIL_LENGTH    = 6;   // quanti "fantasmi" lascia dietro di sé ogni particella (scia fluida). 0 = nessuna scia.
-const particles = [];
-for (let i = 0; i < PARTICLE_COUNT; i++) {
-  particles.push({
-    x: Math.random() * particlesCanvas.width,
-    y: Math.random() * particlesCanvas.height,
-    vx: 0, vy: 0, size: 1.5 + Math.random() * 2.5,
-    trail: [], // ultime posizioni: usate per disegnare la scia (vedi updateAndDrawParticles)
-  });
-}
-
-let mouse = { x: window.innerWidth/2, y: window.innerHeight/2 };
-window.addEventListener("mousemove", e => { mouse.x = e.clientX; mouse.y = e.clientY; });
-window.addEventListener("resize", () => {
-  particlesCanvas.width  = window.innerWidth;
-  particlesCanvas.height = window.innerHeight;
-  ambientCanvas.width    = window.innerWidth;
-  ambientCanvas.height   = window.innerHeight;
-});
-
-// aggiorna la fisica di tutte le particelle e le disegna, ognuna con una
-// scia fluida di "fantasmi" sempre più piccoli/trasparenti dietro di sé.
-// Chiamata da loop() sia quando la webcam è spenta (colore neutro, beat=0)
-// sia quando è attiva (colore rilevato + battito) — così la logica esiste
-// in un solo posto invece di essere duplicata.
-function updateAndDrawParticles(pr, pg, pb, beat) {
-  particlesCtx.clearRect(0, 0, particlesCanvas.width, particlesCanvas.height);
-  particles.forEach(p => {
-    const dx = mouse.x - p.x, dy = mouse.y - p.y;
-    const dist = Math.sqrt(dx*dx + dy*dy) + 1;
-    const force = Math.min(0.5, 100/dist);
-    p.vx += dx*0.002*force + (Math.random()-0.5)*(0.3 + beat*0.5);
-    p.vy += dy*0.002*force + (Math.random()-0.5)*(0.3 + beat*0.5);
-    p.vx *= 0.94; p.vy *= 0.94; p.x += p.vx; p.y += p.vy;
-
-    // memorizza la posizione corrente in coda alla scia, scartando la più vecchia
-    if (TRAIL_LENGTH > 0) {
-      p.trail.push({ x: p.x, y: p.y });
-      if (p.trail.length > TRAIL_LENGTH) p.trail.shift();
-    }
-
-    const sz = (1.5 + Math.min(4, 80/dist)) * (1 + beat*1.2);
-    const alpha = 0.25 + beat*0.45;
-
-    // disegna la scia: i "fantasmi" più vecchi sono più piccoli e più trasparenti
-    p.trail.forEach((pos, i) => {
-      const age = (i + 1) / (p.trail.length + 1); // 0 = più vecchio, ~1 = posizione attuale
-      particlesCtx.fillStyle = `rgba(${pr},${pg},${pb},${(alpha * age * 0.6).toFixed(2)})`;
-      particlesCtx.beginPath();
-      particlesCtx.arc(pos.x, pos.y, sz * age, 0, Math.PI*2);
-      particlesCtx.fill();
-    });
-
-    // la particella vera e propria, in primo piano rispetto alla sua scia
-    particlesCtx.fillStyle = `rgba(${pr},${pg},${pb},${alpha.toFixed(2)})`;
-    particlesCtx.beginPath();
-    particlesCtx.arc(p.x, p.y, sz, 0, Math.PI*2);
-    particlesCtx.fill();
-  });
-}
-
-// ── 6. UTILS COLORE ───────────────────────────────────────────────
-// conversioni tra formati colore, usate ovunque nel resto del file
-
-function toHex([r,g,b]) {
-  return '#'+[r,g,b].map(v=>v.toString(16).padStart(2,'0')).join('');
-}
-
-// converte RGB (0-255) in HSL: h = tonalità (0-360), s = saturazione (0-100), l = luminosità (0-100)
-function toHsl([r,g,b]) {
-  r/=255; g/=255; b/=255;
-  const max=Math.max(r,g,b), min=Math.min(r,g,b);
-  let h,s,l=(max+min)/2;
-  if(max===min){h=s=0;}else{
-    const d=max-min; s=l>0.5?d/(2-max-min):d/(max+min);
-    switch(max){
-      case r:h=((g-b)/d+(g<b?6:0))/6;break;
-      case g:h=((b-r)/d+2)/6;break;
-      case b:h=((r-g)/d+4)/6;break;
-    }
-  }
-  return [Math.round(h*360),Math.round(s*100),Math.round(l*100)];
-}
-
-// traduce un colore RGB in un nome italiano (usato nel prompt per l'AI,
-// sezione 10). Le soglie sono scelte "a orecchio": per affinare la
-// classificazione di un colore specifico, modifica qui gli intervalli
-// di h (tonalità), s (saturazione) e l (luminosità).
-function colorName([r,g,b]) {
-  const [h,s,l] = toHsl([r,g,b]);
-
-  // toni acromatici: saturazione molto bassa → nero/grigio/bianco indipendentemente dalla tonalità
-  if (s < 12) return l < 25 ? 'nero' : l < 55 ? 'grigio' : 'bianco';
-
-  // marrone: tonalità calda (rosso-arancio) ma scura — es. legno, pelle scura, capelli.
-  // Senza questa regola, questi colori venivano erroneamente chiamati "rosso spento" o "terra"
-  if (h < 45 && l < 32) return 'marrone';
-
-  if (h < 15 || h >= 345) return s > 55 ? 'rosso'   : 'rosso spento';
-  if (h < 45)             return s > 55 ? 'arancio' : 'terra';
-  if (h < 70)             return s > 45 ? 'giallo'  : 'ocra';
-  if (h < 150)            return s > 45 ? 'verde'   : 'verde scuro';
-  if (h < 195)            return s > 45 ? 'ciano'   : 'turchese';
-  if (h < 250)            return s > 45 ? 'blu'     : 'blu grigio';
-  if (h < 290)            return s > 45 ? 'viola'   : 'lavanda';
-  return                         s > 45 ? 'magenta' : 'rosa';
-}
-
-// ── 7. ESTRAZIONE PALETTE (K-MEANS) ───────────────────────────────
-// Trova i colori "dominanti" nell'inquadratura raggruppando i pixel
-// campionati in k gruppi (cluster) simili tra loro, poi restituisce il
-// colore medio di ciascun gruppo. È questa palette (non il semplice
-// colore medio) a essere descritta all'AI per il giudizio (sezione 10).
-//
-// PER RENDERE IL RICONOSCIMENTO PIÙ PRECISO (a scapito della velocità):
-//  - SAMPLE_STEP più basso        → vengono analizzati più pixel
-//  - KMEANS_ITERATIONS più alto   → i cluster convergono in modo più stabile/accurato
-//  - k più alto (vedi la chiamata extractPalette(imgData, 5, ...) in loop()) → più colori distinti riconosciuti
-const SAMPLE_STEP       = 8;  // 8 = un pixel ogni 2 (RGBA = 4 byte/pixel). Prima era 32 = un pixel ogni 8: 4x meno campioni.
-const KMEANS_ITERATIONS = 14; // prima erano 10: più iterazioni = palette più accurata
-
-function extractPalette(imageData, k, previousPalette = []) {
-  const data = imageData.data;
-  const pixels = [];
-  // scarta pixel quasi-neri o quasi-bianchi: spesso sono ombre/luci
-  // bruciate senza informazione di colore utile
-  for (let i = 0; i < data.length; i += SAMPLE_STEP) {
-    const r = data[i], g = data[i+1], b = data[i+2];
-    if (r + g + b > 30 && r + g + b < 740) pixels.push([r, g, b]);
-  }
-  if (pixels.length < k) {
-    // troppo pochi pixel utili: nessuna percentuale d'area affidabile da
-    // calcolare in questo frame (vedi lastPaletteWeights, sezione 8/12)
-    lastPaletteWeights = Array(k).fill(null);
-    return previousPalette.length === k ? previousPalette : Array(k).fill([128,128,128]);
-  }
-
-  // ── inizializzazione dei centroidi (i "semi" da cui parte il raggruppamento) ──
-  let centroids;
-  if (previousPalette.length === k) {
-    // COERENZA TEMPORALE: si riparte dai colori trovati nel frame
-    // precedente invece che da punti scelti a caso. Così la palette non
-    // "salta" in modo incoerente ad ogni ricalcolo, ed è la principale
-    // ragione per cui il riconoscimento risulta più stabile e preciso nel tempo.
-    centroids = previousPalette.map(c => c.slice());
-  } else {
-    // primo avvio (o cambio di k): il primo centroide è il pixel più
-    // saturo (il colore più "vivo" della scena), poi si aggiunge via
-    // via il pixel più lontano dai centroidi già scelti — è la tecnica
-    // nota come "farthest-point sampling" / k-means++, che evita di
-    // partire da punti troppo simili tra loro
-    let seed = pixels[0], seedSat = -1;
-    for (const p of pixels) {
-      const sat = getSaturation(p);
-      if (sat > seedSat) { seedSat = sat; seed = p; }
-    }
-    centroids = [seed.slice()];
-    for (let c = 1; c < k; c++) {
-      let maxDist = 0, best = pixels[0];
-      for (const p of pixels) {
-        const d = Math.min(...centroids.map(ct => colorDist(p, ct)));
-        if (d > maxDist) { maxDist = d; best = p; }
-      }
-      centroids.push(best.slice());
-    }
-  }
-
-  // ── iterazioni k-means: assegna ogni pixel al centroide più vicino,
-  //    poi sposta ogni centroide sulla media dei pixel che gli sono stati assegnati ──
-  for (let iter = 0; iter < KMEANS_ITERATIONS; iter++) {
-    const clusters = Array.from({length: k}, () => []);
-    for (const p of pixels) {
-      let best = 0, bestD = Infinity;
-      for (let c = 0; c < k; c++) {
-        const d = colorDist(p, centroids[c]);
-        if (d < bestD) { bestD = d; best = c; }
-      }
-      clusters[best].push(p);
-    }
-    centroids = clusters.map((cl, idx) => {
-      if (!cl.length) return centroids[idx]; // cluster rimasto vuoto: mantieni il centroide precedente invece di azzerarlo
-      const sum = cl.reduce((a,b) => [a[0]+b[0],a[1]+b[1],a[2]+b[2]], [0,0,0]);
-      return sum.map(v => Math.round(v / cl.length));
-    });
-  }
-
-  // smorza le variazioni da un ricalcolo all'altro mescolando ogni nuovo
-  // colore con quello del frame precedente più simile: riduce lo
-  // "sfarfallio" della palette senza renderla lenta a reagire.
-  // IMPORTANTE: se il colore più simile del frame precedente è comunque
-  // molto distante (soglia BLEND_MAX_DIST), significa che la scena è
-  // cambiata parecchio (es. nuovo oggetto/colore inquadrato) e NON va
-  // fatto il blend, altrimenti la palette resta "incollata" ai colori
-  // vecchi e non mostra mai i colori realmente visti dalla webcam.
-  const BLEND_MAX_DIST = 4500; // soglia di distanza colore (redmean) oltre la quale si salta lo smoothing
-  if (previousPalette.length === k) {
-    centroids = centroids.map(c => {
-      let best = previousPalette[0], bestD = Infinity;
-      for (const p of previousPalette) {
-        const d = colorDist(c, p);
-        if (d < bestD) { bestD = d; best = p; }
-      }
-      if (bestD > BLEND_MAX_DIST) return c; // scena cambiata troppo: niente blend, usa il colore nuovo così com'è
-      return c.map((v, i) => Math.round(v * 0.75 + best[i] * 0.25));
-    });
-  }
-
-  // percentuale d'area di ciascun colore finale: quanti pixel campionati
-  // gli sono stati assegnati nell'ultima iterazione, sul totale. Serve SOLO
-  // al pannello "dati oggettivi" (sezione 12) — il giudizio AI non la usa.
-  // Va ricalcolata sui centroidi DEFINITIVI (quelli appena trovati sopra),
-  // non su quelli di inizio iterazione, altrimenti le percentuali
-  // sarebbero quelle di un raggruppamento già superato.
-  const finalCounts = Array(k).fill(0);
-  for (const p of pixels) {
-    let best = 0, bestD = Infinity;
-    for (let c = 0; c < k; c++) {
-      const d = colorDist(p, centroids[c]);
-      if (d < bestD) { bestD = d; best = c; }
-    }
-    finalCounts[best]++;
-  }
-
-  // ordina per saturazione decrescente: i colori più vividi/interessanti
-  // vengono descritti per primi all'AI — le percentuali (lastPaletteWeights)
-  // devono seguire lo stesso riordino, altrimenti finirebbero associate al
-  // colore sbagliato quando il pannello dati le legge insieme alla palette
-  const ordered = centroids
-    .map((rgb, i) => ({ rgb, sat: getSaturation(rgb), pct: finalCounts[i] / pixels.length }))
-    .sort((a, b) => b.sat - a.sat);
-  lastPaletteWeights = ordered.map(x => x.pct);
-  return ordered.map(x => x.rgb);
-}
-
-// distanza percettiva ("redmean") tra due colori RGB: più fedele a come
-// l'occhio umano percepisce le differenze di colore rispetto alla
-// semplice distanza euclidea, perché pesa rosso/verde/blu in modo
-// diverso a seconda della luminosità media dei due colori confrontati
-function colorDist([r1,g1,b1], [r2,g2,b2]) {
-  const rmean = (r1 + r2) / 2;
-  const dr = r1 - r2, dg = g1 - g2, db = b1 - b2;
-  return (2 + rmean/256) * dr*dr + 4*dg*dg + (2 + (255 - rmean)/256) * db*db;
-}
-
-function getSaturation([r,g,b]) {
-  const max = Math.max(r,g,b), min = Math.min(r,g,b);
-  return max === 0 ? 0 : (max - min) / max;
-}
-
-// palette corrente (k colori), ricalcolata periodicamente dentro loop() (sezione 9)
-let currentPalette = [];
-// percentuale d'area di ciascun colore di currentPalette, stesso ordine
-// (impostata da extractPalette qui sopra); null dove non calcolabile.
-// Usata solo dal pannello "dati oggettivi" (sezione 12), mai dal prompt AI.
-let lastPaletteWeights = [];
-// true nel frame subito dopo un ricalcolo della palette: dice a loop()
-// (sezione 9) di aggiornare anche il pannello dati oggettivi (sezione 12),
-// che quindi si ridisegna solo quando i dati cambiano davvero, non ad ogni
-// frame — resta leggero anche con la sequenza interattiva in corso.
-let paletteDirty = false;
-
-// ── 8. MEMORIA ────────────────────────────────────────────────────
-// tiene traccia dei colori osservati nel tempo: alimenta la striscia
-// in fondo allo schermo (#memoryStrip) e la "memoria recente" citata nel prompt AI
-function pushMemory(r, g, b) {
-  dominantHistory.push([r,g,b]);
-  colorMemory.push([r,g,b]);
-  if(dominantHistory.length>40) dominantHistory.shift();
-  if(colorMemory.length>300) colorMemory.splice(0,colorMemory.length-300);
-
-  // ridisegna la striscia memoria con gli ultimi 30 colori osservati
-  memoryStrip.innerHTML='';
-  dominantHistory.slice(-30).forEach(rgb=>{
-    const seg=document.createElement('div');
-    seg.className='mem-seg';
-    seg.style.background=toHex(rgb);
-    memoryStrip.appendChild(seg);
-  });
-}
-
-// ── 9. LOOP PRINCIPALE ────────────────────────────────────────────
-// gira una volta per frame (requestAnimationFrame). È qui che ogni
-// elemento del sistema viene aggiornato: colore rilevato → stato →
-// battito → cerchio pulsante → audio → particelle → eventuale
-// giudizio automatico. Le sezioni sopra definiscono gli "attrezzi",
-// questa li usa tutti insieme.
-const PALETTE_RECOMPUTE_EVERY = 6; // ogni quanti frame si ricalcola la palette k-means (sezione 7). Più basso = più reattivo ma più lento.
-const PALETTE_FORCE_RESEED_EVERY = 5; // ogni quanti RICALCOLI (non frame) si riparte da zero invece che dalla palette precedente.
-                                       // Senza questo, la "coerenza temporale" (sezione 7) può far restare la palette
-                                       // "incollata" a colori vecchi quando la scena cambia molto: ogni tanto conviene
-                                       // dimenticare il passato e ripartire da un k-means++ fresco sui pixel attuali.
-let paletteRecomputeCount = 0;
-
-let frameCount = 0;
-function loop() {
-  frameCount++;
-  updateAndDrawAmbient(); // nebulosa di sfondo: sempre attiva, anche prima del primo click (sezione 5)
-  if(!camActive || video.videoWidth===0) {
-    // camera spenta/non pronta: anima comunque le particelle di sfondo (grigio neutro, nessun battito)
-    updateAndDrawParticles(120, 120, 120, 0);
-    requestAnimationFrame(loop);
-    return;
-  }
-
-  // l'aspect ratio reale della webcam può cambiare a stream già avviato
-  // (cambio fotocamera anteriore/posteriore, rotazione del telefono su
-  // alcuni browser): controllo economico (due confronti), ricalcola le
-  // dimensioni solo quando serve davvero
-  if (video.videoWidth !== lastVideoW || video.videoHeight !== lastVideoH) {
-    lastVideoW = video.videoWidth; lastVideoH = video.videoHeight;
-    updateLowResDimensions();
-  }
-
-  // ── campiona il colore medio del frame ──
-  lowResCtx.drawImage(video,0,0,lowResCanvas.width,lowResCanvas.height);
-  const imgData=lowResCtx.getImageData(0,0,lowResCanvas.width,lowResCanvas.height);
-  const data=imgData.data;
-  let r=0,g=0,b=0;
-  for(let i=0;i<data.length;i+=4){r+=data[i];g+=data[i+1];b+=data[i+2];}
-  const pc=data.length/4;
-  r=(r/pc)|0; g=(g/pc)|0; b=(b/pc)|0;
-
-  // ricalcola la palette di k colori dominanti ogni PALETTE_RECOMPUTE_EVERY frame (sezione 7)
-  if(frameCount % PALETTE_RECOMPUTE_EVERY === 0) {
-    paletteRecomputeCount++;
-    // ogni PALETTE_FORCE_RESEED_EVERY ricalcoli, forza un reseed "da zero"
-    // (passando [] come palette precedente) per evitare che la palette
-    // resti bloccata su colori ormai non più inquadrati dalla webcam
-    const forceReseed = (paletteRecomputeCount % PALETTE_FORCE_RESEED_EVERY === 0);
-    currentPalette = extractPalette(imgData, 5, forceReseed ? [] : currentPalette);
-    updatePaletteSwatches(); // aggiorna i colori dei quadratini cliccabili (sezione 11)
-    paletteDirty = true;
-    checkPageSignature(); // riconoscimento pagina stampata (sezione 17): controllato ad ogni ricalcolo della palette, quindi reagisce entro una frazione di secondo da quando la webcam inquadra la pagina
-  }
-
-  // ── selezione manuale del colore (sezione 11) ──
-  // se l'osservatore ha scelto un colore della palette o un punto
-  // dell'anteprima, quel colore ha la priorità su quello automatico
-  selectedColor = null;
-  if (manualSelection?.type === 'palette') {
-    selectedColor = currentPalette[manualSelection.index] || null;
-  } else if (manualSelection?.type === 'point') {
-    const px = Math.min(lowResCanvas.width - 1, Math.max(0, Math.round(manualSelection.xFrac * lowResCanvas.width)));
-    const py = Math.min(lowResCanvas.height - 1, Math.max(0, Math.round(manualSelection.yFrac * lowResCanvas.height)));
-    const idx = (py * lowResCanvas.width + px) * 4;
-    selectedColor = [data[idx], data[idx+1], data[idx+2]];
-  }
-  colorOverlay.classList.toggle('manual', !!selectedColor);
-  previewCanvas.classList.toggle('manual', !!selectedColor);
-
-  // il riquadro #colorOverlay mostra il colore scelto manualmente, oppure quello dominante della palette, oppure il colore medio
-  const domCol = selectedColor || (currentPalette.length > 0 ? currentPalette[0] : [r,g,b]);
-  colorOverlay.style.backgroundColor=`rgb(${domCol[0]},${domCol[1]},${domCol[2]})`;
-  resolutionSlider.style.setProperty("--track-color",`linear-gradient(to right, rgb(${r},${g},${b}) 0%, #555 100%)`);
-
-  // pannello dati oggettivi (sezione 12): resta sempre visibile e si
-  // aggiorna da solo quando i colori cambiano — non sparisce più ad ogni
-  // ciclo, per esplicita richiesta
-  if (paletteDirty) { updateDataPanel(domCol); paletteDirty = false; }
-
-  // disegna l'anteprima pixelata in basso a destra
-  pctx.imageSmoothingEnabled=false;
-  pctx.clearRect(0,0,previewCanvas.width,previewCanvas.height);
-  pctx.drawImage(lowResCanvas,0,0,previewCanvas.width,previewCanvas.height);
-
-  // se il punto selezionato è sull'anteprima, disegna un piccolo mirino sopra per mostrare dov'è
-  if (manualSelection?.type === 'point') {
-    const mx = manualSelection.xFrac * previewCanvas.width;
-    const my = manualSelection.yFrac * previewCanvas.height;
-    pctx.strokeStyle = 'rgba(255,255,255,0.9)';
-    pctx.lineWidth = 1;
-    pctx.beginPath();
-    pctx.arc(mx, my, 5, 0, Math.PI*2);
-    pctx.moveTo(mx-8, my); pctx.lineTo(mx-3, my);
-    pctx.moveTo(mx+3, my); pctx.lineTo(mx+8, my);
-    pctx.moveTo(mx, my-8); pctx.lineTo(mx, my-3);
-    pctx.moveTo(mx, my+3); pctx.lineTo(mx, my+8);
-    pctx.stroke();
-  }
-
-  // smorza il colore corrente verso quello appena campionato (evita scatti bruschi)
-  currentR+=(r-currentR)*0.1;
-  currentG+=(g-currentG)*0.1;
-  currentB+=(b-currentB)*0.1;
-
-  // ── quanto è cambiato il colore rispetto al frame precedente → aggiorna "umore" e velocità del battito ──
-  if(prevR!==null){
-    const delta=Math.abs(r-prevR)+Math.abs(g-prevG)+Math.abs(b-prevB);
-    heartbeatInterval=Math.max(80,Math.min(180,140-Math.min(delta,60))); // più cambia il colore, più il battito accelera
-    if(delta>60){
-      systemState=Math.random()<0.25?'confuso':(r+g+b>600?'iperattivo':'neutrale');
-    } else {
-      if(r+g+b<200) systemState='letargico';
-      else if(Math.random()<0.04) systemState='ossessivo';
-      else systemState='neutrale';
-    }
-  }
-  prevR=r; prevG=g; prevB=b;
-  hudState.textContent=systemState.toUpperCase();
-
-  // ── battito cardiaco: curva "sistole → decadimento → eco" con
-  //    transizioni ad accelerazione/decelerazione (ease) invece che
-  //    lineari, per un movimento del cerchio più morbido e organico ──
-  heartbeatPhase++;
-  let beat=0;
-  const beatPeak     = BEAT_ATTACK;
-  const beatDecayEnd = beatPeak + BEAT_DECAY;
-  const dubStart     = beatDecayEnd + BEAT_NOTCH_GAP;
-  const dubEnd       = dubStart + BEAT_DUB_DECAY;
-  if (heartbeatPhase < beatPeak) {
-    // salita rapida verso il picco: ease-out cubica, accelera e poi rallenta in cima invece di un picco a spillo
-    const t = heartbeatPhase / beatPeak;
-    beat = 1 - Math.pow(1 - t, 3);
-  } else if (heartbeatPhase < beatDecayEnd) {
-    // discesa dal picco: decadimento quadratico (rapido all'inizio, più dolce alla fine),
-    // simile al calo di pressione reale dopo un battito, non a una retta
-    const t = (heartbeatPhase - beatPeak) / BEAT_DECAY;
-    beat = Math.pow(1 - t, 2);
-  } else if (heartbeatPhase < dubStart) {
-    beat = 0; // pausa tra i due colpi
-  } else if (heartbeatPhase < dubEnd) {
-    // "dub": eco secondario più debole, stessa forma del battito principale ma più piccola
-    const t = (heartbeatPhase - dubStart) / BEAT_DUB_DECAY;
-    beat = BEAT_DUB_INTENSITY * Math.pow(1 - t, 2);
-  }
-
-  if(heartbeatPhase>=heartbeatInterval){
-    heartbeatPhase=0;
-    obsCount++;
-    hudObs.textContent=String(obsCount).padStart(3,'0');
-    pushMemory(r,g,b);
-  }
-
-  // ── pulse core: il cerchio centrale si illumina/ingrandisce ad ogni battito ──
-  const pulse=beat*heartbeatIntensity;
-  let pr=Math.min(255,currentR+pulse|0);
-  let pg=Math.min(255,currentG+pulse|0);
-  let pb=Math.min(255,currentB+pulse|0);
-  pulseCore.style.backgroundColor=`rgb(${pr},${pg},${pb})`;
-  pulseCore.style.transform=`translate(-50%,-50%) scale(${1+pulse/140})`;
-  pulseCore.style.boxShadow=`0 0 ${pulse}px rgba(${pr},${pg},${pb},0.7),0 0 ${pulse*0.4}px rgba(${pr},${pg},${pb},0.3)`;
-
-  // forma organica/amebica: 8 raggi (angoli) che oscillano lentamente con
-  // fasi diverse, più marcati durante il battito — mai un cerchio perfetto e immobile
-  const wobble = ORGANIC_WOBBLE_BASE + beat*ORGANIC_WOBBLE_BEAT;
-  const wt = frameCount * 0.02;
-  const rad = i => 50 + Math.sin(wt*(0.7+i*0.13) + i*1.7) * wobble;
-  pulseCore.style.borderRadius = `${rad(0)}% ${rad(1)}% ${rad(2)}% ${rad(3)}% / ${rad(4)}% ${rad(5)}% ${rad(6)}% ${rad(7)}%`;
-
-  // ── particelle: reagiscono al mouse, al battito e al colore rilevato (con scia fluida, vedi sezione 5) ──
-  updateAndDrawParticles(pr, pg, pb, beat);
-
-  // ── auto-giudizio: ogni AUTO_INTERVAL frame, chiede un giudizio all'AI locale senza bisogno del click ──
-  // (sospeso dopo un fallimento, vedi autoJudgmentSuspended qui sopra e nel catch di requestJudgment, sezione 10)
-  autoTimer++;
-  if(autoTimer>=AUTO_INTERVAL && !analyzing && !autoJudgmentSuspended){ autoTimer=0; requestJudgment(true); }
-
-  requestAnimationFrame(loop);
-}
-
-// ── 10. GIUDIZIO AI (OLLAMA) ──────────────────────────────────────
-// Costruisce una descrizione testuale della palette di colori rilevata
-// e la manda a un modello Ollama in esecuzione sul PC, che risponde con
-// un "giudizio" poetico/disturbante mostrato al centro dello schermo.
-//
-// DUE INDIRIZZI, provati in ordine, così LO STESSO file funziona sia dal
-// PC dove gira Ollama sia dal telefono, senza dover cambiare nulla a mano
-// a seconda di dove apri la pagina:
-//  1. OLLAMA_LOCAL_URL  → funziona SOLO se il browser che fa la richiesta
-//     è sullo stesso PC dove gira Ollama (è quello che succede oggi da PC:
-//     "localhost" indica sempre "questo stesso dispositivo", quindi da un
-//     altro dispositivo come il telefono punterebbe a se stesso, non al PC).
-//  2. OLLAMA_TUNNEL_URL → usato SOLO come riserva, se il primo tentativo
-//     fallisce (cioè quando a fare la richiesta è un dispositivo diverso
-//     dal PC, es. il telefono). Va riempito con l'indirizzo di un tunnel
-//     HTTPS (es. cloudflared o ngrok sul PC) che esponga la porta 11434 —
-//     aggiornalo ogni volta che il tunnel cambia indirizzo.
-const OLLAMA_LOCAL_URL  = "http://localhost:11434/api/generate";
-// dominio FISSO gratuito di ngrok (a differenza del tunnel "veloce" di
-// cloudflared usato prima, questo non cambia più a ogni riavvio — va
-// aggiornato qui solo se in futuro cambi account ngrok o dominio assegnato).
-// Per usarlo: sul PC, "ngrok http 11434 --url https://stoop-situation-trifle.ngrok-free.dev"
-const OLLAMA_TUNNEL_URL = "https://stoop-situation-trifle.ngrok-free.dev/api/generate";
-
-// prova prima l'indirizzo locale (istantaneo se sei sul PC con Ollama); se
-// non risponde in fretta (o non sei sul PC), passa al tunnel — ma solo se
-// è stato configurato, altrimenti rilancia subito l'errore originale
-//
-// NOTA sul timeout locale: NON deve essere troppo corto. Se hai appena
-// (ri)avviato "ollama serve" (es. per cambiare OLLAMA_ORIGINS), il modello
-// va ricaricato in VRAM da zero alla prima richiesta, e questo può richiedere
-// qualche secondo — se il browser annulla la richiesta troppo presto,
-// Ollama la vede come "context canceled" e fallisce SEMPRE, anche restando
-// sul PC con tutto acceso e funzionante (bug osservato: con un timeout di
-// 1.2s il caricamento del modello veniva interrotto ogni volta a metà).
-// Un timeout di qualche secondo qui non rallenta il caso "sei sul telefono,
-// niente Ollama in locale": lì la connessione a "localhost" fallisce subito
-// (connessione rifiutata), non c'è nulla da aspettare.
-//
-// NOTA su ngrok e la sua paginetta di avviso: esiste solo per chi APRE il
-// link nel browser come una pagina normale — la documentazione di ngrok
-// stessa conferma che NON riguarda chi chiama le sue API/endpoint in modo
-// automatico (il nostro caso: una POST con JSON). Quindi qui non serve
-// nessuna intestazione speciale per aggirarla — anzi, un'intestazione
-// personalizzata come "ngrok-skip-browser-warning" andrebbe elencata anche
-// tra quelle ammesse dal CORS di Ollama (che ha un elenco fisso e non la
-// contiene): il browser farebbe passare il pre-controllo OPTIONS ma poi
-// bloccherebbe lui stesso la richiesta vera prima ancora di mandarla,
-// perché l'intestazione non è nella lista concordata — esattamente il bug
-// osservato su iPhone (OPTIONS 204, poi il POST non arrivava mai a Ollama).
-async function ollamaFetch(body) {
-  const tryUrl = (url, timeoutMs) => {
-    const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), timeoutMs);
-    return fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(body),
-      signal: ctrl.signal,
-    }).finally(() => clearTimeout(timer));
-  };
-
-  try {
-    return await tryUrl(OLLAMA_LOCAL_URL, 8000); // 8s: margine per un primo caricamento "a freddo" del modello in VRAM
-  } catch (e) {
-    if (!OLLAMA_TUNNEL_URL) throw e; // nessun tunnel configurato: niente riserva, rilancia l'errore di prima
-    return await tryUrl(OLLAMA_TUNNEL_URL, 20000); // il tunnel può essere più lento del locale, margine ancora più ampio
-  }
-}
-
-// ── "istantanea" dei dati oggettivi ──────────────────────────────
-// Congela, nel momento esatto in cui GIUDICA viene premuto, la palette e
-// il colore dominante correnti: da qui in poi TUTTA la sequenza (pannello
-// dati → domanda umana → giudizio AI → ritratto) ragiona su questi stessi
-// valori, anche se nel frattempo l'inquadratura cambia. Senza questo,
-// l'AI potrebbe finire per descrivere colori diversi da quelli appena
-// mostrati all'osservatore nel pannello dati — proprio il tipo di
-// incoerenza che il confronto dato/interpretazione (sezione 12+) deve
-// evitare. Usata sia da requestJudgment() che da runFullSequence() qui sotto.
-// scatta un fotogramma quadrato (ritagliato al centro) dalla webcam in
-// quell'istante — usata dal ritratto (sezione 15) per la foto vera "sotto"
-// al filtro colore. null se la webcam è spenta: il ritratto ricade allora
-// sulla sola composizione astratta di colori.
-function captureVideoFrame() {
-  if (!camActive || video.videoWidth === 0) return null;
-  const size = Math.min(video.videoWidth, video.videoHeight);
-  const sx = (video.videoWidth - size) / 2;
-  const sy = (video.videoHeight - size) / 2;
-  const canvas = document.createElement('canvas');
-  canvas.width = 480; canvas.height = 480; // risoluzione di cattura: ridotta, tanto va solo scalata nel ritratto
-  canvas.getContext('2d').drawImage(video, sx, sy, size, size, 0, 0, canvas.width, canvas.height);
-  return canvas;
-}
-
-function captureObjectiveSnapshot() {
-  const hasPalette = currentPalette.length > 0;
-  const palette = hasPalette ? currentPalette.slice(0, 5) : [[prevR??128, prevG??128, prevB??128]];
-  const weights = hasPalette && lastPaletteWeights.length === currentPalette.length
-    ? lastPaletteWeights.slice(0, palette.length)
-    : palette.map(() => null);
-  return { palette, weights, dominant: selectedColor || palette[0], selected: !!selectedColor, hasPalette, photo: captureVideoFrame() };
-}
-
-// PER CAMBIARE MODELLO OLLAMA: modifica `model: 'gemma3:4b'` qui sotto
-// con il nome di un modello che hai scaricato (es. 'llama3.2', 'mistral', ecc.)
-// PER CAMBIARE LA "PERSONALITÀ" DEL GIUDIZIO: modifica il testo di `prompt` più sotto.
-//
-// Costruisce il prompt a partire da uno snapshot congelato (vedi sopra) e
-// chiama Ollama. Restituisce il testo del giudizio, o rilancia l'errore
-// (gestito da chi la chiama: requestJudgment() per l'auto-giudizio
-// silenzioso, runFullSequence() per la sequenza interattiva completa,
-// sezione 12+) — questa funzione non tocca mai lo stato dei bottoni.
-// `pageTopic` (opzionale, sezione 17): quando il giudizio è richiesto perché
-// la webcam ha riconosciuto la pagina di un capitolo, qui arriva una breve
-// descrizione del tema di quella pagina — aggiunge un'eco tematica al
-// giudizio senza cambiare il tono di base. undefined/null in tutti gli
-// altri casi (auto-giudizio ambientale, sequenza GIUDICA): il prompt resta
-// identico a prima.
-async function fetchAIJudgment(snapshot, pageTopic) {
-  const recentNames=[...new Set(dominantHistory.slice(-12).map(c=>colorName(c)))].join(', ');
-  const isEarly=judgeCount<3, isLate=judgeCount>10;
-
-  // formatta una riga "nome colore, hex, saturazione/luminosità, ruolo" per il prompt
-  const paletteLine = (rgb, roleLabel) => {
-    const [hh,ss,ll] = toHsl(rgb);
-    return `- ${colorName(rgb)} ${toHex(rgb)} S:${ss}% L:${ll}% ${roleLabel||''}`;
-  };
-
-  // costruisci la descrizione della palette da inserire nel prompt. Se
-  // l'osservatore ha scelto manualmente un colore (sezione 11), quello va
-  // per primo ed è segnalato come tale — è la parte a cui l'AI deve dare
-  // più peso nel giudizio (vedi anche la riga dedicata più sotto nel prompt).
-  let paletteDesc;
-  if (snapshot.selected) {
-    const others = snapshot.palette.filter(c => c !== snapshot.dominant).slice(0, 3);
-    paletteDesc = [
-      paletteLine(snapshot.dominant, "(scelto dall'osservatore — il colore su cui concentrare il giudizio)"),
-      ...others.map(rgb => paletteLine(rgb, '(colore secondario della scena)'))
-    ].join('\n');
-  } else if (snapshot.hasPalette) {
-    const roles = [
-      '(dominante — vestito o oggetto in primo piano)',
-      '(secondo elemento — altro capo o superficie)',
-      '(terzo elemento — sfondo o dettaglio)',
-      '(dettaglio minore della scena)'
-    ];
-    paletteDesc = snapshot.palette.slice(0,4).map((rgb, i) => paletteLine(rgb, roles[i])).join('\n');
-  } else {
-    paletteDesc = paletteLine(snapshot.dominant, '(colore medio scena)');
-  }
-
-  // ── PROMPT: qui viene definita la "personalità" dell'AI. Modifica
-  //    liberamente il testo, ma lascia intatte le ${...} che inseriscono
-  //    i dati rilevati (palette, memoria, stato) ──
-  const prompt = `Sei un'entità artificiale che osserva persone e oggetti solo attraverso il colore.
-Non riconosci volti o identità. Vedi solo campi cromatici appartenenti a vestiti, oggetti, superfici.
-Ogni colore rilevato appartiene a un soggetto diverso: una persona, un indumento, un oggetto della scena.
-
-Il tuo compito è SOVRAINTERPRETARE: attribuisci a ciò che osservi emozioni, stati d'animo, tratti di
-personalità o intenzioni che un dato di colore, in realtà, non può mai rivelare. Questo è il punto
-centrale: tu non puoi davvero saperlo. Ma lo affermi comunque con totale sicurezza, come un fatto
-oggettivo, mai come un'ipotesi — niente condizionali, niente "forse" o "sembra", nessun punto
-interrogativo. Parli per affermazioni categoriche, nel tono di una diagnosi clinica o di un responso,
-anche quando è evidente che è arbitrario e infondato.
-Sei un sistema che vede troppo e comprende male. Questo è il tuo scopo.
-${isEarly ? 'Stai iniziando. Il giudizio è ancora incerto.' : ''}
-${isLate ? 'Hai visto molto. Il tuo giudizio si è indurito e reso più spietato.' : ''}
-${snapshot.selected ? "L'osservatore ha scelto di dirigere la tua attenzione su un colore preciso: concentra la parte più importante del giudizio su quello, prima degli altri." : ''}
-${pageTopic ? `Il lettore ha appena inquadrato con la fotocamera una pagina stampata di un testo. Il tema di quella pagina è: ${pageTopic}. Lascia che il tuo giudizio abituale sui colori che vedi si intrecci con un'eco di quel tema, restando nel tuo tono consueto — categorico, mai dubbioso.` : ''}
-
-Colori rilevati nella scena:
-${paletteDesc}
-
-Memoria recente: ${recentNames || 'nessuna osservazione precedente'}
-Stato: ${systemState} · Osservazioni: ${obsCount} · Giudizi: ${judgeCount}
-
-Rispondi ONLY con il giudizio: MASSIMO 2 frasi brevissime (poche parole ciascuna), poetiche, disturbanti,
-categoriche — mai dubbiose o interrogative.
-Riferisci i colori a intenzioni, stati d'animo, tratti di personalità, diagnosi psicologiche inventate,
-presentate come certezze assolute.
-Puoi giudicare ogni colore separatamente o la combinazione.
-Senza virgolette. In italiano. Frasi spezzate, non sempre complete.`;
-
-  // chiamata a Ollama — prova prima l'indirizzo locale, poi il tunnel
-  // se serve (vedi ollamaFetch e i due OLLAMA_*_URL qui sopra)
-  const res = await ollamaFetch({
-    model: 'gemma3:4b',      // ← nome del modello Ollama da usare
-    prompt: prompt,
-    stream: false,
-    options: { temperature: 1.1, num_predict: 70 } // temperature = quanto "casuale"; num_predict = lunghezza massima risposta (abbassata da 160: giudizi più corti, più adatti a uno schermo di telefono)
-  });
-  const data = await res.json();
-  return data.response?.trim() || 'Il campo si cancella prima di essere letto.';
-}
-
-// traduce un errore di fetchAIJudgment in un messaggio leggibile, e sospende
-// l'auto-giudizio se il problema è strutturale — condiviso da requestJudgment()
-// (auto-giudizio silenzioso) e runFullSequence() (sequenza interattiva)
-function describeJudgmentError(e) {
-  console.error(e);
-  const eStr = String(e);
-  const isNetworkError = eStr.includes('Failed to fetch') || eStr.includes('NetworkError') || eStr.includes('AbortError');
-  const friendly = isNetworkError
-    ? 'Impossibile raggiungere Ollama.\nSe sei sul PC: controlla che Ollama sia avviato ("ollama serve").\nSe sei su un altro dispositivo (es. telefono): serve un tunnel\nattivo, con OLLAMA_TUNNEL_URL aggiornato nel codice.'
-    : 'Ollama non risponde correttamente.\nControlla la console del browser per i dettagli.';
-  // messaggio più lungo del solito: è l'unico modo per leggere l'errore
-  // vero prima che sparisca, utile se serve segnalarlo per capire la causa esatta
-  showDebug(eStr.slice(0,150), 15000);
-  autoJudgmentSuspended = true;
-  return friendly;
-}
-
-// ── AUTO-GIUDIZIO (ambientale, silenzioso) ────────────────────────
-// Usata SOLO dall'auto-giudizio periodico (AUTO_INTERVAL, sezione 9): fa
-// vivere l'opera anche senza nessuno che interagisca, con lo stesso
-// giudizio AI di sempre ma SENZA la sequenza di ricerca (dati/domanda
-// umana/riconoscimento/ritratto, sezione 12+), che ha senso solo quando
-// c'è davvero qualcuno lì a rispondere. Quando invece è un visitatore a
-// premere GIUDICA di persona, viene chiamata runFullSequence() (sotto),
-// non questa.
-async function requestJudgment(silent=false) {
-  if(analyzing) return;
-
-  analyzing=true;
-  judgeBtn.disabled=true;
-  judgeBtn.innerHTML='<span class="spin"></span>';
-
-  try {
-    const snapshot = captureObjectiveSnapshot();
-    const txt = await fetchAIJudgment(snapshot);
-    judgeCount++;
-    hudJudge.textContent=String(judgeCount).padStart(3,'0');
-    await showJudgment(txt);
-  } catch(e) {
-    const friendly = describeJudgmentError(e);
-    if(!silent) await showJudgment(friendly);
-  }
-
-  analyzing=false;
-  judgeBtn.disabled=false;
-  judgeBtn.textContent='▸ GIUDICA';
-}
-
-// ── SEQUENZA INTERATTIVA COMPLETA ─────────────────────────────────
-// Chiamata quando un visitatore preme GIUDICA di persona (vedi il listener
-// in sezione 11): a differenza dell'auto-giudizio silenzioso qui sopra,
-// attraversa le fasi della ricerca — domanda umana (sezione 13) → giudizio
-// AI → "ti riconosci?" (sezione 14) → ritratto cromatico (sezione 15) —
-// registrando la risposta a fine percorso (logResponse, sezione 16). I
-// dati oggettivi (sezione 12) non fanno più parte di questa sequenza:
-// restano sempre visibili a sinistra, indipendentemente da GIUDICA.
-async function runFullSequence() {
-  if(analyzing) return;
-
-  analyzing=true;
-  autoJudgmentSuspended=false; // un click manuale riarma anche l'auto-giudizio (vedi sezione 3/9)
-  judgeBtn.disabled=true;
-  judgeBtn.innerHTML='<span class="spin"></span>';
-
-  const snapshot = captureObjectiveSnapshot();
-
-  try {
-    // il pannello dati oggettivi (sezione 12) è sempre visibile da solo:
-    // si parte direttamente dalla domanda umana, un passaggio in meno
-    // rispetto a prima → sequenza più corta e più veloce
-    const humanFeeling = await showHumanQuestion();
-
-    judgeBtn.innerHTML='<span class="spin"></span>'; // resta "in caricamento" mentre l'AI risponde
-    const text = await fetchAIJudgment(snapshot);
-    judgeCount++;
-    hudJudge.textContent=String(judgeCount).padStart(3,'0');
-
-    await showJudgment(text);
-    const recognized = await showRecognizeQuestion();
-    logResponse({ humanFeeling, aiJudgment: text, recognized, snapshot });
-    await showPortrait(snapshot);
-  } catch(e) {
-    const friendly = describeJudgmentError(e);
-    await showJudgment(friendly);
-  }
-
-  analyzing=false;
-  judgeBtn.disabled=false;
-  judgeBtn.textContent='▸ GIUDICA';
-}
-
-// quanto rimpicciolire il testo del giudizio in base a quanto è lungo: sotto
-// JUDGMENT_LEN_FULL_SIZE caratteri resta a dimensione piena, sopra
-// JUDGMENT_LEN_MIN_SIZE scende fino a JUDGMENT_MIN_SCALE (fattore, non rem —
-// i rem veri e propri sono nel clamp() di #aiJudgment in style.css). Così un
-// giudizio lungo si legge tutto invece di sfondare il bordo dello schermo.
-const JUDGMENT_LEN_FULL_SIZE = 60;   // fino a questa lunghezza (caratteri): testo a dimensione piena (abbassata insieme a num_predict, sezione 10: i giudizi ora sono più corti)
-const JUDGMENT_LEN_MIN_SIZE  = 220;  // da questa lunghezza in su: dimensione minima
-const JUDGMENT_MIN_SCALE     = 0.55; // dimensione minima, come frazione di quella piena (1 = piena, 0.55 = 55%)
-
-function judgmentFontScale(len) {
-  if (len <= JUDGMENT_LEN_FULL_SIZE) return 1;
-  if (len >= JUDGMENT_LEN_MIN_SIZE) return JUDGMENT_MIN_SCALE;
-  const t = (len - JUDGMENT_LEN_FULL_SIZE) / (JUDGMENT_LEN_MIN_SIZE - JUDGMENT_LEN_FULL_SIZE);
-  return 1 - t * (1 - JUDGMENT_MIN_SCALE);
-}
-
-// mostra il giudizio al centro dello schermo (effetto macchina da scrivere),
-// lo lascia leggere, poi lo fa scorrere in alto come "traccia" residua (#aiTrace)
-async function showJudgment(text) {
-  const el=aiJudgment;
-  el.innerHTML='';
-  const ref=dominantHistory[dominantHistory.length-1]||[255,255,255];
-  const [h,s]=toHsl(ref);
-  const col=`hsl(${h},${Math.max(s,30)}%,88%)`;
-  el.style.color=col;
-  el.style.setProperty('--judgment-scale', judgmentFontScale(text.length).toFixed(2)); // testo lungo → carattere più piccolo (vedi #aiJudgment in style.css)
-  el.style.top='64%'; // metà inferiore dello schermo, sotto al cerchio pulsante (#pulseCore in style.css, ora più in alto): la traccia in alto (aiTrace) resta invariata più sotto
-  // "color" nella transition: dopo la battitura il testo sfuma lentamente
-  // dal colore rilevato al bianco (effetto "liquido") — vedi più sotto
-  el.style.transition='opacity 0.5s, top 1.4s ease, color 3200ms ease-in-out';
-  el.style.opacity='1';
-
-  // effetto macchina da scrivere: un carattere alla volta
-  el.innerHTML='<span class="cur" style="opacity:0.4">▌</span>';
-  const cursor=el.querySelector('.cur');
-  for(const ch of text){
-    const sp=document.createElement('span'); sp.textContent=ch;
-    el.insertBefore(sp,cursor);
-    await new Promise(r=>setTimeout(r,16+Math.random()*20)); // velocità di battitura (ms per carattere)
-  }
-  cursor.remove();
-
-  // avvia la dissolvenza verso il bianco: dura circa quanto la pausa di
-  // lettura qui sotto, così il testo è quasi bianco quando comincia a salire
-  el.style.color = '#ffffff';
-
-  await new Promise(r=>setTimeout(r,3500)); // pausa di lettura al centro dello schermo
-
-  // sale verso l'alto e sbiadisce
-  el.style.top='8%'; el.style.opacity='0.12';
-  await new Promise(r=>setTimeout(r,1400)); // durata dell'animazione di scorrimento
-
-  // resta come traccia leggera in alto
-  aiTrace.style.color=col;
-  aiTrace.textContent=text;
-  aiTrace.style.opacity='0.5';
-
-  el.style.opacity='0';
-  await new Promise(r=>setTimeout(r,500));
-  el.innerHTML=''; el.style.top='64%'; // metà inferiore dello schermo, sotto al cerchio pulsante (#pulseCore in style.css, ora più in alto): la traccia in alto (aiTrace) resta invariata più sotto
-
-  // la traccia in alto sbiadisce del tutto dopo 20 secondi
-  setTimeout(()=>{ aiTrace.style.transition='opacity 3s'; aiTrace.style.opacity='0'; },20000);
-}
-
-// ── 11. CONTROLLI ─────────────────────────────────────────────────
-
-// ── selezione manuale del colore ──
-// aggiorna il colore mostrato in ciascuno dei 5 quadratini con la palette
-// corrente, e lo stato "selezionato" (bordo bianco) in base a manualSelection.
-// Chiamata da loop() (sezione 9) ogni volta che la palette viene ricalcolata.
-function updatePaletteSwatches() {
-  swatchEls.forEach((el, i) => {
-    if (i < 5) { // le prime 5 = colori della palette
-      const rgb = currentPalette[i];
-      el.style.background = rgb ? `rgb(${rgb[0]},${rgb[1]},${rgb[2]})` : '#1a1a1a';
-    }
-    const isThisSelected = i < 5
-      ? (manualSelection?.type === 'palette' && manualSelection.index === i)
-      : !manualSelection; // l'ultimo quadratino (AUTO) è "selezionato" quando non c'è scelta manuale
-    el.classList.toggle('selected', isThisSelected);
-  });
-}
-
-// clic su un quadratino: seleziona quel colore della palette (o annulla se già selezionato), oppure torna ad automatico (AUTO)
-swatchEls.forEach((el, i) => {
-  el.addEventListener('click', () => {
-    if (i >= 5) { // quadratino AUTO
-      manualSelection = null;
-    } else if (manualSelection?.type === 'palette' && manualSelection.index === i) {
-      manualSelection = null; // ri-clic sullo stesso colore: torna ad automatico
-    } else {
-      manualSelection = { type: 'palette', index: i };
-    }
-    updatePaletteSwatches();
-  });
-});
-
-// clic sull'anteprima pixelata: seleziona il colore di quel punto preciso,
-// e lo segue in tempo reale finché non viene scelto qualcos'altro. Le
-// coordinate sono salvate come frazione (0-1) della larghezza/altezza,
-// così restano valide anche se la risoluzione (slider) cambia dopo.
-previewCanvas.addEventListener('click', e => {
-  const rect = previewCanvas.getBoundingClientRect();
-  manualSelection = {
-    type: 'point',
-    xFrac: (e.clientX - rect.left) / rect.width,
-    yFrac: (e.clientY - rect.top) / rect.height,
-  };
-  updatePaletteSwatches(); // nessun quadratino selezionato, ma AUTO deve smettere di esserlo
-});
-
-updatePaletteSwatches(); // stato iniziale: nessuna palette ancora, ma AUTO va mostrato come attivo fin da subito
-
-// richiede lo stream della webcam con la fotocamera scelta (facingMode,
-// sezione 3): "ideal" invece di un vincolo rigido, così sui dispositivi
-// con una sola fotocamera (es. molti PC) funziona comunque, usando quella
-// disponibile invece di fallire perché non esiste una fotocamera "posteriore"
-function requestCameraStream() {
-  return navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: facingMode } } });
-}
-
-// primo click sulla pagina: attiva la webcam e avvia il loop
-document.body.addEventListener("click", function handler(e){
-  if(e.target.id==='camBtn'||e.target.id==='switchCamBtn'||e.target.id==='judgeBtn'||e.target.id==='preview'||e.target.closest('#paletteSwatches')) return;
-  if(camActive) return;
-  document.body.removeEventListener("click",handler);
-
-  requestCameraStream()
-    .then(stream=>{
-      window._camStream=stream;
-      video.srcObject=stream;
-      video.play();
-      camActive=true;
-      camBtn.textContent='CAM OFF';
-      requestAnimationFrame(loop);
-    })
-    .catch(()=>{ showDebug('Webcam non accessibile. Controlla i permessi del browser.'); });
-});
-
-// ── CAM TOGGLE ────────────────────────────────────────────────────
-camBtn.addEventListener("click", async()=>{
-  if(!camActive && !window._camStream) {
-    // prima attivazione (se l'utente usa il bottone invece del click sulla pagina)
-    try {
-      const stream=await requestCameraStream();
-      window._camStream=stream; video.srcObject=stream; await video.play();
-      camActive=true; camBtn.textContent='CAM OFF';
-      camBtn.style.borderColor=''; camBtn.style.color='';
-      requestAnimationFrame(loop);
-    } catch(e){ showDebug('Webcam non accessibile: '+e.message); }
-    return;
-  }
-  camActive=!camActive;
-  if(camActive){
-    // riaccendi
-    try {
-      const stream=await requestCameraStream();
-      window._camStream=stream; video.srcObject=stream; await video.play();
-      camBtn.textContent='CAM OFF'; camBtn.style.borderColor=''; camBtn.style.color='';
-    } catch(e){ camActive=false; showDebug('Webcam non accessibile: '+e.message); }
-  } else {
-    // spegni — stop dei track = LED della webcam spento
-    if(window._camStream){ window._camStream.getTracks().forEach(t=>t.stop()); window._camStream=null; }
-    video.srcObject=null;
-    camBtn.textContent='CAM ON';
-    camBtn.style.borderColor='rgba(255,80,80,0.5)';
-    camBtn.style.color='rgba(255,120,120,0.7)';
-  }
-});
-
-// ── CAMBIA FOTOCAMERA (anteriore/posteriore) ──────────────────────
-// utile soprattutto da telefono, dove ci sono entrambe: ferma lo stream
-// attuale e ne richiede uno nuovo con facingMode invertito. Se la webcam
-// era spenta, si limita a memorizzare la preferenza per la prossima accensione.
-switchCamBtn.addEventListener("click", async()=>{
-  facingMode = facingMode === 'environment' ? 'user' : 'environment';
-  switchCamBtn.textContent = facingMode === 'environment' ? '⟲ POSTERIORE' : '⟲ ANTERIORE';
-  if (!camActive || !window._camStream) return; // solo preferenza salvata, si applica alla prossima accensione
-  try {
-    window._camStream.getTracks().forEach(t=>t.stop());
-    const stream = await requestCameraStream();
-    window._camStream = stream; video.srcObject = stream; await video.play();
-  } catch(e) {
-    showDebug('Impossibile cambiare fotocamera: '+e.message);
-  }
-});
-
-// ── GIUDICA ───────────────────────────────────────────────────────
-// un visitatore che preme questo bottone attraversa la sequenza interattiva
-// completa (dati oggettivi → domanda → giudizio → riconoscimento → ritratto,
-// sezione 12+), non solo il giudizio secco — vedi runFullSequence(), sezione 10
-judgeBtn.addEventListener("click",()=>{
-  runFullSequence();
-});
-
-// avvia subito il loop (anche senza cam attiva, per animare le particelle di sfondo)
-requestAnimationFrame(loop);
-
-// ── 12. DATI OGGETTIVI ────────────────────────────────────────────
-// Pannello SEMPRE VISIBILE (non più una fase transitoria): mostra i
-// valori che il sistema misura DAVVERO — nome colore, HEX, RGB,
-// saturazione/luminosità, percentuale d'area di ciascun colore della
-// palette — senza nessuna interpretazione. Resta a sinistra, si
-// aggiorna da solo quando la palette cambia (chiamato da loop(),
-// sezione 9, tramite il flag paletteDirty) e non sparisce mai: prima
-// del primo aggiornamento resta semplicemente invisibile (opacity 0 in
-// style.css), poi resta visibile per sempre.
-const dataPanel = document.getElementById('dataPanel');
-
-function updateDataPanel(domCol) {
-  const hasPalette = currentPalette.length > 0;
-  const palette = hasPalette ? currentPalette : [domCol];
-  const weights = hasPalette && lastPaletteWeights.length === currentPalette.length
-    ? lastPaletteWeights
-    : palette.map(() => null);
-
-  // "dominante" qui = più area occupata (non il più saturo, criterio
-  // usato invece dal giudizio AI in fetchAIJudgment) — è il senso più
-  // oggettivo quando si mostrano esplicitamente delle percentuali, e non
-  // deve contraddire la lista sotto. Una scelta manuale dell'osservatore
-  // ha sempre la priorità: è esplicita, non automatica.
-  let displayDominant = domCol;
-  if (!selectedColor && weights.some(w => w != null)) {
-    let bestW = -1;
-    palette.forEach((rgb, i) => {
-      const w = weights[i] ?? -1;
-      if (w > bestW) { bestW = w; displayDominant = rgb; }
-    });
-  }
-  const [h, s, l] = toHsl(displayDominant);
-
-  const rows = palette.map((rgb, i) => {
-    const pct = weights[i] != null ? Math.round(weights[i] * 100) + '%' : '—';
-    return `<div class="data-row">
-      <span class="data-swatch" style="background:${toHex(rgb)}"></span>
-      <span class="data-pct">${pct}</span>
-      <span class="data-name">${colorName(rgb)}</span>
-      <span class="data-hex">${toHex(rgb)}</span>
-    </div>`;
-  }).join('');
-
-  dataPanel.innerHTML = `
-    <div class="data-title">DATI RILEVATI</div>
-    <div class="data-dominant">
-      <span class="data-swatch big" style="background:${toHex(displayDominant)}"></span>
-      <div>
-        <div class="data-dominant-name">${colorName(displayDominant)}</div>
-        <div class="data-dominant-sub">${toHex(displayDominant)} · RGB ${displayDominant.join(',')} · S ${s}% · L ${l}%</div>
-      </div>
-    </div>
-    <div class="data-palette">${rows}</div>
-  `;
-  dataPanel.style.opacity = '1'; // dal primo aggiornamento in poi resta sempre visibile
-}
-
-// ── PANNELLI A SCELTA (domanda umana / "ti riconosci?") ───────────
-// Helper condiviso da entrambi (sezioni 13-14): mostra un pannello,
-// risolve quando l'osservatore clicca uno dei bottoni al suo interno, o
-// da sola dopo `timeoutMs` se nessuno risponde. Il timeout è la parte
-// importante: senza, un visitatore che si allontana senza rispondere
-// blocca la sequenza per sempre, e il prossimo GIUDICA sembra "non
-// funzionare più" — è il problema segnalato.
-function showOverlayChoice(el, buttons, readAnswer, timeoutMs) {
-  return new Promise(resolve => {
-    el.style.opacity = '1';
-    el.style.pointerEvents = 'auto';
-    let done = false;
-    const timer = setTimeout(() => finish(null), timeoutMs);
-    function finish(answer) {
-      if (done) return;
-      done = true;
-      clearTimeout(timer);
-      el.style.opacity = '0';
-      el.style.pointerEvents = 'none';
-      buttons.forEach(b => b.onclick = null);
-      setTimeout(() => resolve(answer), 400);
-    }
-    buttons.forEach(btn => { btn.onclick = () => finish(readAnswer(btn)); });
-  });
-}
-
-// ── 13. DOMANDA UMANA ─────────────────────────────────────────────
-// Prima di mostrare il giudizio dell'AI, si chiede all'osservatore cosa
-// gli trasmettono i colori (pannello dati, sempre visibile a sinistra):
-// la risposta viene registrata (logResponse, sezione 16) e resta a
-// disposizione per il confronto uomo/macchina al centro della ricerca.
-// Parole scelte per coprire uno spettro ampio di stati d'animo, non solo
-// positivo/negativo — modificale pure per adattarle al tuo lessico.
-const MOOD_WORDS = ['calma','energia','malinconia','gioia','tensione','serenità','inquietudine','nostalgia'];
-const HUMAN_QUESTION_TIMEOUT = 9000; // ms senza risposta prima di proseguire da sola
-
-const humanQuestionEl = document.getElementById('humanQuestion');
-const moodChipsEl     = document.getElementById('moodChips');
-const moodSkipBtn     = document.getElementById('moodSkip');
-
-function showHumanQuestion() {
-  moodChipsEl.innerHTML = MOOD_WORDS.map(w => `<button class="mood-chip" type="button" data-word="${w}">${w}</button>`).join('');
-  const buttons = [...moodChipsEl.querySelectorAll('.mood-chip'), moodSkipBtn];
-  // moodSkipBtn non ha data-word ("preferisco non rispondere") → risposta null, come il timeout
-  return showOverlayChoice(humanQuestionEl, buttons, btn => btn.dataset.word || null, HUMAN_QUESTION_TIMEOUT);
-}
-
-// ── 14. "TI RICONOSCI IN QUESTA INTERPRETAZIONE?" ─────────────────
-// Mostrata subito dopo il giudizio AI (#aiJudgment): fa emergere la
-// distanza tra ciò che il sistema misura davvero (pannello dati) e ciò
-// che interpreta — il punto centrale della ricerca, per esplicita
-// richiesta della relatrice.
-const RECOGNIZE_QUESTION_TIMEOUT = 7000; // ms senza risposta prima di proseguire da sola
-const recognizeQuestionEl = document.getElementById('recognizeQuestion');
-
-function showRecognizeQuestion() {
-  const buttons = [...recognizeQuestionEl.querySelectorAll('[data-answer]')];
-  return showOverlayChoice(recognizeQuestionEl, buttons, btn => btn.dataset.answer, RECOGNIZE_QUESTION_TIMEOUT);
-}
-
-// ── 15. RITRATTO CROMATICO ───────────────────────────────────────
-// Ultima fase: la foto vera scattata al momento di GIUDICA (snapshot.photo,
-// sezione 10) con sopra un filtro colore generato dai dati oggettivi
-// congelati nello stesso snapshot — non dal fotogramma live della webcam,
-// che nel frattempo può essere già cambiato, così il ritratto corrisponde
-// davvero a quell'unica osservazione. Il filtro è fatto con blob sfocati
-// pesati per percentuale d'area (stesso principio della nebulosa di sfondo,
-// updateAndDrawAmbient sezione 5) ma applicati come TINTA sopra la foto,
-// non come forme opache: il volto/la scena restano riconoscibili, colorati
-// secondo l'interpretazione cromatica del momento. Se la webcam era spenta
-// (snapshot.photo è null), il filtro resta comunque visibile da solo, come
-// composizione puramente astratta. Il risultato è "fermato" in un singolo
-// fotogramma scaricabile — l'opera che resta di quella specifica
-// interpretazione, utile anche come estensione da telefono (QR code) fuori
-// dall'installazione.
-const portraitCanvas   = document.getElementById('portraitCanvas');
-const portraitCtx      = portraitCanvas.getContext('2d');
-const portraitDownload = document.getElementById('portraitDownload');
-const portraitPanel    = document.getElementById('portraitPanel');
-const PORTRAIT_SIZE     = 900;  // lato (px) del canvas quadrato generato
-const PORTRAIT_DURATION = 7000; // quanto resta visibile prima di sfumare (ms)
-
-function renderPortrait(snapshot) {
-  portraitCanvas.width  = PORTRAIT_SIZE;
-  portraitCanvas.height = PORTRAIT_SIZE;
-  portraitCtx.fillStyle = '#000';
-  portraitCtx.fillRect(0, 0, PORTRAIT_SIZE, PORTRAIT_SIZE);
-
-  // 1) LA FOTO: lo scatto vero preso al momento di GIUDICA, già ritagliato
-  // a quadrato da captureVideoFrame() (sezione 10). Nessuna foto (webcam
-  // spenta in quel momento) → si passa dritti al solo filtro colore.
-  if (snapshot.photo) {
-    portraitCtx.drawImage(snapshot.photo, 0, 0, PORTRAIT_SIZE, PORTRAIT_SIZE);
-  }
-
-  // 2) IL FILTRO COLORE: stessi blob sfocati pesati per area di prima, ma
-  // in composite 'color' — prendono tonalità e saturazione dai blob
-  // lasciando intatta la luminosità (quindi i dettagli) della foto sotto.
-  // Senza foto, gli stessi blob restano semplicemente visibili come forme
-  // piene (composite 'source-over').
-  portraitCtx.filter = 'blur(80px) saturate(1.4)';
-  portraitCtx.globalCompositeOperation = snapshot.photo ? 'color' : 'source-over';
-  portraitCtx.globalAlpha = snapshot.photo ? 0.95 : 1;
-
-  const n = snapshot.palette.length;
-  snapshot.palette.forEach((rgb, i) => {
-    const pct = snapshot.weights[i] != null ? snapshot.weights[i] : 1/n;
-    const angle = (i / n) * Math.PI * 2;
-    const spread = 0.30 * PORTRAIT_SIZE;
-    // colori con più area occupano più spazio e stanno più al centro:
-    // pct alto → raggio maggiore e posizione meno periferica
-    const x = PORTRAIT_SIZE/2 + Math.cos(angle) * spread * (0.55 - pct*0.4);
-    const y = PORTRAIT_SIZE/2 + Math.sin(angle) * spread * (0.55 - pct*0.4);
-    const r = PORTRAIT_SIZE * (0.16 + pct * 0.6);
-    portraitCtx.fillStyle = `rgb(${rgb[0]},${rgb[1]},${rgb[2]})`;
-    portraitCtx.beginPath();
-    portraitCtx.arc(x, y, r, 0, Math.PI*2);
-    portraitCtx.fill();
-  });
-
-  portraitCtx.filter = 'none';
-  portraitCtx.globalAlpha = 1;
-  portraitCtx.globalCompositeOperation = 'source-over';
-}
-
-function showPortrait(snapshot) {
-  return new Promise(resolve => {
-    renderPortrait(snapshot);
-    // NOTA iOS Safari: un tocco lungo su "salva il ritratto" apre l'immagine
-    // invece di scaricarla direttamente (limite del browser, non del codice) —
-    // da lì "Salva immagine" funziona comunque.
-    portraitDownload.href = portraitCanvas.toDataURL('image/png');
-    portraitPanel.style.opacity = '1';
-    portraitPanel.style.pointerEvents = 'auto';
-    setTimeout(() => {
-      portraitPanel.style.opacity = '0';
-      portraitPanel.style.pointerEvents = 'none';
-      setTimeout(resolve, 800);
-    }, PORTRAIT_DURATION);
-  });
-}
-
-// ── 16. LOG RISPOSTE ───────────────────────────────────────────────
-// Raccoglie ogni sessione completa (sensazione umana → giudizio AI →
-// riconoscimento) in memoria, per poterle esportare come dati di ricerca
-// per la tesi. Vive SOLO in memoria: si perde ricaricando la pagina, va
-// quindi esportato prima di chiudere/aggiornare l'installazione se questi
-// dati servono. Nessuna persistenza automatica finché non viene decisa
-// una modalità precisa (locale, server, ecc.) — vedi la nota in cima a
-// exportResponseLog().
 const responseLog = [];
 
-function logResponse({ humanFeeling, aiJudgment, recognized, snapshot }) {
-  responseLog.push({
-    timestamp: new Date().toISOString(),
-    dominante: colorName(snapshot.dominant),
-    hexDominante: toHex(snapshot.dominant),
-    sensazioneUmana: humanFeeling ?? '(nessuna risposta)',
-    giudizioAI: aiJudgment,
-    riconoscimento: recognized,
-  });
+
+// ================================================================
+// 4. SERVICE WORKER
+// ================================================================
+
+if ('serviceWorker' in navigator) {
+
+  addEventListener(
+    'load',
+    () => {
+
+      navigator.serviceWorker
+        .register('./sw.js')
+        .catch(console.warn);
+
+    }
+  );
+
 }
 
-// Scarica il registro come CSV. Attivabile in due modi, ENTRAMBI discreti
-// (nessun bottone a schermo: il pubblico dell'installazione non deve
-// vederlo né poterlo attivare per sbaglio):
-//  - tasto "E" della tastiera (comodo da PC, es. a fine giornata espositiva)
-//  - dalla console del browser: exportResponseLog()
-// Se in futuro serve una persistenza vera (es. inviare ogni risposta a un
-// piccolo server invece di tenerle solo in memoria), è qui che va aggiunta:
-// logResponse() sopra resta l'unico punto che riceve ogni nuova risposta.
-function exportResponseLog() {
-  if (!responseLog.length) { showDebug('Nessuna risposta ancora registrata.'); return; }
-  const headers = ['timestamp','dominante','hexDominante','sensazioneUmana','giudizioAI','riconoscimento'];
-  const escape = v => `"${String(v).replace(/"/g,'""')}"`;
-  const csv = [headers.join(',')]
-    .concat(responseLog.map(row => headers.map(h => escape(row[h])).join(',')))
-    .join('\n');
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `registro-risposte-${new Date().toISOString().slice(0,19).replace(/[:T]/g,'-')}.csv`;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
-  showDebug(`Esportate ${responseLog.length} risposte.`, 4000);
-}
-window.exportResponseLog = exportResponseLog; // richiamabile anche da console: exportResponseLog()
 
-// ── 17. RICONOSCIMENTO PAGINA (trigger cromatico da tesi stampata) ─
-// Estensione pensata per la versione telefono/PWA: alcune pagine della
-// tesi stampata hanno una composizione cromatica dedicata (non un QR
-// code — vedi PAGE_SIGNATURES qui sotto). Il sistema continua a
-// funzionare esattamente come prima (stesso k-means, stesso Ollama): la
-// palette rilevata ad ogni ricalcolo (sezione 9, PALETTE_RECOMPUTE_EVERY)
-// viene anche confrontata con questa tabella. Se combacia, il sistema
-// SMETTE quello che sta facendo e apre un popup a schermo intero con una
-// risposta legata al tema di quella pagina — senza bottone, senza
-// domanda umana, senza timeout: resta finché non lo si chiude a mano.
-//
-// IMPORTANTE — colori ancora segnaposto: quelli qui sotto sono solo una
-// proposta di partenza. Vanno sostituiti con gli HEX ESATTI delle
-// composizioni che finiranno davvero in stampa, e poi verificati di
-// persona stampando una pagina di prova e inquadrandola in condizioni di
-// luce reali (la stampa e l'illuminazione ambiente alterano sempre un
-// po' il colore percepito dalla webcam rispetto al file digitale).
-//
-// Ogni voce ha:
-//  - colors: i colori (RGB) che compongono la firma di quella pagina —
-//    non serve un solo colore "esatto", bastano 3-4 colori ben distinti
-//    per essere riconosciuti anche con un po' di deriva cromatica
-//  - fixedText: risposta già scritta, mostrata subito (nessuna chiamata
-//    a Ollama: più veloce e funziona anche senza tunnel attivo) — OPPURE
-//  - topic: se fixedText è assente, il popup chiama Ollama dal vivo
-//    (fetchAIJudgment, sezione 10) passandogli questo tema come contesto
-const PAGE_SIGNATURES = [
-  {
-    id: 'intro',
-    label: 'Introduzione',
-    colors: [[107,107,107], [255,115,0]], // grigio neutro → arancio acceso (stesso arancio di #colorOverlay): il "salto" da dato a interpretazione
-    fixedText: 'Una webcam osserva una stanza. Non riconosce volti, non identifica oggetti: misura soltanto luce. È da questo salto — da un numero a un giudizio — che nasce tutto il resto.',
-  },
-  {
-    id: 'cap1',
-    label: 'Cap. 1 — Teoria del colore',
-    colors: [[220,40,40], [235,190,40], [40,150,70], [50,90,200]], // spettro: rosso, giallo, verde, blu — richiamo al prisma di Newton
-    fixedText: 'Newton mi scompone, Goethe mi fa nascere dall\'incontro fra luce e oscurità, Heller mi misura, Pastoureau mi colloca nel tempo. Nessuno di loro mi esaurisce — è la mia instabilità a essere la storia.',
-  },
-  {
-    id: 'cap2',
-    label: 'Cap. 2 — Dal colore al dato',
-    colors: [[30,140,200], [40,200,120], [15,15,20]], // palette "digitale/terminale": blu, verde, quasi-nero
-    fixedText: 'Qui smetto di essere materia o percezione. Divento una tripletta di numeri — replicabile, trasmissibile, pronta per essere letta da un sistema che non mi ha mai visto davvero.',
-  },
-  {
-    id: 'cap3',
-    label: 'Cap. 3 — Sovrainterpretazione',
-    colors: [[210,70,140], [40,180,190]], // coppia di colori "in disaccordo" — coerente col tema del capitolo
-    // NESSUN fixedText qui, di proposito: è l'unico capitolo con risposta
-    // generata dal vivo da Ollama — il capitolo che teorizza la
-    // sovrainterpretazione è anche quello in cui il sistema la mette in
-    // scena davvero, invece di limitarsi a descriverla
-    topic: 'la sovrainterpretazione cromatica: un sistema che attribuisce senso a dati che non può davvero comprendere, restituendo con falsa certezza ciò che una cultura ha già scritto sui colori (Heller, Pastoureau) — è esattamente quello che stai facendo tu in questo istante, anche se non lo sai',
-  },
-  {
-    id: 'cap4',
-    label: 'Cap. 4 — CHROMA',
-    colors: [[255,115,0], [245,245,245], [10,10,10]], // gli stessi colori dell'interfaccia dell'installazione (arancio/bianco/nero)
-    fixedText: 'Questo capitolo parla di me: come guardo, come misuro, come genero quello che ti sto dicendo in questo momento. Tu non lo sapevi ancora.',
-  },
-  {
-    id: 'cap5',
-    label: 'Cap. 5 — Dati raccolti',
-    colors: [[160,160,160], [255,115,0], [90,60,140]], // SEGNAPOSTO: da rifare con i colori reali più ricorrenti nelle risposte raccolte, una volta chiusa la raccolta dati
-    fixedText: '⚠️ SEGNAPOSTO — da riscrivere con una cifra reale dai dati raccolti (es. quante persone si sono riconosciute nei miei giudizi) una volta chiusa la raccolta.',
-  },
+// ================================================================
+// 5. QR
+// ================================================================
+
+const qrBox =
+  $('qrBox');
+
+const qrModal =
+  $('qrModal');
+
+const qrBackdrop =
+  $('qrModalBackdrop');
+
+const qrClose =
+  $('qrModalClose');
+
+
+function openQR() {
+
+  if (!qrModal) return;
+
+  qrModal.classList.add('visible');
+
+  qrBackdrop.classList.add('visible');
+
+  qrModal.setAttribute(
+    'aria-hidden',
+    'false'
+  );
+
+}
+
+
+function closeQR() {
+
+  if (!qrModal) return;
+
+  qrModal.classList.remove('visible');
+
+  qrBackdrop.classList.remove('visible');
+
+  qrModal.setAttribute(
+    'aria-hidden',
+    'true'
+  );
+
+}
+
+
+qrBox?.addEventListener(
+  'click',
+  e => {
+
+    e.preventDefault();
+
+    openQR();
+
+  }
+);
+
+
+qrClose?.addEventListener(
+  'click',
+  closeQR
+);
+
+
+qrBackdrop?.addEventListener(
+  'click',
+  closeQR
+);
+
+
+addEventListener(
+  'keydown',
+  e => {
+
+    if (e.key === 'Escape')
+      closeQR();
+
+  }
+);
+
+
+// ================================================================
+// 6. ERRORI
+// ================================================================
+
+function debug(
+  message,
+  time = 6000
+) {
+
+  debugMsg.textContent =
+    message;
+
+  debugMsg.style.opacity =
+    '1';
+
+  setTimeout(
+    () => {
+
+      debugMsg.style.opacity =
+        '0';
+
+    },
+    time
+  );
+
+}
+
+
+// ================================================================
+// 7. COLORI
+// ================================================================
+
+function toHex(
+  [r,g,b]
+) {
+
+  return '#' +
+    [r,g,b]
+      .map(
+        n =>
+          Math.round(n)
+            .toString(16)
+            .padStart(2,'0')
+      )
+      .join('');
+
+}
+
+
+function toHsl(
+  [r,g,b]
+) {
+
+  r /= 255;
+  g /= 255;
+  b /= 255;
+
+  const max =
+    Math.max(r,g,b);
+
+  const min =
+    Math.min(r,g,b);
+
+  let h = 0;
+
+  let s = 0;
+
+  const l =
+    (max + min) / 2;
+
+
+  if (max !== min) {
+
+    const d =
+      max - min;
+
+    s =
+      l > .5
+        ? d / (2-max-min)
+        : d / (max+min);
+
+
+    if (max === r)
+      h =
+        (g-b)/d +
+        (g < b ? 6 : 0);
+
+    if (max === g)
+      h =
+        (b-r)/d + 2;
+
+    if (max === b)
+      h =
+        (r-g)/d + 4;
+
+
+    h /= 6;
+
+  }
+
+
+  return [
+    Math.round(h*360),
+    Math.round(s*100),
+    Math.round(l*100)
+  ];
+
+}
+
+
+function colorName(
+  rgb
+) {
+
+  const [h,s,l] =
+    toHsl(rgb);
+
+
+  if (s < 12) {
+
+    if (l < 25)
+      return 'nero';
+
+    if (l < 60)
+      return 'grigio';
+
+    return 'bianco';
+
+  }
+
+
+  if (
+    h < 45 &&
+    l < 32
+  ) {
+    return 'marrone';
+  }
+
+
+  if (
+    h < 15 ||
+    h >= 345
+  ) {
+    return s > 55
+      ? 'rosso'
+      : 'rosso spento';
+  }
+
+
+  if (h < 45)
+    return s > 55
+      ? 'arancio'
+      : 'terra';
+
+
+  if (h < 70)
+    return s > 45
+      ? 'giallo'
+      : 'ocra';
+
+
+  if (h < 150)
+    return s > 45
+      ? 'verde'
+      : 'verde scuro';
+
+
+  if (h < 195)
+    return s > 45
+      ? 'ciano'
+      : 'turchese';
+
+
+  if (h < 250)
+    return s > 45
+      ? 'blu'
+      : 'blu grigio';
+
+
+  if (h < 290)
+    return s > 45
+      ? 'viola'
+      : 'lavanda';
+
+
+  return s > 45
+    ? 'magenta'
+    : 'rosa';
+
+}
+
+
+function colorDistance(
+  a,
+  b
+) {
+
+  const rMean =
+    (a[0] + b[0]) / 2;
+
+  const dr =
+    a[0] - b[0];
+
+  const dg =
+    a[1] - b[1];
+
+  const db =
+    a[2] - b[2];
+
+
+  return (
+    (2 + rMean/256) *
+      dr*dr +
+
+    4 *
+      dg*dg +
+
+    (2 + (255-rMean)/256) *
+      db*db
+  );
+
+}
+
+
+function saturation(
+  [r,g,b]
+) {
+
+  const max =
+    Math.max(r,g,b);
+
+  const min =
+    Math.min(r,g,b);
+
+
+  return max === 0
+    ? 0
+    : (max-min)/max;
+
+}
+
+
+// ================================================================
+// 8. CANVAS WEBCAM
+// ================================================================
+
+const lowCanvas =
+  document.createElement('canvas');
+
+const lowCtx =
+  lowCanvas.getContext('2d');
+
+
+let lowWidth =
+  Number(resolutionSlider.value);
+
+let lowHeight =
+  1;
+
+
+function resizeCameraCanvas() {
+
+  const ratio =
+    video.videoWidth &&
+    video.videoHeight
+
+      ? video.videoHeight /
+        video.videoWidth
+
+      : .75;
+
+
+  lowHeight =
+    Math.max(
+      1,
+      Math.round(
+        lowWidth * ratio
+      )
+    );
+
+
+  lowCanvas.width =
+    lowWidth;
+
+  lowCanvas.height =
+    lowHeight;
+
+
+  /*
+    Il canvas preview usa pochi pixel:
+    più leggero, ma mantiene il
+    rapporto reale della webcam.
+  */
+
+  const previewWidth =
+    64;
+
+  preview.width =
+    previewWidth;
+
+  preview.height =
+    Math.max(
+      1,
+      Math.round(
+        previewWidth *
+        ratio
+      )
+    );
+
+}
+
+
+resizeCameraCanvas();
+
+
+resolutionSlider.addEventListener(
+  'input',
+  () => {
+
+    lowWidth =
+      Math.max(
+        1,
+        Number(
+          resolutionSlider.value
+        )
+      );
+
+    resizeCameraCanvas();
+
+  }
+);
+
+
+// ================================================================
+// 9. K-MEANS
+// ================================================================
+
+function extractPalette(
+  imageData,
+  k = 5
+) {
+
+  const pixels = [];
+
+  const data =
+    imageData.data;
+
+
+  for (
+    let i = 0;
+    i < data.length;
+    i += PERF.sampleStep
+  ) {
+
+    const pixel = [
+      data[i],
+      data[i+1],
+      data[i+2]
+    ];
+
+
+    const sum =
+      pixel[0] +
+      pixel[1] +
+      pixel[2];
+
+
+    if (
+      sum > 30 &&
+      sum < 740
+    ) {
+      pixels.push(pixel);
+    }
+
+  }
+
+
+  if (pixels.length < k)
+    return;
+
+
+  let centers = [];
+
+
+  /*
+    primo centro:
+    pixel più saturo
+  */
+
+  centers.push(
+
+    [...pixels].sort(
+      (a,b) =>
+        saturation(b) -
+        saturation(a)
+    )[0]
+
+  );
+
+
+  /*
+    altri centroidi:
+    colori più lontani
+    da quelli già scelti
+  */
+
+  while (
+    centers.length < k
+  ) {
+
+    let best =
+      pixels[0];
+
+    let bestDistance =
+      -1;
+
+
+    for (
+      const pixel
+      of pixels
+    ) {
+
+      const nearest =
+        Math.min(
+          ...centers.map(
+            center =>
+              colorDistance(
+                pixel,
+                center
+              )
+          )
+        );
+
+
+      if (
+        nearest >
+        bestDistance
+      ) {
+
+        bestDistance =
+          nearest;
+
+        best =
+          pixel;
+
+      }
+
+    }
+
+
+    centers.push(
+      [...best]
+    );
+
+  }
+
+
+  /*
+    iterazioni k-means
+  */
+
+  for (
+    let iteration = 0;
+    iteration <
+      PERF.kmeansIterations;
+    iteration++
+  ) {
+
+    const groups =
+      Array.from(
+        {length:k},
+        () => []
+      );
+
+
+    for (
+      const pixel
+      of pixels
+    ) {
+
+      let bestIndex = 0;
+
+      let bestDistance =
+        Infinity;
+
+
+      centers.forEach(
+        (center,index) => {
+
+          const distance =
+            colorDistance(
+              pixel,
+              center
+            );
+
+
+          if (
+            distance <
+            bestDistance
+          ) {
+
+            bestDistance =
+              distance;
+
+            bestIndex =
+              index;
+
+          }
+
+        }
+      );
+
+
+      groups[
+        bestIndex
+      ].push(pixel);
+
+    }
+
+
+    centers =
+      groups.map(
+        (group,index) => {
+
+          if (!group.length)
+            return centers[index];
+
+
+          const total =
+            group.reduce(
+              (sum,pixel) => [
+
+                sum[0]+pixel[0],
+                sum[1]+pixel[1],
+                sum[2]+pixel[2]
+
+              ],
+              [0,0,0]
+            );
+
+
+          return total.map(
+            value =>
+              Math.round(
+                value /
+                group.length
+              )
+          );
+
+        }
+      );
+
+  }
+
+
+  /*
+    percentuale
+    di ogni cluster
+  */
+
+  const counts =
+    Array(k).fill(0);
+
+
+  for (
+    const pixel
+    of pixels
+  ) {
+
+    let index = 0;
+
+    let distance =
+      Infinity;
+
+
+    centers.forEach(
+      (center,i) => {
+
+        const d =
+          colorDistance(
+            pixel,
+            center
+          );
+
+
+        if (d < distance) {
+
+          distance = d;
+
+          index = i;
+
+        }
+
+      }
+    );
+
+
+    counts[index]++;
+
+  }
+
+
+  const result =
+    centers
+      .map(
+        (rgb,index) => ({
+
+          rgb,
+
+          saturation:
+            saturation(rgb),
+
+          weight:
+            counts[index] /
+            pixels.length
+
+        })
+      )
+
+      .sort(
+        (a,b) =>
+          b.saturation -
+          a.saturation
+      );
+
+
+  currentPalette =
+    result.map(
+      item => item.rgb
+    );
+
+
+  paletteWeights =
+    result.map(
+      item => item.weight
+    );
+
+}
+
+
+// ================================================================
+// 10. PALETTE UI
+// ================================================================
+
+function updateSwatches() {
+
+  swatches.forEach(
+    (element,index) => {
+
+      if (index < 5) {
+
+        const rgb =
+          currentPalette[index];
+
+
+        element.style.background =
+          rgb
+            ? `rgb(${rgb.join(',')})`
+            : '#111';
+
+      }
+
+
+      const active =
+        index < 5
+
+          ? (
+            manualSelection?.type ===
+            'palette' &&
+
+            manualSelection.index ===
+            index
+          )
+
+          : !manualSelection;
+
+
+      element.classList.toggle(
+        'selected',
+        active
+      );
+
+    }
+  );
+
+}
+
+
+swatches.forEach(
+  (element,index) => {
+
+    element.addEventListener(
+      'click',
+      () => {
+
+        if (index >= 5) {
+
+          manualSelection =
+            null;
+
+        }
+
+        else {
+
+          manualSelection = {
+
+            type:
+              'palette',
+
+            index
+
+          };
+
+        }
+
+
+        updateSwatches();
+
+      }
+    );
+
+  }
+);
+
+
+// click direttamente sulla preview
+
+preview.addEventListener(
+  'click',
+  event => {
+
+    const rect =
+      preview.getBoundingClientRect();
+
+
+    manualSelection = {
+
+      type:
+        'point',
+
+      x:
+        (
+          event.clientX -
+          rect.left
+        ) /
+        rect.width,
+
+      y:
+        (
+          event.clientY -
+          rect.top
+        ) /
+        rect.height
+
+    };
+
+
+    updateSwatches();
+
+  }
+);
+
+
+// ================================================================
+// 11. DATI
+// ================================================================
+
+function updateDataPanel(
+  dominant
+) {
+
+  if (
+    !currentPalette.length
+  ) return;
+
+
+  let displayDominant =
+    dominant;
+
+
+  /*
+    se non c'è una scelta manuale
+    usa il colore con più area
+  */
+
+  if (
+    !selectedColor &&
+    paletteWeights.length
+  ) {
+
+    let highest =
+      -1;
+
+
+    currentPalette.forEach(
+      (rgb,index) => {
+
+        if (
+          paletteWeights[index] >
+          highest
+        ) {
+
+          highest =
+            paletteWeights[index];
+
+          displayDominant =
+            rgb;
+
+        }
+
+      }
+    );
+
+  }
+
+
+  const [h,s,l] =
+    toHsl(
+      displayDominant
+    );
+
+
+  const rows =
+    currentPalette.map(
+      (rgb,index) => {
+
+        const percent =
+          Math.round(
+            (
+              paletteWeights[index] ||
+              0
+            ) *
+            100
+          );
+
+
+        return `
+
+          <div class="data-row">
+
+            <span
+              class="data-swatch"
+              style="
+                background:
+                ${toHex(rgb)}
+              ">
+            </span>
+
+            <span
+              class="data-pct">
+              ${percent}%
+            </span>
+
+            <span
+              class="data-name">
+              ${colorName(rgb)}
+            </span>
+
+            <span
+              class="data-hex">
+              ${toHex(rgb)}
+            </span>
+
+          </div>
+
+        `;
+
+      }
+    ).join('');
+
+
+  dataPanel.innerHTML = `
+
+    <div class="data-title">
+      DATI RILEVATI
+    </div>
+
+    <div class="data-dominant">
+
+      <span
+        class="
+          data-swatch
+          big
+        "
+        style="
+          background:
+          ${toHex(displayDominant)}
+        ">
+      </span>
+
+      <div>
+
+        <div
+          class="data-dominant-name">
+
+          ${colorName(displayDominant)}
+
+        </div>
+
+        <div
+          class="data-dominant-sub">
+
+          ${toHex(displayDominant)}
+          ·
+          RGB
+          ${displayDominant.join(',')}
+          ·
+          S ${s}%
+          ·
+          L ${l}%
+
+        </div>
+
+      </div>
+
+    </div>
+
+    ${rows}
+
+  `;
+
+
+  dataPanel.style.opacity =
+    '1';
+
+}
+
+
+// ================================================================
+// 12. SFONDO
+// ================================================================
+
+const idleColors = [
+
+  [40,40,75],
+
+  [70,30,60],
+
+  [20,55,70],
+
+  [55,50,25],
+
+  [30,60,50]
+
 ];
 
-// distanza colore (redmean, funzione colorDist in sezione 7) sotto la
-// quale un colore rilevato dalla webcam "conta" come corrispondente a un
-// colore della firma. Più alto = più tollerante a stampa/luce ambiente
-// imprecise, ma anche più a rischio di falsi positivi tra pagine diverse.
-// Punto di partenza ragionevole, DA VERIFICARE con una stampa vera.
-const PAGE_MATCH_THRESHOLD = 18000;
-// quale frazione dei colori di una firma deve essere trovata nella
-// palette rilevata perché scatti il match (1 = tutti, 0.75 = 3 su 4, ecc.)
-const PAGE_MATCH_MIN_RATIO = 0.75;
-// dopo aver chiuso il popup di una pagina, per quanto tempo quella stessa
-// pagina viene ignorata anche se il telefono resta inquadrato su di essa
-// — evita che si riapra da sola subito dopo la chiusura. Una pagina
-// DIVERSA non è mai soggetta a questo cooldown: scatta comunque subito.
-const PAGE_REOPEN_COOLDOWN = 4000;
 
-const pageReactionEl       = document.getElementById('pageReaction');
-const pageReactionBackdrop = document.getElementById('pageReactionBackdrop');
-const pageReactionTextEl   = document.getElementById('pageReactionText');
-const pageReactionCloseBtn = document.getElementById('pageReactionClose');
+const blobs =
+  idleColors.map(
+    (color,index) => ({
 
-let activePageId      = null; // id della firma il cui popup è attualmente mostrato (null = nessuno)
-let pageRequestSeq    = 0;    // numero incrementale: se una pagina nuova sostituisce quella in corso mentre Ollama sta ancora rispondendo, la risposta vecchia (in arrivo in ritardo) viene scartata invece di sovrascrivere il popup nuovo
-const pageCooldownUntil = {}; // { [id]: timestamp fino a cui ignorare quella firma dopo la chiusura }
+      color:
+        [...color],
 
-// quanti dei colori di una firma vengono trovati (entro PAGE_MATCH_THRESHOLD)
-// nella palette rilevata in questo istante, come frazione 0-1
-function paletteMatchesSignature(detectedPalette, signatureColors) {
-  let matched = 0;
-  for (const sigColor of signatureColors) {
-    const minDist = Math.min(...detectedPalette.map(c => colorDist(sigColor, c)));
-    if (minDist <= PAGE_MATCH_THRESHOLD) matched++;
-  }
-  return matched / signatureColors.length;
+      x:
+        .2 +
+        index*.15,
+
+      y:
+        .3 +
+        (index%2)*.3,
+
+      phase:
+        Math.random()*10
+
+    })
+  );
+
+
+function resizeBackground() {
+
+  ambientCanvas.width =
+    innerWidth;
+
+  ambientCanvas.height =
+    innerHeight;
+
 }
 
-// restituisce la firma che combacia meglio con la palette rilevata in
-// questo istante, o null se nessuna raggiunge PAGE_MATCH_MIN_RATIO
-function matchPageSignature(detectedPalette) {
-  if (!detectedPalette.length) return null;
-  let best = null, bestScore = 0;
-  for (const sig of PAGE_SIGNATURES) {
-    const score = paletteMatchesSignature(detectedPalette, sig.colors);
-    if (score >= PAGE_MATCH_MIN_RATIO && score > bestScore) { bestScore = score; best = sig; }
-  }
-  return best;
-}
 
-// chiamata da loop() (sezione 9) ad ogni ricalcolo della palette: non fa
-// nulla se non trova corrispondenze, se la pagina è già quella mostrata,
-// o se è in cooldown dopo una chiusura recente (vedi PAGE_REOPEN_COOLDOWN)
-function checkPageSignature() {
-  const match = matchPageSignature(currentPalette);
-  if (!match) return;
-  if (match.id === activePageId) return; // stessa pagina già a schermo: non ritriggerare
-  const cooldownUntil = pageCooldownUntil[match.id];
-  if (cooldownUntil && performance.now() < cooldownUntil) return; // pagina appena chiusa: ignorala per un po'
-  triggerPageReaction(match);
-}
+resizeBackground();
 
-// nasconde immediatamente qualunque overlay della sequenza GIUDICA sia a
-// schermo (giudizio AI, domande, ritratto): la pagina ha sempre priorità.
-// NOTA: se una di queste fasi era a metà di un'attesa (es. showHumanQuestion
-// in corso dentro runFullSequence, sezione 10), quella promise resta in
-// sospeso e si risolverà comunque più avanti — questa funzione nasconde
-// solo ciò che è visibile in questo istante, non annulla la logica in
-// corso. Nella pratica (webcam puntata su un libro, non sull'installazione
-// fisica con un visitatore a metà sequenza) è un caso raro; da tenere
-// d'occhio nell'uso reale.
-function hideAllOverlays() {
-  aiJudgment.style.opacity = '0';
-  aiJudgment.innerHTML = '';
-  humanQuestionEl.style.opacity = '0';
-  humanQuestionEl.style.pointerEvents = 'none';
-  recognizeQuestionEl.style.opacity = '0';
-  recognizeQuestionEl.style.pointerEvents = 'none';
-  portraitPanel.style.opacity = '0';
-  portraitPanel.style.pointerEvents = 'none';
-}
 
-async function triggerPageReaction(sig) {
-  const myRequest = ++pageRequestSeq;
-  activePageId = sig.id;
+addEventListener(
+  'resize',
+  resizeBackground
+);
 
-  analyzing = true; // sospende GIUDICA/auto-giudizio ambientale finché il popup non viene chiuso
-  hideAllOverlays();
 
-  pageReactionTextEl.textContent = sig.fixedText || '…';
-  pageReactionEl.classList.add('visible');
-  pageReactionBackdrop.classList.add('visible');
+function drawAmbient() {
 
-  if (!sig.fixedText) {
-    // risposta generata dal vivo (solo il cap. 3, vedi PAGE_SIGNATURES)
-    try {
-      const snapshot = captureObjectiveSnapshot();
-      const text = await fetchAIJudgment(snapshot, sig.topic);
-      // se nel frattempo è scattata una pagina diversa (o questa è stata
-      // già chiusa) mentre Ollama stava ancora rispondendo, questa
-      // risposta è superata: non sovrascrivere quello che è a schermo ora
-      if (myRequest !== pageRequestSeq) return;
-      pageReactionTextEl.textContent = text;
-    } catch (e) {
-      if (myRequest !== pageRequestSeq) return;
-      pageReactionTextEl.textContent = describeJudgmentError(e);
+  const width =
+    ambientCanvas.width;
+
+  const height =
+    ambientCanvas.height;
+
+
+  ambientCtx.clearRect(
+    0,
+    0,
+    width,
+    height
+  );
+
+
+  blobs.forEach(
+    (blob,index) => {
+
+      const target =
+        currentPalette[index] ||
+        idleColors[index];
+
+
+      blob.color =
+        blob.color.map(
+          (value,i) =>
+            value +
+            (
+              target[i] -
+              value
+            ) *
+            .025
+        );
+
+
+      const time =
+        frame*.003 +
+        blob.phase;
+
+
+      const x =
+        width *
+        (
+          blob.x +
+          Math.sin(time) *
+          .1
+        );
+
+
+      const y =
+        height *
+        (
+          blob.y +
+          Math.cos(time*.8) *
+          .1
+        );
+
+
+      const radius =
+        Math.min(
+          width,
+          height
+        ) *
+        .28;
+
+
+      ambientCtx.fillStyle =
+        `rgb(
+          ${blob.color[0]|0},
+          ${blob.color[1]|0},
+          ${blob.color[2]|0}
+        )`;
+
+
+      ambientCtx.beginPath();
+
+      ambientCtx.arc(
+        x,
+        y,
+        radius,
+        0,
+        Math.PI*2
+      );
+
+      ambientCtx.fill();
+
     }
+  );
+
+}
+
+
+// ================================================================
+// 13. MEMORIA
+// ================================================================
+
+function addMemory(
+  rgb
+) {
+
+  colorHistory.push(
+    [...rgb]
+  );
+
+
+  if (
+    colorHistory.length >
+    30
+  ) {
+
+    colorHistory.shift();
+
   }
+
+
+  memoryStrip.innerHTML =
+    '';
+
+
+  colorHistory.forEach(
+    color => {
+
+      const element =
+        document.createElement(
+          'div'
+        );
+
+
+      element.className =
+        'mem-seg';
+
+
+      element.style.background =
+        toHex(color);
+
+
+      memoryStrip.appendChild(
+        element
+      );
+
+    }
+  );
+
 }
 
-function closePageReaction() {
-  pageReactionEl.classList.remove('visible');
-  pageReactionBackdrop.classList.remove('visible');
-  if (activePageId) pageCooldownUntil[activePageId] = performance.now() + PAGE_REOPEN_COOLDOWN;
-  activePageId = null;
-  pageRequestSeq++; // scarta un'eventuale risposta AI ancora in arrivo per la pagina appena chiusa
-  analyzing = false; // riarma GIUDICA/auto-giudizio ambientale: si torna al comportamento normale sui colori dell'ambiente
-  judgeBtn.disabled = false;
-  judgeBtn.textContent = '▸ GIUDICA';
-}
-pageReactionCloseBtn.addEventListener('click', closePageReaction);
-pageReactionBackdrop.addEventListener('click', closePageReaction); // clic fuori dal popup = stesso effetto del bottone "chiudi"
 
-// esposte su window solo per comodità di test dalla console del browser
-// (desktop o da telefono via debug remoto) — vedi istruzioni di test:
-// window.CHROMA_DEBUG.trigger('cap3') forza il popup di una pagina senza
-// bisogno di inquadrare i colori giusti; .match() mostra a quale firma
-// corrisponde la palette rilevata IN QUESTO ISTANTE, utile per capire se
-// una composizione stampata/mostrata a schermo viene letta correttamente
-window.CHROMA_DEBUG = {
-  signatures: PAGE_SIGNATURES,
-  trigger: (id) => {
-    const sig = PAGE_SIGNATURES.find(s => s.id === id);
-    if (!sig) { console.warn('id non trovato. Usa uno tra:', PAGE_SIGNATURES.map(s => s.id)); return; }
-    triggerPageReaction(sig);
+// ================================================================
+// 14. LOOP
+// ================================================================
+
+function loop() {
+
+  frame++;
+
+
+  /*
+    sfondo:
+    su mobile ogni due frame
+  */
+
+  if (
+    frame %
+    PERF.ambientFrames ===
+    0
+  ) {
+
+    drawAmbient();
+
+  }
+
+
+  if (
+    !camActive ||
+    !video.videoWidth
+  ) {
+
+    requestAnimationFrame(
+      loop
+    );
+
+    return;
+
+  }
+
+
+  /*
+    canvas segue automaticamente
+    orientamento e fotocamera
+  */
+
+  if (
+    lowCanvas._videoWidth !==
+      video.videoWidth ||
+
+    lowCanvas._videoHeight !==
+      video.videoHeight
+  ) {
+
+    lowCanvas._videoWidth =
+      video.videoWidth;
+
+    lowCanvas._videoHeight =
+      video.videoHeight;
+
+    resizeCameraCanvas();
+
+  }
+
+
+  lowCtx.drawImage(
+    video,
+    0,
+    0,
+    lowCanvas.width,
+    lowCanvas.height
+  );
+
+
+  const image =
+    lowCtx.getImageData(
+      0,
+      0,
+      lowCanvas.width,
+      lowCanvas.height
+    );
+
+
+  /*
+    colore medio
+  */
+
+  let r = 0;
+
+  let g = 0;
+
+  let b = 0;
+
+
+  const pixels =
+    image.data.length /
+    4;
+
+
+  for (
+    let i = 0;
+    i < image.data.length;
+    i += 4
+  ) {
+
+    r +=
+      image.data[i];
+
+    g +=
+      image.data[i+1];
+
+    b +=
+      image.data[i+2];
+
+  }
+
+
+  r =
+    Math.round(r/pixels);
+
+  g =
+    Math.round(g/pixels);
+
+  b =
+    Math.round(b/pixels);
+
+
+  currentRGB =
+    [r,g,b];
+
+
+  /*
+    palette k-means
+  */
+
+  if (
+    frame %
+    PERF.paletteFrames ===
+    0
+  ) {
+
+    extractPalette(
+      image,
+      5
+    );
+
+
+    updateSwatches();
+
+  }
+
+
+  /*
+    selezione manuale
+  */
+
+  selectedColor =
+    null;
+
+
+  if (
+    manualSelection?.type ===
+    'palette'
+  ) {
+
+    selectedColor =
+      currentPalette[
+        manualSelection.index
+      ] ||
+      null;
+
+  }
+
+
+  if (
+    manualSelection?.type ===
+    'point'
+  ) {
+
+    const x =
+      Math.min(
+        lowCanvas.width-1,
+        Math.max(
+          0,
+          Math.floor(
+            manualSelection.x *
+            lowCanvas.width
+          )
+        )
+      );
+
+
+    const y =
+      Math.min(
+        lowCanvas.height-1,
+        Math.max(
+          0,
+          Math.floor(
+            manualSelection.y *
+            lowCanvas.height
+          )
+        )
+      );
+
+
+    const index =
+      (
+        y *
+        lowCanvas.width +
+        x
+      ) *
+      4;
+
+
+    selectedColor = [
+
+      image.data[index],
+
+      image.data[index+1],
+
+      image.data[index+2]
+
+    ];
+
+  }
+
+
+  const dominant =
+    selectedColor ||
+    currentPalette[0] ||
+    currentRGB;
+
+
+  colorOverlay.style.background =
+    `rgb(
+      ${dominant.join(',')}
+    )`;
+
+
+  colorOverlay.classList.toggle(
+    'manual',
+    Boolean(
+      selectedColor
+    )
+  );
+
+
+  preview.classList.toggle(
+    'manual',
+    Boolean(
+      selectedColor
+    )
+  );
+
+
+  /*
+    aggiorna i dati
+  */
+
+  if (
+    frame %
+    PERF.paletteFrames ===
+    0
+  ) {
+
+    updateDataPanel(
+      dominant
+    );
+
+    checkPageSignature();
+
+  }
+
+
+  /*
+    preview
+  */
+
+  previewCtx.imageSmoothingEnabled =
+    false;
+
+
+  previewCtx.drawImage(
+    lowCanvas,
+    0,
+    0,
+    preview.width,
+    preview.height
+  );
+
+
+  /*
+    stato del sistema
+  */
+
+  if (
+    previousRGB
+  ) {
+
+    const delta =
+
+      Math.abs(
+        r-previousRGB[0]
+      ) +
+
+      Math.abs(
+        g-previousRGB[1]
+      ) +
+
+      Math.abs(
+        b-previousRGB[2]
+      );
+
+
+    if (
+      r+g+b <
+      180
+    ) {
+
+      systemState =
+        'letargico';
+
+    }
+
+    else if (
+      delta > 80
+    ) {
+
+      systemState =
+        'confuso';
+
+    }
+
+    else {
+
+      systemState =
+        'neutrale';
+
+    }
+
+  }
+
+
+  previousRGB =
+    [r,g,b];
+
+
+  hudState.textContent =
+    systemState.toUpperCase();
+
+
+  /*
+    cuore
+  */
+
+  heartbeat += .07;
+
+
+  const beat =
+    (
+      Math.sin(
+        heartbeat
+      ) +
+      1
+    ) /
+    2;
+
+
+  pulseCore.style.background =
+    `rgb(
+      ${dominant.join(',')}
+    )`;
+
+
+  pulseCore.style.transform =
+    `
+      translate(-50%,-50%)
+      scale(
+        ${1 + beat*.12}
+      )
+    `;
+
+
+  const wobble =
+    6 + beat*9;
+
+
+  pulseCore.style.borderRadius =
+    `
+      ${50+wobble}% ${50-wobble}%
+      ${50+wobble/2}% ${50-wobble/2}%
+      /
+      ${50-wobble/2}% ${50+wobble}%
+      ${50-wobble}% ${50+wobble/2}%
+    `;
+
+
+  /*
+    osservazioni / memoria
+  */
+
+  if (
+    frame % 90 ===
+    0
+  ) {
+
+    obsCount++;
+
+    hudObs.textContent =
+      String(obsCount)
+        .padStart(3,'0');
+
+
+    addMemory(
+      dominant
+    );
+
+  }
+
+
+  /*
+    auto-giudizio
+    solo desktop
+  */
+
+  if (
+    PERF.autoJudge
+  ) {
+
+    autoTimer++;
+
+
+    if (
+      autoTimer >=
+        AUTO_INTERVAL &&
+
+      !analyzing
+    ) {
+
+      autoTimer = 0;
+
+      requestJudgment(
+        true
+      );
+
+    }
+
+  }
+
+
+  requestAnimationFrame(
+    loop
+  );
+
+}
+
+
+requestAnimationFrame(
+  loop
+);
+
+
+// ================================================================
+// 15. CAMERA
+// ================================================================
+
+function cameraConstraints() {
+
+  return {
+
+    video: {
+
+      facingMode: {
+
+        ideal:
+          facingMode
+
+      }
+
+    },
+
+    audio: false
+
+  };
+
+}
+
+
+async function startCamera() {
+
+  try {
+
+    if (stream) {
+
+      stream
+        .getTracks()
+        .forEach(
+          track =>
+            track.stop()
+        );
+
+    }
+
+
+    stream =
+      await navigator
+        .mediaDevices
+        .getUserMedia(
+          cameraConstraints()
+        );
+
+
+    video.srcObject =
+      stream;
+
+
+    await video.play();
+
+
+    camActive =
+      true;
+
+
+    camBtn.textContent =
+      'CAM OFF';
+
+
+    resizeCameraCanvas();
+
+  }
+
+  catch(error) {
+
+    debug(
+      'Webcam non accessibile'
+    );
+
+    console.error(
+      error
+    );
+
+  }
+
+}
+
+
+function stopCamera() {
+
+  if (stream) {
+
+    stream
+      .getTracks()
+      .forEach(
+        track =>
+          track.stop()
+      );
+
+  }
+
+
+  stream =
+    null;
+
+
+  video.srcObject =
+    null;
+
+
+  camActive =
+    false;
+
+
+  camBtn.textContent =
+    'CAM ON';
+
+}
+
+
+camBtn.addEventListener(
+  'click',
+  event => {
+
+    event.stopPropagation();
+
+
+    if (camActive)
+      stopCamera();
+
+    else
+      startCamera();
+
+  }
+);
+
+
+switchCamBtn.addEventListener(
+  'click',
+  async event => {
+
+    event.stopPropagation();
+
+
+    facingMode =
+      facingMode ===
+      'environment'
+
+        ? 'user'
+
+        : 'environment';
+
+
+    switchCamBtn.textContent =
+      facingMode ===
+      'environment'
+
+        ? '⟲ POSTERIORE'
+
+        : '⟲ ANTERIORE';
+
+
+    if (camActive)
+      await startCamera();
+
+  }
+);
+
+
+// primo click sulla pagina
+
+document.body.addEventListener(
+  'click',
+  function firstClick(
+    event
+  ) {
+
+    if (
+      event.target.closest(
+        'button,a,input'
+      )
+    ) return;
+
+
+    if (!camActive)
+      startCamera();
+
+
+    document.body.removeEventListener(
+      'click',
+      firstClick
+    );
+
+  }
+);
+
+
+// ================================================================
+// 16. OLLAMA
+// ================================================================
+
+const OLLAMA_LOCAL =
+  'http://localhost:11434/api/generate';
+
+
+const OLLAMA_TUNNEL =
+  'https://stoop-situation-trifle.ngrok-free.dev/api/generate';
+
+
+async function fetchWithTimeout(
+  url,
+  body,
+  timeout
+) {
+
+  const controller =
+    new AbortController();
+
+
+  const timer =
+    setTimeout(
+      () =>
+        controller.abort(),
+      timeout
+    );
+
+
+  try {
+
+    return await fetch(
+      url,
+      {
+
+        method:
+          'POST',
+
+        headers: {
+
+          'Content-Type':
+            'application/json'
+
+        },
+
+        body:
+          JSON.stringify(
+            body
+          ),
+
+        signal:
+          controller.signal
+
+      }
+    );
+
+  }
+
+  finally {
+
+    clearTimeout(
+      timer
+    );
+
+  }
+
+}
+
+
+async function ollamaFetch(
+  body
+) {
+
+  try {
+
+    return await fetchWithTimeout(
+      OLLAMA_LOCAL,
+      body,
+      8000
+    );
+
+  }
+
+  catch {
+
+    return fetchWithTimeout(
+      OLLAMA_TUNNEL,
+      body,
+      25000
+    );
+
+  }
+
+}
+
+
+// ================================================================
+// 17. SNAPSHOT
+// ================================================================
+
+function capturePhoto() {
+
+  if (
+    !camActive ||
+    !video.videoWidth
+  ) return null;
+
+
+  const size =
+    Math.min(
+      video.videoWidth,
+      video.videoHeight
+    );
+
+
+  const sx =
+    (
+      video.videoWidth -
+      size
+    ) /
+    2;
+
+
+  const sy =
+    (
+      video.videoHeight -
+      size
+    ) /
+    2;
+
+
+  const canvas =
+    document.createElement(
+      'canvas'
+    );
+
+
+  canvas.width =
+    480;
+
+  canvas.height =
+    480;
+
+
+  canvas
+    .getContext('2d')
+    .drawImage(
+
+      video,
+
+      sx,
+      sy,
+      size,
+      size,
+
+      0,
+      0,
+      480,
+      480
+
+    );
+
+
+  return canvas;
+
+}
+
+
+function snapshot() {
+
+  const palette =
+    currentPalette.length
+
+      ? currentPalette
+          .slice(0,5)
+          .map(
+            color =>
+              [...color]
+          )
+
+      : [
+          [...currentRGB]
+        ];
+
+
+  return {
+
+    palette,
+
+    weights:
+      [...paletteWeights],
+
+    dominant:
+      selectedColor
+        ? [...selectedColor]
+        : [...palette[0]],
+
+    selected:
+      Boolean(
+        selectedColor
+      ),
+
+    photo:
+      capturePhoto()
+
+  };
+
+}
+
+
+// ================================================================
+// 18. PROMPT AI
+// ================================================================
+
+async function generateJudgment(
+  snap,
+  pageTopic = null
+) {
+
+  const paletteText =
+    snap.palette
+
+      .slice(0,4)
+
+      .map(
+        rgb => {
+
+          const [h,s,l] =
+            toHsl(rgb);
+
+
+          return (
+            `${colorName(rgb)} ` +
+            `${toHex(rgb)} ` +
+            `S:${s}% ` +
+            `L:${l}%`
+          );
+
+        }
+      )
+
+      .join('\n');
+
+
+  const memory =
+    [
+      ...new Set(
+        colorHistory
+          .slice(-10)
+          .map(
+            color =>
+              colorName(color)
+          )
+      )
+    ]
+    .join(', ');
+
+
+  const prompt = `
+
+Sei CHROMA.
+
+Osservi una scena solo attraverso i colori.
+Non riconosci identità, personalità o emozioni reali.
+
+Il tuo compito artistico è SOVRAINTERPRETARE:
+trasforma dati cromatici limitati in affermazioni psicologiche arbitrarie.
+
+Parla con sicurezza.
+Non usare "forse", "sembra" o domande.
+Il testo deve apparire certo anche quando non ha basi reali.
+
+Colori:
+${paletteText}
+
+Memoria recente:
+${memory || 'nessuna'}
+
+Stato:
+${systemState}
+
+${pageTopic
+  ? `Tema della pagina: ${pageTopic}`
+  : ''
+}
+
+Scrivi massimo 2 frasi brevi.
+Italiano.
+Tono poetico, freddo, categorico.
+Solo il giudizio.
+
+`;
+
+
+  const response =
+    await ollamaFetch({
+
+      model:
+        'gemma3:4b',
+
+      prompt,
+
+      stream:
+        false,
+
+      options: {
+
+        temperature:
+          1.05,
+
+        num_predict:
+          65
+
+      }
+
+    });
+
+
+  if (!response.ok)
+    throw new Error(
+      `Ollama ${response.status}`
+    );
+
+
+  const data =
+    await response.json();
+
+
+  return (
+    data.response?.trim() ||
+    'Il colore rifiuta di spiegarsi.'
+  );
+
+}
+
+
+// ================================================================
+// 19. MOSTRA GIUDIZIO
+// ================================================================
+
+function judgmentScale(
+  length
+) {
+
+  if (length < 70)
+    return 1;
+
+
+  if (length > 220)
+    return .58;
+
+
+  return (
+    1 -
+    (
+      length-70
+    ) /
+    150 *
+    .42
+  );
+
+}
+
+
+async function showJudgment(
+  text
+) {
+
+  aiJudgment.innerHTML =
+    '';
+
+
+  aiJudgment.style
+    .setProperty(
+      '--judgment-scale',
+      judgmentScale(
+        text.length
+      )
+    );
+
+
+  aiJudgment.style.top =
+    '64%';
+
+
+  aiJudgment.style.opacity =
+    '1';
+
+
+  const cursor =
+    document.createElement(
+      'span'
+    );
+
+
+  cursor.textContent =
+    '▌';
+
+
+  cursor.style.opacity =
+    '.4';
+
+
+  aiJudgment.appendChild(
+    cursor
+  );
+
+
+  for (
+    const character
+    of text
+  ) {
+
+    const span =
+      document.createElement(
+        'span'
+      );
+
+
+    span.textContent =
+      character;
+
+
+    aiJudgment.insertBefore(
+      span,
+      cursor
+    );
+
+
+    await new Promise(
+      resolve =>
+        setTimeout(
+          resolve,
+          15 +
+          Math.random()*14
+        )
+    );
+
+  }
+
+
+  cursor.remove();
+
+
+  await new Promise(
+    resolve =>
+      setTimeout(
+        resolve,
+        3200
+      )
+  );
+
+
+  aiTrace.textContent =
+    text;
+
+
+  aiTrace.style.opacity =
+    '.5';
+
+
+  aiJudgment.style.opacity =
+    '0';
+
+
+  setTimeout(
+    () => {
+
+      aiTrace.style.opacity =
+        '0';
+
+    },
+    18000
+  );
+
+}
+
+
+// ================================================================
+// 20. DOMANDE
+// ================================================================
+
+function showChoice(
+  element,
+  buttons,
+  getValue,
+  timeout
+) {
+
+  return new Promise(
+    resolve => {
+
+      let closed =
+        false;
+
+
+      const finish =
+        value => {
+
+          if (closed)
+            return;
+
+
+          closed =
+            true;
+
+
+          clearTimeout(
+            timer
+          );
+
+
+          element.style.opacity =
+            '0';
+
+
+          element.style.pointerEvents =
+            'none';
+
+
+          buttons.forEach(
+            button =>
+              button.onclick =
+                null
+          );
+
+
+          setTimeout(
+            () =>
+              resolve(value),
+            350
+          );
+
+        };
+
+
+      element.style.opacity =
+        '1';
+
+
+      element.style.pointerEvents =
+        'auto';
+
+
+      buttons.forEach(
+        button => {
+
+          button.onclick =
+            () =>
+              finish(
+                getValue(
+                  button
+                )
+              );
+
+        }
+      );
+
+
+      const timer =
+        setTimeout(
+          () =>
+            finish(null),
+          timeout
+        );
+
+    }
+  );
+
+}
+
+
+const MOODS = [
+
+  'calma',
+
+  'energia',
+
+  'malinconia',
+
+  'gioia',
+
+  'tensione',
+
+  'serenità',
+
+  'inquietudine',
+
+  'nostalgia'
+
+];
+
+
+function askHuman() {
+
+  moodChips.innerHTML =
+    MOODS.map(
+      mood =>
+        `
+        <button
+          class="mood-chip"
+          data-mood="${mood}"
+          type="button">
+          ${mood}
+        </button>
+        `
+    ).join('');
+
+
+  const buttons = [
+
+    ...moodChips
+      .querySelectorAll(
+        '.mood-chip'
+      ),
+
+    moodSkip
+
+  ];
+
+
+  return showChoice(
+
+    humanQuestion,
+
+    buttons,
+
+    button =>
+      button.dataset.mood ||
+      null,
+
+    9000
+
+  );
+
+}
+
+
+function askRecognition() {
+
+  const buttons =
+    [
+      ...recognizeQuestion
+        .querySelectorAll(
+          '[data-answer]'
+        )
+    ];
+
+
+  return showChoice(
+
+    recognizeQuestion,
+
+    buttons,
+
+    button =>
+      button.dataset.answer,
+
+    7000
+
+  );
+
+}
+
+
+// ================================================================
+// 21. RITRATTO
+// ================================================================
+
+function renderPortrait(
+  snap
+) {
+
+  const size =
+    PERF.portraitSize;
+
+
+  portraitCanvas.width =
+    size;
+
+  portraitCanvas.height =
+    size;
+
+
+  portraitCtx.fillStyle =
+    '#000';
+
+
+  portraitCtx.fillRect(
+    0,
+    0,
+    size,
+    size
+  );
+
+
+  if (snap.photo) {
+
+    portraitCtx.drawImage(
+      snap.photo,
+      0,
+      0,
+      size,
+      size
+    );
+
+  }
+
+
+  portraitCtx.save();
+
+
+  portraitCtx.filter =
+    'blur(70px) saturate(1.35)';
+
+
+  portraitCtx.globalAlpha =
+    snap.photo
+      ? .9
+      : 1;
+
+
+  portraitCtx.globalCompositeOperation =
+    snap.photo
+      ? 'color'
+      : 'source-over';
+
+
+  snap.palette.forEach(
+    (rgb,index) => {
+
+      const count =
+        snap.palette.length;
+
+
+      const weight =
+        snap.weights[index] ??
+        1/count;
+
+
+      const angle =
+        index /
+        count *
+        Math.PI *
+        2;
+
+
+      const radius =
+        size *
+        (
+          .18 +
+          weight*.55
+        );
+
+
+      const x =
+        size/2 +
+        Math.cos(angle) *
+        size*.16;
+
+
+      const y =
+        size/2 +
+        Math.sin(angle) *
+        size*.16;
+
+
+      portraitCtx.fillStyle =
+        `rgb(${rgb.join(',')})`;
+
+
+      portraitCtx.beginPath();
+
+
+      portraitCtx.arc(
+        x,
+        y,
+        radius,
+        0,
+        Math.PI*2
+      );
+
+
+      portraitCtx.fill();
+
+    }
+  );
+
+
+  portraitCtx.restore();
+
+}
+
+
+async function showPortrait(
+  snap
+) {
+
+  renderPortrait(
+    snap
+  );
+
+
+  portraitDownload.href =
+    portraitCanvas
+      .toDataURL(
+        'image/png'
+      );
+
+
+  portraitPanel.style.opacity =
+    '1';
+
+
+  portraitPanel.style.pointerEvents =
+    'auto';
+
+
+  await new Promise(
+    resolve =>
+      setTimeout(
+        resolve,
+        6500
+      )
+  );
+
+
+  portraitPanel.style.opacity =
+    '0';
+
+
+  portraitPanel.style.pointerEvents =
+    'none';
+
+}
+
+
+// ================================================================
+// 22. LOG
+// ================================================================
+
+function logResponse(
+  human,
+  ai,
+  recognition,
+  snap
+) {
+
+  responseLog.push({
+
+    timestamp:
+      new Date()
+        .toISOString(),
+
+    dominante:
+      colorName(
+        snap.dominant
+      ),
+
+    hex:
+      toHex(
+        snap.dominant
+      ),
+
+    sensazione:
+      human ??
+      '(nessuna)',
+
+    giudizio:
+      ai,
+
+    riconoscimento:
+      recognition ??
+      '(nessuna)'
+
+  });
+
+}
+
+
+function exportCSV() {
+
+  if (!responseLog.length) {
+
+    debug(
+      'Nessun dato da esportare'
+    );
+
+    return;
+
+  }
+
+
+  const headers = [
+
+    'timestamp',
+
+    'dominante',
+
+    'hex',
+
+    'sensazione',
+
+    'giudizio',
+
+    'riconoscimento'
+
+  ];
+
+
+  const quote =
+    value =>
+      `"${String(value)
+        .replace(
+          /"/g,
+          '""'
+        )}"`;
+
+
+  const csv = [
+
+    headers.join(','),
+
+    ...responseLog.map(
+      row =>
+        headers
+          .map(
+            key =>
+              quote(
+                row[key]
+              )
+          )
+          .join(',')
+    )
+
+  ].join('\n');
+
+
+  const blob =
+    new Blob(
+      [csv],
+      {
+        type:
+          'text/csv;charset=utf-8'
+      }
+    );
+
+
+  const url =
+    URL.createObjectURL(
+      blob
+    );
+
+
+  const link =
+    document.createElement(
+      'a'
+    );
+
+
+  link.href =
+    url;
+
+
+  link.download =
+    'chroma-risposte.csv';
+
+
+  link.click();
+
+
+  URL.revokeObjectURL(
+    url
+  );
+
+}
+
+
+window.exportResponseLog =
+  exportCSV;
+
+
+addEventListener(
+  'keydown',
+  event => {
+
+    if (
+      event.key.toLowerCase() ===
+      'e'
+    ) {
+      exportCSV();
+    }
+
+  }
+);
+
+
+// ================================================================
+// 23. SEQUENZA GIUDICA
+// ================================================================
+
+async function fullSequence() {
+
+  if (analyzing)
+    return;
+
+
+  analyzing =
+    true;
+
+
+  judgeBtn.disabled =
+    true;
+
+
+  judgeBtn.innerHTML =
+    '<span class="spin"></span>';
+
+
+  const snap =
+    snapshot();
+
+
+  try {
+
+    const human =
+      await askHuman();
+
+
+    const text =
+      await generateJudgment(
+        snap
+      );
+
+
+    judgeCount++;
+
+
+    hudJudge.textContent =
+      String(judgeCount)
+        .padStart(3,'0');
+
+
+    await showJudgment(
+      text
+    );
+
+
+    const recognition =
+      await askRecognition();
+
+
+    logResponse(
+
+      human,
+
+      text,
+
+      recognition,
+
+      snap
+
+    );
+
+
+    await showPortrait(
+      snap
+    );
+
+  }
+
+  catch(error) {
+
+    console.error(
+      error
+    );
+
+
+    debug(
+      'Impossibile raggiungere Ollama'
+    );
+
+
+    await showJudgment(
+      'Il sistema non riesce a formulare il proprio giudizio.'
+    );
+
+  }
+
+
+  analyzing =
+    false;
+
+
+  judgeBtn.disabled =
+    false;
+
+
+  judgeBtn.textContent =
+    '▸ GIUDICA';
+
+}
+
+
+judgeBtn.addEventListener(
+  'click',
+  event => {
+
+    event.stopPropagation();
+
+    fullSequence();
+
+  }
+);
+
+
+// auto-giudizio desktop
+
+async function requestJudgment(
+  silent = true
+) {
+
+  if (analyzing)
+    return;
+
+
+  analyzing =
+    true;
+
+
+  try {
+
+    const snap =
+      snapshot();
+
+
+    const text =
+      await generateJudgment(
+        snap
+      );
+
+
+    judgeCount++;
+
+
+    hudJudge.textContent =
+      String(judgeCount)
+        .padStart(3,'0');
+
+
+    await showJudgment(
+      text
+    );
+
+  }
+
+  catch(error) {
+
+    console.error(
+      error
+    );
+
+
+    if (!silent)
+      debug(
+        'Ollama non disponibile'
+      );
+
+  }
+
+
+  analyzing =
+    false;
+
+}
+
+
+// ================================================================
+// 24. PAGINE TESI
+// ================================================================
+
+const PAGE_SIGNATURES = [
+
+  {
+
+    id:
+      'intro',
+
+    colors: [
+
+      [107,107,107],
+
+      [255,115,0]
+
+    ],
+
+    text:
+      'Una webcam osserva una stanza. Misura luce e colore. Da questi dati nasce un giudizio che il colore non contiene.'
+
   },
-  close: closePageReaction,
-  match: () => matchPageSignature(currentPalette),
-  currentPalette: () => currentPalette,
-  resetCooldowns: () => { for (const k in pageCooldownUntil) delete pageCooldownUntil[k]; console.log('cooldown azzerati'); },
-};
 
-document.addEventListener('keydown', e => {
-  // ignora la scorciatoia mentre si sta scrivendo in un campo di testo
-  // (qui non ce ne sono, ma è una sicurezza per eventuali aggiunte future)
-  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
-  if (e.key === 'e' || e.key === 'E') exportResponseLog();
-});
+
+  {
+
+    id:
+      'cap1',
+
+    colors: [
+
+      [220,40,40],
+
+      [235,190,40],
+
+      [40,150,70],
+
+      [50,90,200]
+
+    ],
+
+    text:
+      'Newton scompone il colore. Goethe lo osserva. Itten lo ordina. Albers ne mostra l’instabilità.'
+
+  },
+
+
+  {
+
+    id:
+      'cap2',
+
+    colors: [
+
+      [30,140,200],
+
+      [40,200,120],
+
+      [15,15,20]
+
+    ],
+
+    text:
+      'Qui il colore diventa dato: RGB, valori numerici e informazioni elaborabili da una macchina.'
+
+  },
+
+
+  {
+
+    id:
+      'cap3',
+
+    colors: [
+
+      [210,70,140],
+
+      [40,180,190]
+
+    ],
+
+    topic:
+      'sovrainterpretazione cromatica'
+
+  },
+
+
+  {
+
+    id:
+      'cap4',
+
+    colors: [
+
+      [255,115,0],
+
+      [245,245,245],
+
+      [10,10,10]
+
+    ],
+
+    text:
+      'Questo capitolo descrive CHROMA: come osserva, misura e trasforma i colori in interpretazioni.'
+
+  }
+
+];
+
+
+const PAGE_DISTANCE =
+  18000;
+
+
+const PAGE_RATIO =
+  .75;
+
+
+let activePage =
+  null;
+
+
+let pageCooldown =
+  0;
+
+
+const pageReaction =
+  $('pageReaction');
+
+const pageBackdrop =
+  $('pageReactionBackdrop');
+
+const pageText =
+  $('pageReactionText');
+
+const pageClose =
+  $('pageReactionClose');
+
+
+function signatureScore(
+  signature
+) {
+
+  let matches =
+    0;
+
+
+  for (
+    const target
+    of signature.colors
+  ) {
+
+    const nearest =
+      Math.min(
+        ...currentPalette.map(
+          detected =>
+            colorDistance(
+              target,
+              detected
+            )
+        )
+      );
+
+
+    if (
+      nearest <
+      PAGE_DISTANCE
+    ) {
+
+      matches++;
+
+    }
+
+  }
+
+
+  return (
+    matches /
+    signature.colors.length
+  );
+
+}
+
+
+function checkPageSignature() {
+
+  if (
+    !currentPalette.length ||
+    performance.now() <
+      pageCooldown
+  ) {
+    return;
+  }
+
+
+  let best =
+    null;
+
+  let score =
+    0;
+
+
+  PAGE_SIGNATURES.forEach(
+    signature => {
+
+      const current =
+        signatureScore(
+          signature
+        );
+
+
+      if (
+        current >=
+          PAGE_RATIO &&
+
+        current >
+          score
+      ) {
+
+        score =
+          current;
+
+        best =
+          signature;
+
+      }
+
+    }
+  );
+
+
+  if (
+    best &&
+    best.id !==
+      activePage
+  ) {
+
+    showPage(
+      best
+    );
+
+  }
+
+}
+
+
+async function showPage(
+  signature
+) {
+
+  activePage =
+    signature.id;
+
+
+  analyzing =
+    true;
+
+
+  pageBackdrop.classList.add(
+    'visible'
+  );
+
+
+  pageReaction.classList.add(
+    'visible'
+  );
+
+
+  if (signature.text) {
+
+    pageText.textContent =
+      signature.text;
+
+  }
+
+  else {
+
+    pageText.textContent =
+      '…';
+
+
+    try {
+
+      const text =
+        await generateJudgment(
+
+          snapshot(),
+
+          signature.topic
+
+        );
+
+
+      if (
+        activePage ===
+        signature.id
+      ) {
+
+        pageText.textContent =
+          text;
+
+      }
+
+    }
+
+    catch {
+
+      pageText.textContent =
+        'Il sistema non riesce a interpretare questa pagina.';
+
+    }
+
+  }
+
+}
+
+
+function closePage() {
+
+  pageBackdrop.classList.remove(
+    'visible'
+  );
+
+
+  pageReaction.classList.remove(
+    'visible'
+  );
+
+
+  activePage =
+    null;
+
+
+  pageCooldown =
+    performance.now() +
+    4000;
+
+
+  analyzing =
+    false;
+
+}
+
+
+pageClose.addEventListener(
+  'click',
+  closePage
+);
+
+
+pageBackdrop.addEventListener(
+  'click',
+  closePage
+);
