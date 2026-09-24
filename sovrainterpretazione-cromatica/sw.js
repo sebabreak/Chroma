@@ -18,7 +18,7 @@
 //  sola quando il telefono è online), ma pulisce la cache vecchia invece
 //  di lasciarla lì a occupare spazio inutilmente.
 // ══════════════════════════════════════════════════════════════════
-const CACHE_NAME = 'sovrainterpretazione-v10'; // v6: aggiunto il riconoscimento pagina (sezione 17 di script.js) + #pageReaction in index.html/style.css
+const CACHE_NAME = 'sovrainterpretazione-v11'; // v6: aggiunto il riconoscimento pagina (sezione 17 di script.js) + #pageReaction in index.html/style.css
 
 const ASSETS = [
   './',
