@@ -1,1361 +1,1714 @@
-@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300;1,400&display=swap');
+@import url(
+  'https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300;1,400&display=swap'
+);
 
-/* ══════════════════════════════════════════════════════════════════
-   SOVRAINTERPRETAZIONE CROMATICA — stili
-   Ogni blocco qui sotto corrisponde a un elemento con lo stesso id/
-   classe in index.html. La logica che li anima è in script.js.
 
-   MODIFICHE VISIVE PIÙ COMUNI:
-   - Sfocatura/intensità della nebulosa di colori    → #ambientCanvas (i colori/il movimento sono in script.js, updateAndDrawAmbient())
-   - Scurezza della vignettatura ai bordi            → #vignette
-   - Intensità della grana/rumore                    → #grain
-   - Colore/posizione del riquadro in alto a sinistra → #colorOverlay
-   - Aspetto dei quadratini di selezione colore      → #paletteSwatches, .swatch
-   - Dimensione del cerchio pulsante centrale       → #pulseCore
-   - Stile del testo di giudizio dell'AI            → #aiJudgment
-   - Stile della "traccia" che resta in alto dopo    → #aiTrace
-   - Spessore/posizione della striscia memoria       → #memoryStrip
-   - Layout/dimensioni su schermi piccoli (telefono)  → media query "SCHERMI PICCOLI" in fondo al file
-   - Aspetto del pannello dati oggettivi              → #dataPanel e .data-*
-   - Aspetto della domanda umana/dei tasti d'umore    → #humanQuestion, .mood-chip
-   - Aspetto di "ti riconosci?"                       → #recognizeQuestion, .recognize-btns
-   - Aspetto/dimensione del ritratto cromatico         → #portraitPanel, #portraitCanvas
-   ══════════════════════════════════════════════════════════════════ */
+/* =========================================================
+   BASE
+   ========================================================= */
 
-* { margin: 0; padding: 0; box-sizing: border-box; }
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html,
+body {
+  width: 100%;
+  height: 100%;
+}
 
 body {
-  height: 100vh;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  font-family: sans-serif;
-  color: white;
-  text-align: center;
-  cursor: crosshair;
+
+  height: 100dvh;
+
   overflow: hidden;
-  background-color: black;
+
+  background: #000;
+
+  color: #fff;
+
+  font-family: sans-serif;
+
+  cursor: crosshair;
+
 }
 
-/* la webcam non è mai visibile: serve solo come sorgente per il canvas in script.js */
-video { display: none; }
 
-/* ── NEBULOSA DI COLORI ─────────────────────────────────────────── */
-/* canvas su cui script.js (updateAndDrawAmbient, sezione 5) disegna
-   alcune macchie di colore morbide che inseguono la palette rilevata
-   dalla webcam e si muovono lentamente. Il blur e l'opacità qui sotto
-   sono ciò che le trasforma da cerchi netti a una nebulosa soffusa:
-   aumenta "blur" per macchie più diffuse, "opacity" per renderle più/meno presenti. */
+/* webcam vera nascosta */
+
+video {
+  display: none;
+}
+
+
+/* =========================================================
+   SFONDO
+   ========================================================= */
+
 #ambientCanvas {
+
   position: fixed;
+
   inset: 0;
+
+  width: 100%;
+  height: 100%;
+
   z-index: 1;
+
   pointer-events: none;
-  filter: blur(80px) saturate(1.4);
-  opacity: 0.55;
+
+  filter:
+    blur(70px)
+    saturate(1.35);
+
+  opacity: .55;
+
 }
 
-/* ── VIGNETTATURA ───────────────────────────────────────────────── */
-/* scurisce i bordi dello schermo: dà profondità e porta lo sguardo verso il centro */
+
 #vignette {
+
   position: fixed;
+
   inset: 0;
+
   z-index: 2;
+
   pointer-events: none;
-  background: radial-gradient(ellipse at 50% 55%, rgba(0,0,0,0) 35%, rgba(0,0,0,0.55) 100%);
+
+  background:
+    radial-gradient(
+      ellipse at center,
+      transparent 35%,
+      rgba(0,0,0,.65) 100%
+    );
+
 }
 
-/* ── GRANA ──────────────────────────────────────────────────────── */
-/* rumore statico molto leggero sopra a tutto: dà una consistenza da
-   pellicola invece del piatto digitale, in coerenza con le scanline sotto */
+
 #grain {
+
   position: fixed;
+
   inset: 0;
+
   z-index: 90;
+
   pointer-events: none;
-  opacity: 0.05;
-  mix-blend-mode: overlay;
-  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='140' height='140'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
-  background-repeat: repeat;
+
+  opacity: .035;
+
+  background-image:
+    repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 3px,
+      rgba(0,0,0,.12) 4px
+    );
+
 }
 
-/* ── CUORE PULSANTE ─────────────────────────────────────────────── */
-/* cambia colore/dimensione in base al colore rilevato e al "battito" (vedi loop() in script.js).
-   Il border-radius viene ridefinito ad ogni frame da script.js per dargli una
-   forma organica/amebica invece di un cerchio perfetto e immobile: la
-   transizione qui sotto ammorbidisce il passaggio da una forma all'altra. */
+
+/* =========================================================
+   CUORE
+   ========================================================= */
+
 #pulseCore {
-  position: absolute;
-  top: 38%; /* nella metà superiore dello schermo, sopra al testo del giudizio (#aiJudgment, più sotto) */
+
+  position: fixed;
+
   left: 50%;
-  transform: translate(-50%, -50%);
+  top: 38%;
+
+  transform:
+    translate(-50%, -50%);
+
   width: 180px;
   height: 180px;
-  border-radius: 50%;
-  background-color: black;
-  transition: background-color 0.2s ease, border-radius 0.35s ease-in-out;
-  box-shadow: 0 0 40px rgba(255,255,255,0.2);
+
   z-index: 6;
+
+  border-radius: 50%;
+
+  background: #111;
+
+  box-shadow:
+    0 0 40px rgba(255,255,255,.15);
+
   pointer-events: none;
+
+  transition:
+    background-color .2s,
+    border-radius .3s;
+
 }
 
-/* ── RIQUADRO COLORE DOMINANTE ──────────────────────────────────── */
+
+/* =========================================================
+   HUD
+   ========================================================= */
+
+#hud {
+
+  position: fixed;
+
+  top: 20px;
+  left: 20px;
+
+  z-index: 20;
+
+  font-family:
+    'Courier New',
+    monospace;
+
+  font-size: 9px;
+
+  line-height: 2;
+
+  letter-spacing: .18em;
+
+  color:
+    rgba(255,255,255,.22);
+
+  pointer-events: none;
+
+}
+
+#hudState {
+  color:
+    rgba(255,255,255,.45);
+}
+
+
+/* =========================================================
+   COLORE PRINCIPALE
+   ========================================================= */
+
 #colorOverlay {
-  position: absolute;
+
+  position: fixed;
+
   top: 10%;
-  left: 20px; /* stessa x di #hud qui sopra, così tutta la colonna a sinistra resta allineata */
+  left: 20px;
+
   width: 120px;
   height: 120px;
-  border-radius: 6px;
-  border: 2px solid rgba(255, 115, 0, 0.932);
-  background: black;
-  opacity: 1;
-  pointer-events: none;
-  z-index: 5;
-  transition: border-color 0.3s;
-}
-/* selezione manuale attiva (palette o punto sull'anteprima): bordo bianco invece che arancione */
-#colorOverlay.manual { border-color: rgba(255,255,255,0.95); }
 
-/* ── SELEZIONE MANUALE DEL COLORE ──────────────────────────────── */
-/* quadratini con i colori della palette rilevata (aggiornati in script.js,
-   sezione 11, updatePaletteSwatches()): cliccane uno per "bloccare" quel
-   colore come quello su cui il sistema/l'AI si concentra, al posto della
-   scelta automatica. L'ultimo quadratino (AUTO) annulla la selezione. */
-#paletteSwatches {
-  position: fixed;
-  top: calc(10% + 132px);
-  left: 20px; /* stessa x di #hud/#colorOverlay, colonna allineata */
   z-index: 15;
-  display: flex;
-  gap: 6px;
+
+  border-radius: 6px;
+
+  border:
+    2px solid
+    rgba(255,115,0,.95);
+
+  background: #000;
+
+  pointer-events: none;
+
 }
+
+#colorOverlay.manual {
+  border-color: #fff;
+}
+
+
+/* =========================================================
+   PALETTE
+   ========================================================= */
+
+#paletteSwatches {
+
+  position: fixed;
+
+  top: calc(10% + 132px);
+  left: 20px;
+
+  display: flex;
+
+  gap: 6px;
+
+  z-index: 20;
+
+}
+
+
 .swatch {
+
   width: 22px;
   height: 22px;
+
   border-radius: 4px;
-  border: 1px solid rgba(255,255,255,0.25);
+
+  border:
+    1px solid
+    rgba(255,255,255,.3);
+
   cursor: pointer;
-  background: #1a1a1a;
-  transition: border-color 0.2s, transform 0.15s;
+
+  background: #111;
+
 }
-.swatch:hover { transform: scale(1.15); border-color: rgba(255,255,255,0.6); }
-.swatch.selected { border-color: #fff; border-width: 2px; box-shadow: 0 0 8px rgba(255,255,255,0.5); }
+
+
+.swatch.selected {
+
+  border:
+    2px solid #fff;
+
+}
+
+
 .swatch.auto {
-  background: transparent;
+
   display: flex;
+
   align-items: center;
   justify-content: center;
-  font-family: 'Courier New', monospace;
+
+  background: transparent;
+
+  font-family:
+    'Courier New',
+    monospace;
+
   font-size: 6px;
-  letter-spacing: 0.03em;
-  color: rgba(255,255,255,0.4);
-  border-style: dashed;
-}
-.swatch.auto.selected { border-style: solid; color: #fff; box-shadow: none; }
 
-/* ── ANTEPRIMA PIXELATA ─────────────────────────────────────────── */
-/* cliccabile: un clic su un punto lo seleziona come colore da seguire (script.js, sezione 11).
-   Solo "width" fissata: "height:auto" lascia che il riquadro segua il VERO
-   aspect ratio del canvas (script.js, updateLowResDimensions) — un valore
-   fisso qui causerebbe di nuovo la stessa distorsione che quella funzione
-   risolve lato campionamento, specialmente su telefono dove la webcam
-   raramente trasmette davvero in 4:3. */
+  color:
+    rgba(255,255,255,.5);
+
+}
+
+
+/* =========================================================
+   DATI RILEVATI
+   ========================================================= */
+
+#dataPanel {
+
+  position: fixed;
+
+  top: calc(10% + 170px);
+  left: 0;
+
+  width: 300px;
+
+  z-index: 20;
+
+  opacity: 0;
+
+  pointer-events: none;
+
+  padding:
+    1.1rem
+    1.3rem;
+
+  background:
+    rgba(0,0,0,.74);
+
+  border:
+    1px solid
+    rgba(255,255,255,.12);
+
+  font-family:
+    'Courier New',
+    monospace;
+
+  text-align: left;
+
+}
+
+
+.data-title {
+
+  margin-bottom: .9rem;
+
+  font-size: 10px;
+
+  letter-spacing: .25em;
+
+  color:
+    rgba(255,255,255,.38);
+
+}
+
+
+.data-dominant {
+
+  display: flex;
+
+  align-items: center;
+
+  gap: 14px;
+
+  margin-bottom: 1rem;
+
+  padding-bottom: 1rem;
+
+  border-bottom:
+    1px solid
+    rgba(255,255,255,.1);
+
+}
+
+
+.data-swatch {
+
+  width: 16px;
+  height: 16px;
+
+  flex-shrink: 0;
+
+  border-radius: 3px;
+
+  border:
+    1px solid
+    rgba(255,255,255,.25);
+
+}
+
+
+.data-swatch.big {
+
+  width: 40px;
+  height: 40px;
+
+}
+
+
+.data-dominant-name {
+
+  font-size: 15px;
+
+  letter-spacing: .08em;
+
+  text-transform: uppercase;
+
+}
+
+
+.data-dominant-sub {
+
+  margin-top: 4px;
+
+  font-size: 10px;
+
+  color:
+    rgba(255,255,255,.45);
+
+}
+
+
+.data-row {
+
+  display: flex;
+
+  align-items: center;
+
+  gap: 10px;
+
+  padding: 3px 0;
+
+  font-size: 11px;
+
+  color:
+    rgba(255,255,255,.7);
+
+}
+
+
+.data-pct {
+
+  width: 36px;
+
+}
+
+
+.data-name {
+
+  flex: 1;
+
+  text-transform: uppercase;
+
+}
+
+
+.data-hex {
+
+  color:
+    rgba(255,255,255,.35);
+
+}
+
+
+/* =========================================================
+   WEBCAM PREVIEW
+   ========================================================= */
+
 #preview {
-  position: fixed;
-  bottom: 100px;
-  right: 20px;
-  width: auto;
-  height: auto;
-  max-width: 160px;
-  max-height: 120px;
-  border: 1px solid rgba(255, 115, 0, 0.5);
-  border-radius: 4px;
-  opacity: 0.6;
-  cursor: crosshair;
-  image-rendering: pixelated;
-  z-index: 15;
-  transition: border-color 0.3s, opacity 0.3s;
-}
-#preview.manual { border-color: rgba(255,255,255,0.9); opacity: 0.85; }
 
-/* ── SLIDER RISOLUZIONE ─────────────────────────────────────────── */
-/* controlla quanti pixel vengono campionati per l'analisi colore (più a destra = più preciso ma più lento) */
-#resolutionSlider {
   position: fixed;
+
+  right: 20px;
+  bottom: 95px;
+
+  width: 280px;
+  height: auto;
+
+  max-width: 280px;
+  max-height: 210px;
+
+  z-index: 20;
+
+  border:
+    1px solid
+    rgba(255,115,0,.55);
+
+  border-radius: 4px;
+
+  opacity: .78;
+
+  image-rendering: pixelated;
+
+  cursor: crosshair;
+
+}
+
+#preview.manual {
+
+  border-color: #fff;
+
+  opacity: .95;
+
+}
+
+
+/* =========================================================
+   SLIDER
+   ========================================================= */
+
+#resolutionSlider {
+
+  position: fixed;
+
   top: 50%;
   right: 20px;
-  transform: translateY(-50%) rotate(270deg);
+
   width: 120px;
   height: 3px;
-  -webkit-appearance: none;
+
+  z-index: 30;
+
+  transform:
+    translateY(-50%)
+    rotate(270deg);
+
   appearance: none;
-  background: rgba(255,255,255,0.15);
-  border-radius: 8px;
-  cursor: pointer;
-  z-index: 999;
-  outline: none;
+
+  background:
+    rgba(255,255,255,.2);
+
 }
-#resolutionSlider::-webkit-slider-runnable-track {
-  height: 100%;
-  border-radius: 8px;
-  background: var(--track-color, rgba(255,255,255,0.2));
-}
-#resolutionSlider::-moz-range-track {
-  height: 100%;
-  border-radius: 8px;
-  background: var(--track-color, rgba(255,255,255,0.2));
-}
+
+
 #resolutionSlider::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  width: 12px; height: 12px;
+
+  appearance: none;
+
+  width: 13px;
+  height: 13px;
+
   border-radius: 50%;
-  background: rgba(255,255,255,0.7);
-  cursor: pointer;
-  margin-top: -4px;
-}
-#resolutionSlider::-moz-range-thumb {
-  width: 12px; height: 12px;
-  border-radius: 50%;
-  background: rgba(255,255,255,0.7);
-  border: none;
-  cursor: pointer;
+
+  background: #ddd;
+
 }
 
-/* ── BOTTONI ─────────────────────────────────────────────────────── */
-/* bottom qui sotto usa env(safe-area-inset-bottom): su telefoni con barra
-   di navigazione gestuale (iPhone senza tasto Home, molti Android) evita
-   che i bottoni finiscano nascosti sotto quella barra */
-#camBtn, #switchCamBtn {
-  position: fixed;
-  bottom: calc(20px + env(safe-area-inset-bottom, 0px));
-  z-index: 999;
-  background: transparent;
-  border: 1px solid rgba(255,255,255,0.2);
-  color: rgba(255,255,255,0.5);
-  font-family: 'Courier New', monospace;
-  font-size: 9px;
-  letter-spacing: 0.18em;
-  padding: 7px 14px;
-  cursor: pointer;
-  transition: all 0.25s;
-  white-space: nowrap;
-}
-#camBtn:hover, #switchCamBtn:hover {
-  border-color: rgba(255,255,255,0.6);
-  color: #fff;
-}
-#camBtn       { right: 20px; }
-#switchCamBtn { right: 130px; }
 
-/* GIUDICA: l'azione principale dell'installazione — deve essere
-   impossibile da non notare, quindi grande, centrata e sempre uguale
-   (non più un piccolo link agli angoli come cam/switch qui sopra) */
+/* =========================================================
+   CONTROLLI
+   ========================================================= */
+
+#camBtn,
+#switchCamBtn,
 #judgeBtn {
+
   position: fixed;
-  bottom: calc(28px + env(safe-area-inset-bottom, 0px));
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 999;
-  background: rgba(255,255,255,0.08);
-  border: 1px solid rgba(255,255,255,0.45);
-  color: #fff;
-  font-family: 'Courier New', monospace;
-  font-size: 14px;
-  letter-spacing: 0.22em;
-  padding: 14px 32px;
-  border-radius: 4px;
+
+  z-index: 100;
+
+  background:
+    rgba(0,0,0,.55);
+
+  border:
+    1px solid
+    rgba(255,255,255,.28);
+
+  color:
+    rgba(255,255,255,.72);
+
+  font-family:
+    'Courier New',
+    monospace;
+
+  letter-spacing: .16em;
+
   cursor: pointer;
-  transition: all 0.25s;
-  white-space: nowrap;
-}
-#judgeBtn:hover:not(:disabled) { background: rgba(255,255,255,0.16); border-color: #fff; }
-#judgeBtn:disabled { opacity: 0.6; cursor: default; }
 
-/* ── GIUDIZIO AI (OLLAMA) — grande, al centro dello schermo ───────── */
-/* mostrato/animato da showJudgment() in script.js */
-#aiJudgment {
-  position: fixed;
-  top: 64%; /* nella metà inferiore dello schermo, sotto al cerchio pulsante (#pulseCore, più sopra); la "traccia" in alto dopo non è toccata da questo valore */
+}
+
+
+#camBtn,
+#switchCamBtn {
+
+  bottom:
+    calc(
+      20px +
+      env(safe-area-inset-bottom,0px)
+    );
+
+  padding:
+    7px 14px;
+
+  font-size: 9px;
+
+}
+
+
+#camBtn {
+  right: 20px;
+}
+
+#switchCamBtn {
+  right: 130px;
+}
+
+
+#judgeBtn {
+
   left: 50%;
-  transform: translate(-50%, -50%);
-  font-family: 'Cormorant Garamond', serif;
-  /* la dimensione del testo si restringe da sola per i giudizi più lunghi
-     (calcolato in script.js, showJudgment(), tramite la variabile CSS
-     --judgment-scale impostata sull'elemento stesso). Qui sotto ci sono
-     solo i limiti: dimensione minima, dimensione legata alla larghezza
-     schermo, dimensione massima — esattamente come prima, ma moltiplicati
-     per quel fattore quando il testo è lungo. */
-  font-size: clamp(calc(1.3rem * var(--judgment-scale, 1)), calc(4.2vw * var(--judgment-scale, 1)), calc(3.6rem * var(--judgment-scale, 1)));
-  font-weight: 300;
-  font-style: italic;
-  text-align: center;
-  max-width: 75vw;
-  line-height: 1.5;
-  letter-spacing: 0.02em;
-  z-index: 25;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.5s, top 1.4s ease;
-  padding: 2.5rem 3rem;
-  background: rgba(0,0,0,0.78);
-  border-top: 1px solid rgba(255,255,255,0.1);
-  border-bottom: 1px solid rgba(255,255,255,0.1);
-  /* rete di sicurezza: anche nel caso (raro, con la riduzione automatica
-     qui sopra) di un giudizio eccezionalmente lungo, il riquadro non
-     supera mai il 60% dell'altezza dello schermo — l'eventuale testo in
-     eccesso sfuma dolcemente invece di uscire bruscamente dallo schermo */
-  max-height: 60vh;
-  overflow: hidden;
-  -webkit-mask-image: linear-gradient(to bottom, black 82%, transparent 100%);
-  mask-image: linear-gradient(to bottom, black 82%, transparent 100%);
-}
+  bottom:
+    calc(
+      28px +
+      env(safe-area-inset-bottom,0px)
+    );
 
-/* ── TRACCIA IN ALTO ─────────────────────────────────────────────── */
-/* testo residuo che resta visibile per un po' dopo ogni giudizio AI */
-#aiTrace {
-  position: fixed;
-  top: 10vh;
-  left: 50%;
-  transform: translateX(-50%);
-  font-family: 'Cormorant Garamond', serif;
-  font-size: clamp(0.9rem, 1.8vw, 1.4rem);
-  font-weight: 300;
-  font-style: italic;
-  text-align: center;
-  max-width: 70vw;
-  line-height: 1.9;
-  letter-spacing: 0.04em;
-  z-index: 22;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 1s;
-  padding: 0.8rem 2rem;
-  border-left: 2px solid rgba(255,255,255,0.15);
-}
+  transform:
+    translateX(-50%);
 
-/* ── STRISCIA MEMORIA ────────────────────────────────────────────── */
-/* fila di segmenti colorati in fondo allo schermo: uno per ogni colore recente in dominantHistory (script.js) */
-#memoryStrip {
-  position: fixed;
-  bottom: 0; left: 0;
-  width: 100%; height: 3px;
-  z-index: 15;
+  min-width: 170px;
+  height: 50px;
+
+  padding:
+    0 28px;
+
   display: flex;
-  gap: 1px;
-  pointer-events: none;
+
+  align-items: center;
+  justify-content: center;
+
+  border-color:
+    rgba(255,255,255,.5);
+
+  border-radius: 4px;
+
+  font-size: 14px;
+
+  color: #fff;
+
 }
+
+
+#judgeBtn:hover {
+
+  background:
+    rgba(255,255,255,.12);
+
+}
+
+
+/* =========================================================
+   GIUDIZIO AI
+   ========================================================= */
+
+#aiJudgment {
+
+  position: fixed;
+
+  left: 50%;
+  top: 64%;
+
+  transform:
+    translate(-50%,-50%);
+
+  z-index: 40;
+
+  opacity: 0;
+
+  pointer-events: none;
+
+  max-width: 75vw;
+  max-height: 55vh;
+
+  padding:
+    2rem 2.5rem;
+
+  overflow: hidden;
+
+  background:
+    rgba(0,0,0,.78);
+
+  font-family:
+    'Cormorant Garamond',
+    serif;
+
+  font-size:
+    clamp(
+      calc(
+        1.3rem *
+        var(--judgment-scale,1)
+      ),
+      calc(
+        4vw *
+        var(--judgment-scale,1)
+      ),
+      calc(
+        3.4rem *
+        var(--judgment-scale,1)
+      )
+    );
+
+  font-weight: 300;
+
+  font-style: italic;
+
+  line-height: 1.45;
+
+  text-align: center;
+
+  transition:
+    opacity .5s,
+    top 1.2s,
+    color 2s;
+
+}
+
+
+#aiTrace {
+
+  position: fixed;
+
+  top: 9vh;
+  left: 50%;
+
+  transform:
+    translateX(-50%);
+
+  z-index: 25;
+
+  opacity: 0;
+
+  max-width: 70vw;
+
+  padding: .8rem 2rem;
+
+  font-family:
+    'Cormorant Garamond',
+    serif;
+
+  font-style: italic;
+
+  text-align: center;
+
+  color:
+    rgba(255,255,255,.5);
+
+  pointer-events: none;
+
+}
+
+
+/* =========================================================
+   DOMANDE
+   ========================================================= */
+
+#humanQuestion,
+#recognizeQuestion {
+
+  position: fixed;
+
+  left: 50%;
+  top: 50%;
+
+  transform:
+    translate(-50%,-50%);
+
+  z-index: 45;
+
+  opacity: 0;
+
+  pointer-events: none;
+
+  width: min(700px,90vw);
+
+  text-align: center;
+
+}
+
+
+.question-label {
+
+  margin-bottom: 1.2rem;
+
+  font-family:
+    'Cormorant Garamond',
+    serif;
+
+  font-size:
+    clamp(
+      1.1rem,
+      2.6vw,
+      1.8rem
+    );
+
+  font-style: italic;
+
+}
+
+
+#moodChips,
+.recognize-btns {
+
+  display: flex;
+
+  justify-content: center;
+
+  flex-wrap: wrap;
+
+  gap: 8px;
+
+}
+
+
+.mood-chip,
+.recognize-btns button {
+
+  padding:
+    8px 14px;
+
+  background:
+    rgba(8,8,10,.95);
+
+  border:
+    1px solid
+    rgba(255,255,255,.3);
+
+  color:
+    rgba(255,255,255,.8);
+
+  font-family:
+    'Courier New',
+    monospace;
+
+  font-size: 10px;
+
+  cursor: pointer;
+
+}
+
+
+.mood-chip {
+
+  border-radius: 20px;
+
+}
+
+
+.ghost-btn {
+
+  margin-top: 12px;
+
+  background: transparent;
+
+  border: 0;
+
+  color:
+    rgba(255,255,255,.45);
+
+  font-family:
+    'Courier New',
+    monospace;
+
+  font-size: 9px;
+
+  text-decoration: underline;
+
+  cursor: pointer;
+
+}
+
+
+/* =========================================================
+   RITRATTO
+   ========================================================= */
+
+#portraitPanel {
+
+  position: fixed;
+
+  left: 50%;
+  top: 50%;
+
+  transform:
+    translate(-50%,-50%);
+
+  z-index: 45;
+
+  opacity: 0;
+
+  pointer-events: none;
+
+  text-align: center;
+
+}
+
+
+#portraitCanvas {
+
+  display: block;
+
+  width:
+    min(46vh,46vw);
+
+  height:
+    min(46vh,46vw);
+
+  margin:
+    0 auto .8rem;
+
+  border:
+    1px solid
+    rgba(255,255,255,.15);
+
+  border-radius: 8px;
+
+}
+
+
+/* =========================================================
+   MEMORIA
+   ========================================================= */
+
+#memoryStrip {
+
+  position: fixed;
+
+  left: 0;
+  bottom: 0;
+
+  width: 100%;
+  height: 3px;
+
+  z-index: 20;
+
+  display: flex;
+
+  gap: 1px;
+
+}
+
+
 .mem-seg {
   flex: 1;
-  transition: background 1.5s ease;
 }
 
-/* ── HUD ─────────────────────────────────────────────────────────── */
-#hud {
+
+/* =========================================================
+   ERRORI
+   ========================================================= */
+
+#debugMsg {
+
   position: fixed;
-  top: 20px; left: 20px;
-  z-index: 15;
-  font-family: 'Courier New', monospace;
+
+  left: 50%;
+  bottom: 60px;
+
+  transform:
+    translateX(-50%);
+
+  z-index: 200;
+
+  opacity: 0;
+
+  max-width: 80vw;
+
+  font-family:
+    monospace;
+
   font-size: 9px;
-  letter-spacing: 0.18em;
-  color: rgba(255,255,255,0.2);
-  line-height: 2;
-  pointer-events: none;
-}
-#hudState { color: rgba(255,255,255,0.4); }
 
-/* ── QR TELEFONO ─────────────────────────────────────────────────── */
-/* stessa colonna di #hud (left:20px): scansionandolo si apre la stessa
-   app su GitHub Pages, installabile come PWA anche sul telefono */
-#qrBox {
-  position: fixed;
-  bottom: calc(20px + env(safe-area-inset-bottom, 0px));
-  left: 20px;
-  z-index: 999;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-  text-decoration: none;
-  opacity: 0.85;
-  transition: opacity 0.25s;
+  text-align: center;
+
+  color:
+    rgb(255,110,110);
+
 }
-#qrBox:hover { opacity: 1; }
+
+
+/* =========================================================
+   QR DESKTOP
+   ========================================================= */
+
+#qrBox {
+
+  position: fixed;
+
+  left: 20px;
+  bottom: 20px;
+
+  z-index: 100;
+
+  display: flex;
+
+  flex-direction: column;
+
+  align-items: center;
+
+  gap: 4px;
+
+  text-decoration: none;
+
+  cursor: pointer;
+
+}
+
+
 #qrCode {
-  display: block;
+
   width: 72px;
   height: 72px;
-  background: #fff; /* sfondo bianco fisso: il tema scuro non deve mai ridurre il contrasto dei moduli QR */
+
   padding: 5px;
+
+  background: white;
+
   border-radius: 4px;
-  border: 1px solid rgba(255,255,255,0.25);
+
 }
+
+
 #qrLabel {
-  font-family: 'Courier New', monospace;
+
+  font-family:
+    'Courier New',
+    monospace;
+
   font-size: 8px;
-  letter-spacing: 0.1em;
-  color: rgba(255,255,255,0.45);
-  text-align: center;
+
+  color:
+    rgba(255,255,255,.5);
+
 }
 
-/* ── MESSAGGIO DI DEBUG ──────────────────────────────────────────── */
-/* piccola scritta rossa in basso, usata per errori (webcam, Ollama). Vedi showDebug() in script.js */
-#debugMsg {
+
+/* overlay */
+
+#qrModalBackdrop {
+
   position: fixed;
-  bottom: calc(55px + env(safe-area-inset-bottom, 0px)); left: 50%;
-  transform: translateX(-50%);
-  font-family: monospace;
-  font-size: 9px;
-  color: rgba(255,100,100,0.7);
-  letter-spacing: 0.05em;
-  z-index: 100;
+
+  inset: 0;
+
+  z-index: 500;
+
   opacity: 0;
-  transition: opacity 0.5s;
-  max-width: 80vw;
-  text-align: center;
+
   pointer-events: none;
+
+  background:
+    rgba(0,0,0,.74);
+
+  backdrop-filter:
+    blur(14px);
+
+  transition:
+    opacity .25s;
+
 }
 
-/* ── DATI OGGETTIVI (script.js, sezione 12) ───────────────────────── */
-/* pannello "clinico" SEMPRE VISIBILE (non più una fase che appare e
-   sparisce): mostra i valori misurati in tempo reale, a sinistra, sotto
-   al riquadro colore/quadratini di selezione. Font monospace come l'HUD,
-   in contrasto netto con il serif corsivo del giudizio AI (#aiJudgment)
-   che appare al centro — è proprio questo contrasto visivo a segnare la
-   differenza tra dato e sovrainterpretazione, il cuore della ricerca.
-   Resta invisibile (opacity 0) solo finché non arriva il primo
-   aggiornamento da updateDataPanel() — da lì in poi non sparisce più. */
-#dataPanel {
+
+#qrModalBackdrop.visible {
+
+  opacity: 1;
+
+  pointer-events: auto;
+
+}
+
+
+#qrModal {
+
   position: fixed;
-  top: calc(10% + 170px);
-  /* stessa x di #hud/#colorOverlay (20px), spostata a sinistra della
-     propria imbottitura orizzontale (padding, 1.3rem): così il quadratino/
-     il testo DENTRO al pannello iniziano esattamente alla stessa x degli
-     altri elementi della colonna, invece di restare rientrati per via del
-     solo padding della card */
-  left: calc(20px - 1.3rem);
-  z-index: 20;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.8s ease;
-  background: rgba(0,0,0,0.72);
-  border: 1px solid rgba(255,255,255,0.12);
-  padding: 1.1rem 1.3rem;
-  width: 280px;
-  max-width: 40vw;
-  font-family: 'Courier New', monospace;
-  text-align: left;
-}
-.data-title {
-  font-size: 10px;
-  letter-spacing: 0.25em;
-  color: rgba(255,255,255,0.35);
-  margin-bottom: 0.9rem;
-}
-.data-dominant {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  margin-bottom: 1rem;
-  padding-bottom: 1rem;
-  border-bottom: 1px solid rgba(255,255,255,0.1);
-}
-.data-swatch {
-  width: 16px; height: 16px;
-  border-radius: 3px;
-  border: 1px solid rgba(255,255,255,0.25);
-  flex-shrink: 0;
-}
-.data-swatch.big { width: 40px; height: 40px; }
-.data-dominant-name {
-  font-size: 15px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: #fff;
-}
-.data-dominant-sub {
-  font-size: 10px;
-  color: rgba(255,255,255,0.45);
-  margin-top: 4px;
-}
-.data-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  font-size: 11px;
-  color: rgba(255,255,255,0.7);
-  padding: 3px 0;
-}
-.data-pct  { width: 36px; color: rgba(255,255,255,0.9); }
-.data-name { flex: 1; text-transform: uppercase; letter-spacing: 0.04em; }
-.data-hex  { color: rgba(255,255,255,0.35); }
 
-/* ── DOMANDA UMANA (script.js, sezione 13) — pre-giudizio ─────────── */
-#humanQuestion {
-  position: fixed;
-  top: 50%; left: 50%;
-  transform: translate(-50%, -50%);
-  z-index: 24;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.6s ease;
-  text-align: center;
-  max-width: 90vw;
-}
-.question-label {
-  font-family: 'Cormorant Garamond', serif;
-  font-style: italic;
-  font-weight: 300;
-  font-size: clamp(1.1rem, 2.6vw, 1.7rem);
-  color: rgba(255,255,255,0.9);
-  margin-bottom: 1.4rem;
-}
-#moodChips {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 8px;
-  margin-bottom: 1rem;
-}
-.mood-chip {
-  /* sfondo scuro pieno (non trasparente): se dovesse capitare di finire
-     sopra al pannello dati oggettivi (#dataPanel, sempre visibile),
-     copre il testo sotto invece di "incrociarlo" a schermo */
-  background: rgba(8,8,10,0.92);
-  border: 1px solid rgba(255,255,255,0.25);
-  color: rgba(255,255,255,0.7);
-  font-family: 'Courier New', monospace;
-  font-size: 10px;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  padding: 8px 14px;
-  border-radius: 20px;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-.mood-chip:hover { border-color: #fff; color: #fff; }
+  left: 50%;
+  top: 50%;
 
-/* bottone "testuale", senza bordo — usato per azioni secondarie/facoltative
-   (salta la domanda, scarica il ritratto) */
-.ghost-btn {
-  background: transparent;
-  border: none;
-  color: rgba(255,255,255,0.35);
-  font-family: 'Courier New', monospace;
-  font-size: 9px;
-  letter-spacing: 0.1em;
-  text-decoration: underline;
-  cursor: pointer;
-}
-.ghost-btn:hover { color: rgba(255,255,255,0.7); }
+  transform:
+    translate(-50%,-50%)
+    scale(.92);
 
-/* ── "TI RICONOSCI?" (script.js, sezione 14) ──────────────────────── */
-#recognizeQuestion {
-  position: fixed;
-  top: 50%; left: 50%;
-  transform: translate(-50%, -50%);
-  z-index: 24;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.6s ease;
-  text-align: center;
-  max-width: 90vw;
-}
-.recognize-btns {
-  display: flex;
-  justify-content: center;
-  gap: 12px;
-}
-.recognize-btns button {
-  /* sfondo scuro pieno, stesso motivo di .mood-chip qui sopra */
-  background: rgba(8,8,10,0.92);
-  border: 1px solid rgba(255,255,255,0.3);
-  color: rgba(255,255,255,0.8);
-  font-family: 'Courier New', monospace;
-  font-size: 11px;
-  letter-spacing: 0.15em;
-  padding: 10px 20px;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-.recognize-btns button:hover { border-color: #fff; color: #fff; background: rgba(28,28,30,0.95); }
+  z-index: 501;
 
-/* ── RITRATTO CROMATICO (script.js, sezione 15) ───────────────────── */
-#portraitPanel {
-  position: fixed;
-  top: 50%; left: 50%;
-  transform: translate(-50%, -50%);
-  z-index: 24;
   opacity: 0;
+
   pointer-events: none;
-  transition: opacity 0.8s ease;
-  text-align: center;
-}
-#portraitCanvas {
-  width: min(46vh, 46vw);
-  height: min(46vh, 46vw);
+
+  width:
+    min(520px,85vw);
+
+  padding: 2rem;
+
+  background:
+    rgba(5,5,7,.97);
+
+  border:
+    1px solid
+    rgba(255,255,255,.18);
+
   border-radius: 8px;
-  border: 1px solid rgba(255,255,255,0.15);
+
+  text-align: center;
+
+  transition:
+    opacity .25s,
+    transform .25s;
+
+}
+
+
+#qrModal.visible {
+
+  opacity: 1;
+
+  pointer-events: auto;
+
+  transform:
+    translate(-50%,-50%)
+    scale(1);
+
+}
+
+
+#qrModalClose {
+
   display: block;
-  margin: 0 auto 0.9rem auto;
+
+  margin:
+    0 0 1rem auto;
+
 }
 
-/* ── RICONOSCIMENTO PAGINA (script.js, sezione 17) ─────────────────── */
-/* popup che appare quando la webcam riconosce la composizione cromatica
-   stampata su una pagina della tesi. z-index più alto di TUTTI gli altri
-   overlay (giudizio AI, domande, ritratto): quando compare, deve coprirli
-   sempre, mai il contrario — coerente con "interrompe qualunque cosa il
-   sistema stia facendo". Niente transizione automatica a tempo: resta
-   visibile finché non viene chiuso a mano (script.js gestisce la classe
-   .visible), diversamente dalle fasi con timeout della sequenza GIUDICA
-   (domanda/riconoscimento), pensate invece per un pubblico che può
-   allontanarsi senza rispondere. */
 
-/* sfondo a piena pagina, appena sotto il popup (z-index 39 < 40): senza
-   questo, HUD/pannello dati/QR/GIUDICA/anteprima webcam restavano visibili
-   E CLICCABILI dietro al popup, creando un accavallamento confuso —
-   specialmente su telefono, dove lo spazio è poco in entrambi gli
-   orientamenti. Scurisce tutto invece di nascondere singolarmente ogni
-   elemento: più semplice, e non richiede di "ricordarsi" di far
-   riapparire ciascun elemento alla chiusura. */
+#qrModalImage {
+
+  display: block;
+
+  width:
+    min(360px,65vw);
+
+  height: auto;
+
+  margin: auto;
+
+  padding: 10px;
+
+  background: white;
+
+  border-radius: 8px;
+
+}
+
+
+#qrModalText {
+
+  margin-top: 1rem;
+
+  font-family:
+    'Courier New',
+    monospace;
+
+  font-size: 10px;
+
+  color:
+    rgba(255,255,255,.55);
+
+}
+
+
+/* =========================================================
+   RICONOSCIMENTO PAGINE TESI
+   ========================================================= */
+
 #pageReactionBackdrop {
-  position: fixed; inset: 0;
-  z-index: 39;
-  background: rgba(8,7,6,0.94);
+
+  position: fixed;
+
+  inset: 0;
+
+  z-index: 300;
+
   opacity: 0;
+
   pointer-events: none;
-  transition: opacity 0.5s ease;
+
+  background:
+    rgba(5,5,5,.94);
+
 }
-#pageReactionBackdrop.visible { opacity: 1; pointer-events: auto; }
+
+
+#pageReactionBackdrop.visible {
+
+  opacity: 1;
+
+  pointer-events: auto;
+
+}
+
 
 #pageReaction {
+
   position: fixed;
-  top: 50%; left: 50%;
-  transform: translate(-50%, -50%);
-  z-index: 40;
+
+  left: 50%;
+  top: 50%;
+
+  transform:
+    translate(-50%,-50%);
+
+  z-index: 301;
+
   opacity: 0;
+
   pointer-events: none;
-  transition: opacity 0.5s ease;
-  text-align: center;
-  width: min(560px, 80vw);
-  max-height: 85vh; /* in orizzontale su telefono l'altezza dello schermo è poca: meglio scorrere che tagliare il testo */
+
+  width:
+    min(560px,85vw);
+
+  max-height: 85dvh;
+
   overflow-y: auto;
-  padding: 2.6rem 2.8rem 2.2rem;
-  background: rgba(0,0,0,0.9);
-  border: 1px solid rgba(255,255,255,0.2);
-  border-radius: 4px;
-  box-sizing: border-box;
-  display: flex;
-  flex-direction: column;
+
+  padding:
+    2rem 2.2rem;
+
+  background:
+    rgba(0,0,0,.95);
+
+  border:
+    1px solid
+    rgba(255,255,255,.2);
+
+  text-align: center;
+
 }
-#pageReaction.visible { opacity: 1; pointer-events: auto; }
+
+
+#pageReaction.visible {
+
+  opacity: 1;
+
+  pointer-events: auto;
+
+}
+
+
 #pageReactionClose {
-  align-self: flex-end;
-  position: sticky;
-  top: 0;
-  margin: -0.8rem -0.8rem 0.4rem 0;
+
+  display: block;
+
+  margin:
+    0 0 1rem auto;
+
 }
+
+
 #pageReactionText {
-  font-family: 'Cormorant Garamond', serif;
+
+  font-family:
+    'Cormorant Garamond',
+    serif;
+
+  font-size:
+    clamp(
+      1.1rem,
+      2.8vw,
+      1.9rem
+    );
+
   font-style: italic;
-  font-weight: 300;
-  font-size: clamp(1.1rem, 2.8vw, 1.9rem);
+
   line-height: 1.6;
-  color: #fff;
-  margin-top: 0.6rem;
+
 }
 
-/* ── SCANLINES ───────────────────────────────────────────────────── */
-/* leggerissime righe orizzontali sopra tutto, effetto "schermo vecchio" */
-body::before {
-  content: '';
-  position: fixed; inset: 0;
-  background: repeating-linear-gradient(0deg, transparent, transparent 3px, rgba(0,0,0,0.04) 3px, rgba(0,0,0,0.04) 4px);
-  pointer-events: none;
-  z-index: 50;
-}
 
-/* ── SPINNER ─────────────────────────────────────────────────────── */
-/* rotellina mostrata sul bottone GIUDICA mentre Ollama sta rispondendo */
-.spin {
-  display: inline-block;
-  width: 8px; height: 8px;
-  border: 1px solid rgba(255,255,255,0.3);
-  border-top-color: #fff;
-  border-radius: 50%;
-  animation: spinning 0.7s linear infinite;
-  vertical-align: middle;
-  margin-right: 6px;
-}
-@keyframes spinning { to { transform: rotate(360deg); } }
+/* =========================================================
+   TABLET + TELEFONO
+   ========================================================= */
 
-/* ── SCHERMI PICCOLI (TELEFONO) ──────────────────────────────────── */
-/* Il layout sopra è pensato per schermi grandi (PC). Qui sotto solo le
-   differenze per schermi stretti: elementi rimpiccioliti/riposizionati
-   per non sovrapporsi ed entrare comodamente in una larghezza da telefono.
-   Soglia 600px = copre qualunque telefono in verticale. */
-@media (max-width: 600px) {
-  #pulseCore { width: 120px; height: 120px; }
+@media (max-width:1100px) {
 
-  #colorOverlay { width: 64px; height: 64px; }
-  #paletteSwatches { top: calc(10% + 76px); }
-  .swatch { width: 18px; height: 18px; }
+  /* QR inutile sul dispositivo mobile */
 
-  /* l'anteprima si sposta in alto a destra: libera tutta la fascia in
-     basso per il solo bottone GIUDICA, ben visibile e facile da toccare.
-     max-width/max-height (non width/height fissi) come nella regola base
-     sopra — sul telefono il video è spesso molto verticale, un'altezza
-     fissa lo farebbe uscire dal riquadro previsto */
-  #preview {
-    top: calc(20px + env(safe-area-inset-top, 0px));
-    right: 20px;
-    bottom: auto;
-    width: auto;
-    height: auto;
-    max-width: 100px;
-    max-height: 90px;
-  }
-
-  /* GIUDICA: già centrato di default (vedi regola base sopra) — qui solo
-     una misura adatta a un telefono, comunque ben più grande di prima */
-  #judgeBtn {
-    font-size: 12px;
-    padding: 12px 24px;
-  }
-
-  /* pannello dati oggettivi: più stretto e più in alto, per non scontrarsi
-     con i quadratini di selezione colore (più in alto su schermi piccoli) */
-  #dataPanel {
-    top: calc(10% + 100px);
-    left: calc(20px - 1rem); /* vedi nota sull'allineamento nella regola base di #dataPanel */
-    width: 58vw;
-    max-width: 240px;
-    min-width: 220px;
-    padding: 0.9rem 1rem;
-  }
-  .data-dominant-name { font-size: 13px; }
-  .data-row { font-size: 10px; gap: 6px; }
-
-  /* CAM e cambia-fotocamera: piccola coppia in alto a destra, sotto l'anteprima */
-  #camBtn, #switchCamBtn {
-    bottom: auto;
-    right: 20px;
-    font-size: 8px;
-    padding: 6px 9px;
-  }
-  #camBtn       { top: calc(100px + env(safe-area-inset-top, 0px)); }
-  #switchCamBtn { top: calc(132px + env(safe-area-inset-top, 0px)); }
-
-  #aiJudgment { padding: 1.6rem 1.4rem; max-width: 88vw; }
-  #aiTrace    { max-width: 88vw; }
-
-  #resolutionSlider { width: 90px; }
-
-  /* QR: un po' più piccolo per non occupare troppo spazio su schermi stretti */
-  #qrCode { width: 56px; height: 56px; }
-  #qrLabel { font-size: 7px; }
-
-  /* sequenza interattiva (domanda/riconoscimento/ritratto): un po' più
-     compatta per entrare comodamente in uno schermo da telefono */
-  .question-label { margin-bottom: 1rem; }
-  .mood-chip { font-size: 9px; padding: 7px 11px; }
-  .recognize-btns { gap: 8px; }
-  .recognize-btns button { font-size: 10px; padding: 8px 14px; }
-  #portraitCanvas { width: 55vw; height: 55vw; }
-
-  #pageReaction { padding: 2rem 1.6rem 1.7rem; width: min(560px, 90vw); }
-  #pageReactionText { font-size: 1.05rem; }
-}
-
-/* ══════════════════════════════════════════════════════════════════
-   CHROMA — RESPONSIVE V3
-   Base: CSS originale funzionante.
-   Correzioni mirate:
-   - preview webcam più grande su PC
-   - tablet/telefono senza QR
-   - dati in basso a sinistra + palette/colore sopra
-   - gruppo webcam ordinato in alto a destra
-   - GIUDICA mantiene sempre la stessa dimensione, anche durante lo spinner
-   - pulseCore torna realmente al centro
-   - leggero alleggerimento grafico su mobile
-   ══════════════════════════════════════════════════════════════════ */
-
-html, body {
-  width: 100%;
-  min-height: 100%;
-}
-
-body {
-  height: 100dvh;
-  min-height: 100svh;
-}
-
-/* ── DESKTOP ────────────────────────────────────────────────────── */
-@media (min-width: 1101px) {
-  #preview {
-    width: clamp(250px, 20vw, 330px);
-    height: auto;
-    max-width: 330px;
-    max-height: 248px;
-    right: 24px;
-    bottom: 88px;
-    opacity: 0.8;
-  }
-}
-
-/* ── TABLET + TELEFONO ──────────────────────────────────────────── */
-@media (max-width: 1100px) {
-
-  #qrBox {
+  #qrBox,
+  #qrModal,
+  #qrModalBackdrop {
     display: none !important;
   }
 
-  /* un po' meno pesante per la GPU mobile */
-  #ambientCanvas {
-    filter: blur(48px) saturate(1.22);
-    opacity: 0.5;
-  }
+
+  /* alleggerimento grafico */
 
   #grain {
     display: none;
   }
 
-  /* DATI RILEVATI: sempre in basso a sinistra */
-  #dataPanel {
-    top: auto;
-    left: 12px;
-    bottom: calc(14px + env(safe-area-inset-bottom, 0px));
-    width: min(58vw, 270px);
-    max-width: none;
-    min-width: 0;
-    padding: 0.7rem 0.8rem;
+  #ambientCanvas {
+
+    filter:
+      blur(45px)
+      saturate(1.2);
+
+    opacity: .48;
+
   }
+
+
+  /* cuore realmente al centro */
+
+  #pulseCore {
+
+    left: 50%;
+
+    top: 39%;
+
+    width: 110px;
+    height: 110px;
+
+  }
+
+
+  /* dati in basso a sinistra */
+
+  #dataPanel {
+
+    top: auto;
+
+    left: 10px;
+
+    bottom:
+      calc(
+        12px +
+        env(safe-area-inset-bottom,0px)
+      );
+
+    width:
+      min(57vw,245px);
+
+    padding:
+      .65rem .75rem;
+
+  }
+
 
   .data-title {
     font-size: 8px;
-    margin-bottom: 0.55rem;
-  }
-
-  .data-dominant {
-    gap: 9px;
-    margin-bottom: 0.55rem;
-    padding-bottom: 0.55rem;
-  }
-
-  .data-swatch.big {
-    width: 34px;
-    height: 34px;
   }
 
   .data-dominant-name {
     font-size: 12px;
   }
 
-  .data-dominant-sub {
-    font-size: 8px;
-    line-height: 1.3;
-  }
-
+  .data-dominant-sub,
   .data-row {
-    gap: 5px;
     font-size: 8px;
-    padding: 2px 0;
-  }
-
-  .data-pct {
-    width: 27px;
   }
 
   .data-hex {
     display: none;
   }
 
-  /* colore principale + palette subito sopra al pannello dati */
-  #colorOverlay {
-    top: auto;
-    left: 12px;
-    bottom: calc(216px + env(safe-area-inset-bottom, 0px));
-    width: 58px;
-    height: 58px;
-  }
 
-  #paletteSwatches {
-    top: auto;
-    left: 80px;
-    bottom: calc(233px + env(safe-area-inset-bottom, 0px));
-    gap: 5px;
-  }
-
-  .swatch {
-    width: 18px;
-    height: 18px;
-  }
-
-  /* gruppo CAMERA: stessa larghezza, tutto allineato a destra */
-  #preview {
-    top: calc(14px + env(safe-area-inset-top, 0px));
-    right: 14px;
-    bottom: auto;
-    width: 140px;
-    height: auto;
-    max-width: 140px;
-    max-height: 105px;
-    opacity: 0.8;
-  }
-
-  #camBtn,
-  #switchCamBtn {
-    left: auto;
-    right: 14px;
-    bottom: auto;
-    width: 140px;
-    min-width: 140px;
-    text-align: center;
-    font-size: 7px;
-    padding: 6px 7px;
-  }
-
-  #camBtn {
-    top: calc(126px + env(safe-area-inset-top, 0px));
-  }
-
-  #switchCamBtn {
-    top: calc(160px + env(safe-area-inset-top, 0px));
-  }
-
-  /* slider separato dal gruppo camera */
-  #resolutionSlider {
-    right: 12px;
-    top: 53%;
-    width: 82px;
-  }
-
-  /* il cuore deve essere DAVVERO al centro */
-  #pulseCore {
-    left: 50%;
-    top: 39%;
-    width: 112px;
-    height: 112px;
-  }
-
-  /* GIUDICA: non collassa quando JS sostituisce il testo con lo spinner */
-  #judgeBtn {
-    left: auto;
-    right: 14px;
-    transform: none;
-    bottom: calc(18px + env(safe-area-inset-bottom, 0px));
-    width: 150px;
-    min-width: 150px;
-    height: 46px;
-    min-height: 46px;
-    padding: 0 14px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 10px;
-  }
-
-  #aiJudgment {
-    max-width: 88vw;
-    padding: 1.25rem 1.1rem;
-  }
-
-  #aiTrace {
-    max-width: 82vw;
-  }
-
-  #portraitCanvas {
-    width: min(62vw, 380px);
-    height: min(62vw, 380px);
-  }
-
-  #pageReaction {
-    width: min(620px, 90vw);
-    max-height: 88dvh;
-  }
-}
-
-/* ── TELEFONO VERTICALE ─────────────────────────────────────────── */
-@media (max-width: 600px) and (orientation: portrait) {
-
-  #hud {
-    top: calc(14px + env(safe-area-inset-top, 0px));
-    left: 14px;
-    font-size: 7px;
-    line-height: 1.7;
-  }
-
-  #dataPanel {
-    left: 10px;
-    bottom: calc(12px + env(safe-area-inset-bottom, 0px));
-    width: 57vw;
-    max-width: 218px;
-    padding: 0.62rem 0.68rem;
-  }
-
-  .data-title {
-    font-size: 7px;
-  }
-
-  .data-swatch.big {
-    width: 30px;
-    height: 30px;
-  }
-
-  .data-dominant-name {
-    font-size: 11px;
-  }
-
-  .data-dominant-sub,
-  .data-row {
-    font-size: 7px;
-  }
-
-  .data-row {
-    gap: 4px;
-  }
-
-  .data-pct {
-    width: 24px;
-  }
+  /* colore principale sopra i dati */
 
   #colorOverlay {
+
+    top: auto;
+
     left: 10px;
-    bottom: calc(198px + env(safe-area-inset-bottom, 0px));
-    width: 54px;
-    height: 54px;
+
+    bottom:
+      calc(
+        205px +
+        env(safe-area-inset-bottom,0px)
+      );
+
+    width: 55px;
+    height: 55px;
+
   }
+
+
+  /* palette sopra i dati */
 
   #paletteSwatches {
-    left: 73px;
-    bottom: calc(214px + env(safe-area-inset-bottom, 0px));
+
+    top: auto;
+
+    left: 74px;
+
+    bottom:
+      calc(
+        222px +
+        env(safe-area-inset-bottom,0px)
+      );
+
     gap: 4px;
+
   }
 
+
   .swatch {
+
     width: 17px;
     height: 17px;
+
   }
 
-  /* CAMERA: più compatta e leggermente più interna dal bordo */
-  #preview {
-    top: calc(16px + env(safe-area-inset-top, 0px));
-    right: 14px;
-    width: 118px;
-    max-width: 118px;
-    max-height: 88px;
-  }
-
-  #camBtn,
-  #switchCamBtn {
-    right: 14px;
-    width: 118px;
-    min-width: 118px;
-  }
-
-  #camBtn {
-    top: calc(111px + env(safe-area-inset-top, 0px));
-  }
-
-  #switchCamBtn {
-    top: calc(143px + env(safe-area-inset-top, 0px));
-  }
 
   #resolutionSlider {
-    right: -1px;
-    top: 49%;
-    width: 76px;
+
+    width: 78px;
+
+    right: -2px;
+
   }
 
-  /* centro vero: niente più left:69% */
-  #pulseCore {
-    left: 50%;
-    top: 40%;
-    width: 102px;
-    height: 102px;
-  }
-
-  /* GIUDICA resta leggibile anche durante il caricamento */
-  #judgeBtn {
-    right: 12px;
-    bottom: calc(16px + env(safe-area-inset-bottom, 0px));
-    width: 132px;
-    min-width: 132px;
-    height: 44px;
-    min-height: 44px;
-    font-size: 9px;
-    padding: 0 12px;
-  }
-
-  #aiJudgment {
-    max-width: 88vw;
-    max-height: 38vh;
-    padding: 1rem 0.9rem;
-    line-height: 1.35;
-    font-size: clamp(
-      calc(1rem * var(--judgment-scale, 1)),
-      calc(5vw * var(--judgment-scale, 1)),
-      calc(1.5rem * var(--judgment-scale, 1))
-    );
-  }
-
-  #humanQuestion,
-  #recognizeQuestion {
-    top: 55%;
-    max-width: 92vw;
-  }
-
-  .question-label {
-    font-size: 1rem;
-    margin-bottom: 0.8rem;
-  }
-
-  #moodChips {
-    gap: 5px;
-  }
-
-  .mood-chip {
-    font-size: 8px;
-    padding: 6px 8px;
-  }
-
-  .recognize-btns button {
-    font-size: 9px;
-    padding: 7px 10px;
-  }
-}
-
-/* ── TELEFONO / TABLET ORIZZONTALE ──────────────────────────────── */
-@media (orientation: landscape) and (max-height: 700px) and (max-width: 1100px) {
-
-  #hud {
-    top: calc(10px + env(safe-area-inset-top, 0px));
-    left: 18px;
-    font-size: 7px;
-    line-height: 1.6;
-  }
-
-  #dataPanel {
-    left: 12px;
-    bottom: calc(10px + env(safe-area-inset-bottom, 0px));
-    width: min(31vw, 260px);
-    padding: 0.55rem 0.7rem;
-  }
-
-  .data-title {
-    margin-bottom: 0.4rem;
-  }
-
-  .data-dominant {
-    margin-bottom: 0.4rem;
-    padding-bottom: 0.4rem;
-  }
-
-  .data-swatch.big {
-    width: 28px;
-    height: 28px;
-  }
-
-  .data-row {
-    font-size: 7px;
-    padding: 1px 0;
-  }
-
-  #colorOverlay {
-    left: 12px;
-    bottom: calc(176px + env(safe-area-inset-bottom, 0px));
-    width: 48px;
-    height: 48px;
-  }
-
-  #paletteSwatches {
-    left: 69px;
-    bottom: calc(190px + env(safe-area-inset-bottom, 0px));
-  }
-
-  .swatch {
-    width: 16px;
-    height: 16px;
-  }
-
-  /* landscape quasi funzionava: tengo la stessa logica ma allineo il gruppo */
-  #preview {
-    top: calc(10px + env(safe-area-inset-top, 0px));
-    right: 14px;
-    width: 154px;
-    max-width: 154px;
-    max-height: 96px;
-  }
-
-  #camBtn,
-  #switchCamBtn {
-    right: 14px;
-    width: 154px;
-    min-width: 154px;
-  }
-
-  #camBtn {
-    top: calc(112px + env(safe-area-inset-top, 0px));
-  }
-
-  #switchCamBtn {
-    top: calc(144px + env(safe-area-inset-top, 0px));
-  }
-
-  #resolutionSlider {
-    right: 180px;
-    top: 53%;
-    width: 76px;
-  }
-
-  /* anche in landscape il cuore torna al centro reale */
-  #pulseCore {
-    left: 50%;
-    top: 40%;
-    width: 125px;
-    height: 125px;
-  }
 
   #judgeBtn {
-    left: 50%;
-    right: auto;
-    transform: translateX(-50%);
-    bottom: calc(12px + env(safe-area-inset-bottom, 0px));
-    width: 150px;
-    min-width: 150px;
+
+    min-width: 135px;
+
     height: 44px;
+
+    font-size: 10px;
+
   }
+
 
   #aiJudgment {
-    left: 50%;
-    max-width: 50vw;
-    max-height: 42vh;
-    padding: 0.8rem 1rem;
-    line-height: 1.28;
-    font-size: clamp(
-      calc(0.9rem * var(--judgment-scale, 1)),
-      calc(2.5vw * var(--judgment-scale, 1)),
-      calc(1.4rem * var(--judgment-scale, 1))
-    );
+
+    max-width: 90vw;
+
+    padding:
+      1rem 1rem;
+
   }
 
-  #aiTrace {
-    left: 50%;
-    max-width: 48vw;
-  }
-
-  #humanQuestion,
-  #recognizeQuestion {
-    left: 50%;
-    top: 55%;
-    max-width: 52vw;
-  }
-
-  .question-label {
-    font-size: 0.95rem;
-    margin-bottom: 0.6rem;
-  }
-
-  .mood-chip {
-    font-size: 7px;
-    padding: 5px 7px;
-  }
-
-  .recognize-btns button {
-    font-size: 8px;
-    padding: 6px 9px;
-  }
-
-  #portraitCanvas {
-    width: min(58vh, 36vw);
-    height: min(58vh, 36vw);
-  }
-
-  #pageReaction {
-    width: min(620px, 78vw);
-    max-height: 86dvh;
-    padding: 1.2rem 1.5rem 1rem;
-  }
 }
 
 
-/* ══════════════════════════════════════════════════════════════════
-   CHROMA — RESPONSIVE V4
-   PATCH CAMERA RESPONSIVA
-   Il riquadro webcam cambia forma con l'orientamento del dispositivo:
-   - portrait  -> verticale
-   - landscape -> orizzontale
-   Mantiene separati preview e controlli.
-   ══════════════════════════════════════════════════════════════════ */
+/* =========================================================
+   TELEFONO VERTICALE
+   ========================================================= */
 
-/* TELEFONO / TABLET IN VERTICALE */
-@media (max-width: 1100px) and (orientation: portrait) {
+@media
+(max-width:700px)
+and
+(orientation:portrait) {
+
+
+  /* preview VERTICALE */
+
   #preview {
-    top: calc(16px + env(safe-area-inset-top, 0px));
+
+    top:
+      calc(
+        16px +
+        env(safe-area-inset-top,0px)
+      );
+
     right: 14px;
+
     bottom: auto;
 
-    /* riquadro VERTICALE */
     width: 94px;
     height: 132px;
+
     max-width: none;
     max-height: none;
-    aspect-ratio: 47 / 66;
-    object-fit: cover;
 
-    opacity: 0.80;
   }
+
 
   #camBtn,
   #switchCamBtn {
+
     right: 14px;
+
     width: 94px;
-    min-width: 94px;
-    padding: 6px 5px;
+
+    padding:
+      6px 4px;
+
+    font-size: 7px;
+
   }
 
-  /* subito sotto al riquadro verticale */
+
   #camBtn {
-    top: calc(156px + env(safe-area-inset-top, 0px));
-  }
 
-  #switchCamBtn {
-    top: calc(190px + env(safe-area-inset-top, 0px));
-  }
-}
+    top:
+      calc(
+        156px +
+        env(safe-area-inset-top,0px)
+      );
 
-/* TELEFONO / TABLET IN ORIZZONTALE */
-@media (max-width: 1100px) and (orientation: landscape) {
-  #preview {
-    top: calc(10px + env(safe-area-inset-top, 0px));
-    right: 14px;
     bottom: auto;
 
-    /* riquadro ORIZZONTALE */
+  }
+
+
+  #switchCamBtn {
+
+    top:
+      calc(
+        190px +
+        env(safe-area-inset-top,0px)
+      );
+
+    bottom: auto;
+
+  }
+
+
+  #judgeBtn {
+
+    left: auto;
+
+    right: 12px;
+
+    transform: none;
+
+    bottom:
+      calc(
+        16px +
+        env(safe-area-inset-bottom,0px)
+      );
+
+  }
+
+
+  #aiJudgment {
+
+    top: 58%;
+
+    max-height: 36dvh;
+
+    line-height: 1.3;
+
+  }
+
+
+  #humanQuestion,
+  #recognizeQuestion {
+
+    top: 54%;
+
+  }
+
+
+  .mood-chip {
+
+    padding:
+      6px 9px;
+
+    font-size: 8px;
+
+  }
+
+}
+
+
+/* =========================================================
+   TELEFONO / TABLET ORIZZONTALE
+   ========================================================= */
+
+@media
+(max-width:1100px)
+and
+(orientation:landscape)
+and
+(max-height:700px) {
+
+
+  /* preview ORIZZONTALE */
+
+  #preview {
+
+    top:
+      calc(
+        10px +
+        env(safe-area-inset-top,0px)
+      );
+
+    right: 14px;
+
+    bottom: auto;
+
     width: 164px;
     height: 92px;
+
     max-width: none;
     max-height: none;
-    aspect-ratio: 16 / 9;
-    object-fit: cover;
 
-    opacity: 0.80;
   }
+
 
   #camBtn,
   #switchCamBtn {
+
     right: 14px;
+
     width: 164px;
-    min-width: 164px;
-    padding: 6px 7px;
+
+    font-size: 7px;
+
   }
 
-  /* subito sotto al riquadro orizzontale */
+
   #camBtn {
-    top: calc(108px + env(safe-area-inset-top, 0px));
+
+    top:
+      calc(
+        108px +
+        env(safe-area-inset-top,0px)
+      );
+
+    bottom: auto;
+
   }
+
 
   #switchCamBtn {
-    top: calc(142px + env(safe-area-inset-top, 0px));
+
+    top:
+      calc(
+        142px +
+        env(safe-area-inset-top,0px)
+      );
+
+    bottom: auto;
+
   }
+
+
+  #dataPanel {
+
+    width:
+      min(31vw,260px);
+
+    padding:
+      .55rem .7rem;
+
+  }
+
+
+  #colorOverlay {
+
+    bottom:
+      calc(
+        175px +
+        env(safe-area-inset-bottom,0px)
+      );
+
+    width: 48px;
+    height: 48px;
+
+  }
+
+
+  #paletteSwatches {
+
+    left: 67px;
+
+    bottom:
+      calc(
+        190px +
+        env(safe-area-inset-bottom,0px)
+      );
+
+  }
+
+
+  #resolutionSlider {
+
+    right: 180px;
+
+  }
+
+
+  #pulseCore {
+
+    left: 50%;
+
+    top: 40%;
+
+    width: 125px;
+    height: 125px;
+
+  }
+
+
+  #judgeBtn {
+
+    left: 50%;
+    right: auto;
+
+    transform:
+      translateX(-50%);
+
+    bottom:
+      calc(
+        12px +
+        env(safe-area-inset-bottom,0px)
+      );
+
+  }
+
+
+  #aiJudgment {
+
+    left: 50%;
+
+    top: 64%;
+
+    max-width: 50vw;
+
+  }
+
+
+  #aiTrace,
+  #humanQuestion,
+  #recognizeQuestion {
+
+    left: 50%;
+
+  }
+
 }
