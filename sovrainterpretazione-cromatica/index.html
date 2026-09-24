@@ -93,12 +93,24 @@
   <!-- messaggio di errore/debug (webcam non accessibile, AI locale non disponibile, ecc.) -->
   <div id="debugMsg"></div>
 
-  <!-- QR in basso a sinistra: scansionandolo col telefono si apre la stessa
-       app (GitHub Pages), installabile anche lì come PWA (vedi manifest.json) -->
-  <a id="qrBox" href="https://sebabreak.github.io/Chroma/sovrainterpretazione-cromatica/" target="_blank" rel="noopener">
+  <!-- QR in basso a sinistra: NON naviga più via (era un link <a> che
+       apriva l'app in una nuova scheda) — ora, cliccandolo, si ingrandisce
+       al centro con #qrModal qui sotto, pensato per mostrarlo a tutta la
+       sala durante l'esposizione senza uscire dall'app (script.js, sezione 18) -->
+  <button id="qrBox" type="button">
     <img id="qrCode" src="qr-telefono.png" alt="QR code per aprire l'app sul telefono">
     <span id="qrLabel">installa su telefono</span>
-  </a>
+  </button>
+
+  <!-- popup QR a schermo intero (script.js, sezione 18) — stesso pattern
+       di #pageReactionBackdrop/#pageReaction: sfondo che scurisce tutto
+       il resto, popup sopra, chiudibile con la X, cliccando fuori, o Esc -->
+  <div id="qrModalBackdrop"></div>
+  <div id="qrModal">
+    <button id="qrModalClose" class="ghost-btn" type="button">chiudi ✕</button>
+    <img id="qrModalImg" src="qr-telefono.png" alt="QR code per aprire l'app sul telefono">
+    <div id="qrModalLabel">inquadra per aprire CHROMA sul tuo telefono</div>
+  </div>
 
   <!-- SEQUENZA INTERATTIVA (script.js, sezioni 12-15), un elemento alla
        volta, dallo stesso "palco" al centro dello schermo:
