@@ -1277,3 +1277,85 @@ body {
     padding: 1.2rem 1.5rem 1rem;
   }
 }
+
+
+/* ══════════════════════════════════════════════════════════════════
+   CHROMA — RESPONSIVE V4
+   PATCH CAMERA RESPONSIVA
+   Il riquadro webcam cambia forma con l'orientamento del dispositivo:
+   - portrait  -> verticale
+   - landscape -> orizzontale
+   Mantiene separati preview e controlli.
+   ══════════════════════════════════════════════════════════════════ */
+
+/* TELEFONO / TABLET IN VERTICALE */
+@media (max-width: 1100px) and (orientation: portrait) {
+  #preview {
+    top: calc(16px + env(safe-area-inset-top, 0px));
+    right: 14px;
+    bottom: auto;
+
+    /* riquadro VERTICALE */
+    width: 94px;
+    height: 132px;
+    max-width: none;
+    max-height: none;
+    aspect-ratio: 47 / 66;
+    object-fit: cover;
+
+    opacity: 0.80;
+  }
+
+  #camBtn,
+  #switchCamBtn {
+    right: 14px;
+    width: 94px;
+    min-width: 94px;
+    padding: 6px 5px;
+  }
+
+  /* subito sotto al riquadro verticale */
+  #camBtn {
+    top: calc(156px + env(safe-area-inset-top, 0px));
+  }
+
+  #switchCamBtn {
+    top: calc(190px + env(safe-area-inset-top, 0px));
+  }
+}
+
+/* TELEFONO / TABLET IN ORIZZONTALE */
+@media (max-width: 1100px) and (orientation: landscape) {
+  #preview {
+    top: calc(10px + env(safe-area-inset-top, 0px));
+    right: 14px;
+    bottom: auto;
+
+    /* riquadro ORIZZONTALE */
+    width: 164px;
+    height: 92px;
+    max-width: none;
+    max-height: none;
+    aspect-ratio: 16 / 9;
+    object-fit: cover;
+
+    opacity: 0.80;
+  }
+
+  #camBtn,
+  #switchCamBtn {
+    right: 14px;
+    width: 164px;
+    min-width: 164px;
+    padding: 6px 7px;
+  }
+
+  /* subito sotto al riquadro orizzontale */
+  #camBtn {
+    top: calc(108px + env(safe-area-inset-top, 0px));
+  }
+
+  #switchCamBtn {
+    top: calc(142px + env(safe-area-inset-top, 0px));
+  }
+}
