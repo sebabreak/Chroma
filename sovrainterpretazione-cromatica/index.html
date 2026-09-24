@@ -138,7 +138,12 @@
        appena la webcam riconosce la composizione cromatica stampata su una
        pagina della tesi. Interrompe qualunque cosa il sistema stia facendo
        e resta a schermo finché non viene chiuso manualmente (nessun
-       timeout automatico, a differenza delle fasi della sequenza sopra). -->
+       timeout automatico, a differenza delle fasi della sequenza sopra).
+       #pageReactionBackdrop scurisce TUTTO il resto (HUD, pannello dati,
+       QR, GIUDICA, anteprima webcam) mentre il popup è aperto — senza,
+       quegli elementi restavano visibili e in competizione visiva col
+       popup, specialmente su schermi piccoli (vedi nota in style.css). -->
+  <div id="pageReactionBackdrop"></div>
   <div id="pageReaction">
     <button id="pageReactionClose" class="ghost-btn" type="button">chiudi ✕</button>
     <div id="pageReactionText"></div>
