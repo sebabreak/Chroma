@@ -1,9 +1,11 @@
 // ══════════════════════════════════════════════════════════════════
 //  SERVICE WORKER — rende l'app installabile ("Aggiungi a schermata
 //  Home") e utilizzabile anche offline. Mette in cache solo i FILE
-//  DELL'INTERFACCIA (html/css/js/icone): il modello AI (sezione 10 di
-//  script.js) ha una sua cache separata, gestita internamente dalla
-//  libreria WebLLM la prima volta che viene scaricato.
+//  DELL'INTERFACCIA (html/css/js/icone): il modello AI (Ollama, sezione
+//  10 di script.js) gira sul PC, non nel browser, quindi qui non c'è
+//  nessun modello da scaricare o mettere in cache — il giudizio
+//  richiede sempre di raggiungere il PC (in locale o tramite tunnel),
+//  quindi non funziona offline anche se il resto dell'interfaccia sì.
 //
 //  STRATEGIA: "network-first" — prova sempre prima a scaricare la
 //  versione più recente da internet, e usa la cache solo come riserva
@@ -18,7 +20,7 @@
 //  sola quando il telefono è online), ma pulisce la cache vecchia invece
 //  di lasciarla lì a occupare spazio inutilmente.
 // ══════════════════════════════════════════════════════════════════
-const CACHE_NAME = 'sovrainterpretazione-v23'; // ricorda di alzare questo numero ad ogni modifica di index.html/style.css/script.js (vedi commento sopra)
+const CACHE_NAME = 'sovrainterpretazione-v24'; // ricorda di alzare questo numero ad ogni modifica di index.html/style.css/script.js (vedi commento sopra)
 
 const ASSETS = [
   './',
@@ -53,8 +55,9 @@ self.addEventListener('activate', (event) => {
 // prima la rete (così si vede subito l'ultima versione pubblicata), e
 // ricade sulla cache SOLO se la rete non risponde (telefono offline).
 // Tocca SOLO le richieste verso questo stesso sito: lascia passare senza
-// toccarle le richieste verso esm.run e verso i pesi del modello AI
-// (Hugging Face/CDN di WebLLM), che gestiscono già da soli la propria cache.
+// toccarle le richieste verso Ollama (localhost o tunnel — sezione 10 di
+// script.js), che sono verso un'origine diversa e non vanno né
+// intercettate né messe in cache qui.
 self.addEventListener('fetch', (event) => {
   const req = event.request;
   if (req.method !== 'GET' || new URL(req.url).origin !== location.origin) return;
