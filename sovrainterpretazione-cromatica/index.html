@@ -93,10 +93,11 @@
   <!-- messaggio di errore/debug (webcam non accessibile, AI locale non disponibile, ecc.) -->
   <div id="debugMsg"></div>
 
-  <!-- QR in basso a sinistra: NON naviga più via (era un link <a> che
-       apriva l'app in una nuova scheda) — ora, cliccandolo, si ingrandisce
-       al centro con #qrModal qui sotto, pensato per mostrarlo a tutta la
-       sala durante l'esposizione senza uscire dall'app (script.js, sezione 18) -->
+  <!-- QR in basso a sinistra: un clic lo ingrandisce al centro con
+       #qrModal qui sotto, pensato per mostrarlo a tutta la sala durante
+       l'esposizione senza uscire dall'app (script.js, sezione 18). È un
+       bottone e non un link proprio per poter intercettare il clic
+       invece di aprire una nuova scheda. -->
   <button id="qrBox" type="button">
     <img id="qrCode" src="qr-telefono.png" alt="QR code per aprire l'app sul telefono">
     <span id="qrLabel">installa su telefono</span>
