@@ -666,18 +666,26 @@ function loop() {
   pctx.clearRect(0,0,previewCanvas.width,previewCanvas.height);
   pctx.drawImage(lowResCanvas,0,0,previewCanvas.width,previewCanvas.height);
 
-  // se il punto selezionato è sull'anteprima, disegna un piccolo mirino sopra per mostrare dov'è
+  // se il punto selezionato è sull'anteprima, disegna un piccolo mirino sopra per mostrare dov'è.
+  // Dimensioni in FRAZIONE di previewCanvas.width (non più pixel fissi):
+  // pixel fissi (raggio 5, bracci fino a 8) erano tarati per quando questo
+  // canvas condivideva la risoluzione dello slider (spesso 80-140px di
+  // lato) — ora che è fisso e piccolo (PREVIEW_RASTER_WIDTH, sezione 4),
+  // quegli stessi pixel fissi occupavano una frazione enorme del riquadro.
   if (manualSelection?.type === 'point') {
     const mx = manualSelection.xFrac * previewCanvas.width;
     const my = manualSelection.yFrac * previewCanvas.height;
+    const r    = previewCanvas.width * 0.045; // raggio del cerchietto
+    const gap  = previewCanvas.width * 0.03;  // spazio vuoto attorno al cerchietto, prima dei bracci
+    const reach = previewCanvas.width * 0.075; // quanto si allungano i bracci dal centro
     pctx.strokeStyle = 'rgba(255,255,255,0.9)';
     pctx.lineWidth = 1;
     pctx.beginPath();
-    pctx.arc(mx, my, 5, 0, Math.PI*2);
-    pctx.moveTo(mx-8, my); pctx.lineTo(mx-3, my);
-    pctx.moveTo(mx+3, my); pctx.lineTo(mx+8, my);
-    pctx.moveTo(mx, my-8); pctx.lineTo(mx, my-3);
-    pctx.moveTo(mx, my+3); pctx.lineTo(mx, my+8);
+    pctx.arc(mx, my, r, 0, Math.PI*2);
+    pctx.moveTo(mx-reach, my); pctx.lineTo(mx-gap, my);
+    pctx.moveTo(mx+gap, my);   pctx.lineTo(mx+reach, my);
+    pctx.moveTo(mx, my-reach); pctx.lineTo(mx, my-gap);
+    pctx.moveTo(mx, my+gap);   pctx.lineTo(mx, my+reach);
     pctx.stroke();
   }
 
