@@ -156,20 +156,12 @@ video { display: none; }
 
 /* ── ANTEPRIMA PIXELATA ─────────────────────────────────────────── */
 /* cliccabile: un clic su un punto lo seleziona come colore da seguire (script.js, sezione 11).
-   Solo "width" fissata: "height:auto" lascia che il riquadro segua il VERO
-   aspect ratio del canvas (script.js, updateLowResDimensions) — un valore
-   fisso qui causerebbe di nuovo la stessa distorsione che quella funzione
-   risolve lato campionamento, specialmente su telefono dove la webcam
-   raramente trasmette davvero in 4:3. */
-/* cliccabile: un clic su un punto lo seleziona come colore da seguire (script.js, sezione 11).
-   Dimensione FISSA + object-fit:cover (non più width/height:auto con
-   max-width/max-height): quella combinazione faceva rimpicciolire il
-   riquadro ogni volta che la webcam non trasmetteva davvero in 4:3 —
-   sia su telefono che su PC. object-fit:cover ritaglia il contenuto per
-   riempire comunque queste dimensioni, senza stirarlo. Questa è solo la
-   regola di base/fallback: dai 795px in su e sotto i 1101px ci sono
-   regole più specifiche qui sotto che la sostituiscono con dimensioni
-   pensate per quella fascia. */
+   Dimensione fissa + object-fit:cover: object-fit:cover ritaglia il
+   contenuto per riempire queste dimensioni senza mai stirarlo, qualunque
+   sia il vero aspect ratio della webcam (raramente davvero 4:3, specie
+   su telefono). Questa è solo la regola di base/fallback: sia sopra che
+   sotto i 1101px ci sono regole più specifiche qui sotto che la
+   sostituiscono con dimensioni pensate per quella fascia. */
 #preview {
   position: fixed;
   bottom: 100px;
@@ -257,8 +249,9 @@ video { display: none; }
 #switchCamBtn { right: 130px; }
 
 /* GIUDICA: l'azione principale dell'installazione — deve essere
-   impossibile da non notare, quindi grande, centrata e sempre uguale
-   (non più un piccolo link agli angoli come cam/switch qui sopra) */
+   impossibile da non notare, quindi grande, centrata e sempre della
+   stessa dimensione (a differenza di cam/switch qui sopra, pensati
+   come controlli secondari discreti agli angoli) */
 #judgeBtn {
   position: fixed;
   bottom: calc(28px + env(safe-area-inset-bottom, 0px));
@@ -375,10 +368,9 @@ video { display: none; }
 /* ── QR TELEFONO ─────────────────────────────────────────────────── */
 /* stessa colonna di #hud (left:20px): un clic lo ingrandisce al centro
    (#qrModal qui sotto) invece di navigare via — comodo per mostrarlo a
-   tutta la sala durante l'esposizione. #qrBox è un <button>, non più un
-   <a>: le prime 8 proprietà qui sotto (background/border/font/ecc.)
-   sono solo un reset per fargli perdere l'aspetto di default del
-   browser e restare identico a prima. */
+   tutta la sala durante l'esposizione. #qrBox è un <button>, quindi le
+   prime 5 proprietà qui sotto (background/border/font/ecc.) sono solo
+   un reset per togliergli l'aspetto di default del browser. */
 #qrBox {
   background: none;
   border: none;
@@ -483,14 +475,14 @@ video { display: none; }
 }
 
 /* ── DATI OGGETTIVI (script.js, sezione 12) ───────────────────────── */
-/* pannello "clinico" SEMPRE VISIBILE (non più una fase che appare e
-   sparisce): mostra i valori misurati in tempo reale, a sinistra, sotto
-   al riquadro colore/quadratini di selezione. Font monospace come l'HUD,
-   in contrasto netto con il serif corsivo del giudizio AI (#aiJudgment)
-   che appare al centro — è proprio questo contrasto visivo a segnare la
-   differenza tra dato e sovrainterpretazione, il cuore della ricerca.
-   Resta invisibile (opacity 0) solo finché non arriva il primo
-   aggiornamento da updateDataPanel() — da lì in poi non sparisce più. */
+/* pannello "clinico" SEMPRE VISIBILE: mostra i valori misurati in tempo
+   reale, a sinistra, sotto al riquadro colore/quadratini di selezione.
+   Font monospace come l'HUD, in contrasto netto con il serif corsivo del
+   giudizio AI (#aiJudgment) che appare al centro — è proprio questo
+   contrasto visivo a segnare la differenza tra dato e sovrainterpretazione,
+   il cuore della ricerca. Resta invisibile (opacity 0) solo finché non
+   arriva il primo aggiornamento da updateDataPanel() — da lì in poi non
+   sparisce più. */
 #dataPanel {
   position: fixed;
   top: calc(10% + 170px);
@@ -755,25 +747,14 @@ body::before {
 }
 @keyframes spinning { to { transform: rotate(360deg); } }
 
-/* ── SCHERMI PICCOLI (TELEFONO) ──────────────────────────────────── */
+/* ── SCHERMI PICCOLI (TABLET E TELEFONO) ─────────────────────────── */
 /* Il layout sopra è pensato per schermi grandi (PC). Qui sotto solo le
-   differenze per schermi stretti: elementi rimpiccioliti/riposizionati
-   per non sovrapporsi ed entrare comodamente in una larghezza da telefono.
-   Soglia 600px = copre qualunque telefono in verticale. */
-
-
-/* ══════════════════════════════════════════════════════════════════
-   CHROMA — RESPONSIVE V3
-   Base: CSS originale funzionante.
-   Correzioni mirate:
-   - preview webcam più grande su PC
-   - tablet/telefono senza QR
-   - dati in basso a sinistra + palette/colore sopra
-   - gruppo webcam ordinato in alto a destra
-   - GIUDICA mantiene sempre la stessa dimensione, anche durante lo spinner
-   - pulseCore torna realmente al centro
-   - leggero alleggerimento grafico su mobile
-   ══════════════════════════════════════════════════════════════════ */
+   differenze per schermi più stretti: dimensioni ed elementi
+   riposizionati per stare comodamente su tablet e telefono — pannello
+   dati in basso a sinistra, gruppo webcam in alto a destra, QR
+   nascosto (non serve installare l'app su un telefono che la sta già
+   usando), GIUDICA di dimensione fissa anche durante il caricamento,
+   #pulseCore centrato sullo schermo reale. */
 
 html, body {
   width: 100%;
@@ -788,12 +769,12 @@ body {
 /* ── DESKTOP ────────────────────────────────────────────────────── */
 @media (min-width: 1101px) {
   #preview {
-    /* width E height ora entrambi espliciti (clamp proporzionato a 4:3,
-       non più height:auto+max-height): quella combinazione faceva
-       RIMPICCIOLIRE il riquadro ogni volta che la webcam non trasmetteva
-       davvero in 4:3 — object-fit:cover ritaglia il contenuto per
-       riempire comunque queste dimensioni, senza mai stirarlo né
-       rimpicciolire il riquadro stesso */
+    /* width e height espliciti (clamp proporzionato a un rapporto 4:3),
+       mai "auto": su un elemento position:fixed, width/height:auto lo
+       farebbe ridimensionare in base al vero aspect ratio della webcam
+       invece di restare alla dimensione voluta. object-fit:cover ritaglia
+       il contenuto per riempire comunque queste dimensioni, senza mai
+       stirarlo. */
     width: clamp(250px, 20vw, 330px);
     height: clamp(188px, 15vw, 248px);
     object-fit: cover;
@@ -805,17 +786,16 @@ body {
 
 /* ── TABLET + TELEFONO ──────────────────────────────────────────── */
 
-/* NOTA: questo blocco (mobile generale, ≤600px) è stato spostato qui,
-   DOPO il blocco "TABLET + TELEFONO" (≤1100px) qui sopra, invece di
-   restare prima come nel file originale. Motivo: a parità di
-   specificità del selettore, in CSS vince sempre la regola scritta più
-   in basso nel file — indipendentemente da quale @media sia più
-   stretto. Con il blocco ≤600 PRIMA del ≤1100 (ordine originale), ogni
-   proprietà che i due definivano entrambi (aiJudgment, dataPanel,
-   judgeBtn, paletteSwatches, ecc.) veniva decisa dal blocco ≤1100 anche
-   sui telefoni più stretti — il blocco ≤600, pur essendo quello
-   "giusto" per un telefono, restava silenziosamente ignorato. Ora che
-   viene dopo, vince lui, com'era chiaramente l'intento. */
+/* IMPORTANTE per chi tocca questo file: qui sotto ci sono DUE blocchi
+   che si sovrappongono — "≤1100px" (subito qui sotto) e "≤600px" (più
+   avanti in questo file). In CSS, a parità di specificità del
+   selettore, vince sempre la regola scritta più in basso nel file,
+   indipendentemente da quale @media sia più stretto. Per questo il
+   blocco ≤600px (il più specifico, quello che deve avere l'ultima
+   parola sui telefoni) viene DOPO quello ≤1100px in questo file, e non
+   prima: se in futuro si aggiungono altre regole mobile, vanno tenute
+   nello stesso ordine (dalla condizione più larga alla più stretta),
+   altrimenti quelle più strette smettono silenziosamente di funzionare. */
 @media (max-width: 1100px) {
 
   #qrBox {
@@ -903,34 +883,23 @@ body {
     height: 18px;
   }
 
-  /* #preview NON è più qui per lo stesso motivo di sopra (vedi nota
-     nel blocco @media (max-width: 600px)) — governata dai blocchi V4.
-     #camBtn/#switchCamBtn qui sotto (140px) restano scritti ma sono
-     A LORO VOLTA sovrascritti dai blocchi V4 più avanti in questo file,
-     che impostano una larghezza propria (94px verticale / 164px
-     orizzontale) coerente con le rispettive dimensioni di #preview lì —
-     quindi non c'è un vero disallineamento in pratica, solo altro
-     codice morto: questi 140px qui non vengono mai realmente applicati
-     sotto i 1101px. */
+  /* #preview non è definito qui: la sua dimensione e posizione per
+     schermi ≤1100px sono nei due blocchi "TELEFONO / TABLET IN
+     VERTICALE" / "...IN ORIZZONTALE" più avanti in questo file (una
+     forma diversa per ciascun orientamento, con object-fit:cover). */
 
+  /* La dimensione, la posizione destra/alto e il padding di
+     #camBtn/#switchCamBtn per gli schermi ≤1100px sono definiti più
+     avanti in questo file, nei due blocchi "TELEFONO / TABLET IN
+     VERTICALE" e "...IN ORIZZONTALE" (una larghezza diversa per ciascun
+     orientamento). Qui restano solo le proprietà che quei due blocchi
+     NON toccano. */
   #camBtn,
   #switchCamBtn {
     left: auto;
-    right: 14px;
     bottom: auto;
-    width: 140px;
-    min-width: 140px;
     text-align: center;
     font-size: 7px;
-    padding: 6px 7px;
-  }
-
-  #camBtn {
-    top: calc(126px + env(safe-area-inset-top, 0px));
-  }
-
-  #switchCamBtn {
-    top: calc(160px + env(safe-area-inset-top, 0px));
   }
 
   /* slider separato dal gruppo camera */
@@ -988,17 +957,15 @@ body {
   #pulseCore { width: 120px; height: 120px; }
 
   #colorOverlay { width: 64px; height: 64px; }
-  #paletteSwatches { top: calc(10% + 76px); bottom: auto; } /* bottom:auto: stesso motivo di #dataPanel qui sopra */
+  #paletteSwatches { top: calc(10% + 76px); bottom: auto; } /* bottom:auto per non stirare l'elemento: vedi nota su #dataPanel qui sotto */
   .swatch { width: 18px; height: 18px; }
 
-  /* #preview NON è più qui: sotto i 1101px la dimensione/posizione del
-     riquadro webcam è governata dai blocchi "RESPONSIVE V4" più avanti
-     in questo file (portrait/landscape, object-fit:cover) — una regola
-     #preview qui verrebbe comunque sovrascritta da quelli, quindi è
-     stata tolta invece di lasciarla come codice morto/fuorviante. */
+  /* #preview non è definito qui: dimensione e posizione sotto i 1101px
+     sono nei due blocchi per orientamento verso la fine del file
+     (portrait/landscape, object-fit:cover). */
 
   /* GIUDICA: già centrato di default (vedi regola base sopra) — qui solo
-     una misura adatta a un telefono, comunque ben più grande di prima */
+     una misura adatta a un telefono */
   #judgeBtn {
     font-size: 12px;
     padding: 12px 24px;
@@ -1122,9 +1089,9 @@ body {
     height: 17px;
   }
 
-  /* #preview e #camBtn/#switchCamBtn (dimensioni E posizione top) NON
-     sono più qui: anche in questo breakpoint vincono sempre i blocchi
-     V4 più avanti nel file (stesso motivo delle note sopra). */
+  /* #preview e #camBtn/#switchCamBtn (dimensione, posizione e top) sono
+     definiti nei blocchi per orientamento verso la fine del file, non
+     qui — vedi la nota qualche riga sopra. */
 
   #resolutionSlider {
     right: -1px;
@@ -1243,9 +1210,9 @@ body {
     height: 16px;
   }
 
-  /* #preview e #camBtn/#switchCamBtn (dimensioni E posizione top) NON
-     sono più qui: in landscape vince sempre il blocco V4 più avanti nel
-     file (stesso motivo delle note sopra). */
+  /* #preview e #camBtn/#switchCamBtn (dimensione, posizione e top) per
+     l'orientamento orizzontale sono nel blocco dedicato verso la fine
+     del file, non qui. */
 
   #resolutionSlider {
     right: 180px;
@@ -1324,14 +1291,11 @@ body {
 }
 
 
-/* ══════════════════════════════════════════════════════════════════
-   CHROMA — RESPONSIVE V4
-   PATCH CAMERA RESPONSIVA
-   Il riquadro webcam cambia forma con l'orientamento del dispositivo:
-   - portrait  -> verticale
-   - landscape -> orizzontale
-   Mantiene separati preview e controlli.
-   ══════════════════════════════════════════════════════════════════ */
+/* ── RIQUADRO WEBCAM PER ORIENTAMENTO DEL TELEFONO ──────────────────
+   Il riquadro #preview cambia forma con l'orientamento del dispositivo:
+   verticale in portrait, orizzontale in landscape — in entrambi i casi
+   con object-fit:cover (script.js, sezione 4, drawVideoCover), così il
+   video riempie sempre il riquadro senza mai stirarsi. ────────────── */
 
 /* TELEFONO / TABLET IN VERTICALE */
 @media (max-width: 1100px) and (orientation: portrait) {
