@@ -9,7 +9,7 @@
 //  direttamente a una sezione:
 //
 //   1. ELEMENTI DOM ................ riferimenti agli elementi di index.html
-//   (2. AUDIO — rimossa: l'installazione è puramente visiva, niente più suono)
+//   (2. AUDIO — non presente: l'installazione è puramente visiva, senza suono)
 //   3. STATO ........................ variabili che tengono traccia di colore/tempo/AI
 //   4. CANVAS BASSA RISOLUZIONE ..... pixelazione video + campionamento colore
 //   5. SFONDO ANIMATO E PARTICELLE .. nebulosa di colori rilevati + i puntini che seguono il mouse
@@ -107,10 +107,10 @@ if ('serviceWorker' in navigator) {
   });
 }
 
-// (sezione 2, "AUDIO", rimossa: l'installazione ora è puramente visiva —
-// niente più sintesi sonora reattiva né tasto AUDIO ON/OFF. I numeri delle
-// sezioni successive sono rimasti quelli originali apposta, per restare
-// coerenti con eventuali appunti/versioni precedenti del progetto.)
+// (la sezione 2, "AUDIO", non esiste: l'installazione è puramente visiva,
+// senza sintesi sonora reattiva né tasto AUDIO ON/OFF — la numerazione
+// riparte da 3 di proposito, per lasciare libero quel numero nel caso
+// serva reintrodurre l'audio in futuro senza dover rinumerare tutto)
 
 // ── 3. STATO ──────────────────────────────────────────────────────
 // colore del frame precedente/corrente, usati per calcolare quanto
@@ -184,13 +184,12 @@ let selectedColor = null;
 // per evitare un canvas alto 0px se in futuro il min venisse abbassato oltre 1.
 //
 // TARGET_ASPECT è il formato (4:3) a cui viene RITAGLIATO ogni fotogramma
-// prima di campionarlo (vedi drawVideoCover qui sotto) — NON è un tentativo
-// di indovinare/inseguire il vero aspect ratio della webcam (un approccio
-// provato e poi scartato: se la webcam trasmette in un formato molto
-// diverso da 4:3, il riquadro #preview finiva per rimpicciolirsi per
-// rispettarlo — visto sia su telefono che su PC). Ritagliare invece di
-// stirare/inseguire risolve la distorsione SENZA rendere la dimensione
-// del riquadro imprevedibile: resta sempre 4:3, su qualunque dispositivo.
+// prima di campionarlo (vedi drawVideoCover qui sotto), non il vero
+// aspect ratio della webcam: la fotocamera di un telefono o di un PC
+// raramente trasmette davvero in 4:3, quindi il fotogramma va sempre
+// ritagliato a un formato fisso — mai stirato, e mai lasciato libero di
+// cambiare dimensione col dispositivo, altrimenti anche il riquadro
+// #preview a schermo (style.css) dovrebbe rincorrerlo continuamente.
 const TARGET_ASPECT = 0.75;
 let lowResWidth  = Math.max(1, parseInt(resolutionSlider.value));
 let lowResHeight = Math.max(1, Math.round(lowResWidth * TARGET_ASPECT));
@@ -426,7 +425,7 @@ function colorName([r,g,b]) {
 //  - KMEANS_ITERATIONS più alto   → i cluster convergono in modo più stabile/accurato
 //  - k più alto (vedi la chiamata extractPalette(imgData, 5, ...) in loop()) → più colori distinti riconosciuti
 const SAMPLE_STEP       = 8;  // 8 = un pixel ogni 2 (RGBA = 4 byte/pixel). Prima era 32 = un pixel ogni 8: 4x meno campioni.
-const KMEANS_ITERATIONS = 14; // prima erano 10: più iterazioni = palette più accurata
+const KMEANS_ITERATIONS = 14; // più iterazioni = cluster più stabili/accurati, a costo di qualche ms in più per frame
 
 function extractPalette(imageData, k, previousPalette = []) {
   const data = imageData.data;
@@ -667,11 +666,11 @@ function loop() {
   pctx.drawImage(lowResCanvas,0,0,previewCanvas.width,previewCanvas.height);
 
   // se il punto selezionato è sull'anteprima, disegna un piccolo mirino sopra per mostrare dov'è.
-  // Dimensioni in FRAZIONE di previewCanvas.width (non più pixel fissi):
-  // pixel fissi (raggio 5, bracci fino a 8) erano tarati per quando questo
-  // canvas condivideva la risoluzione dello slider (spesso 80-140px di
-  // lato) — ora che è fisso e piccolo (PREVIEW_RASTER_WIDTH, sezione 4),
-  // quegli stessi pixel fissi occupavano una frazione enorme del riquadro.
+  // Dimensioni in FRAZIONE di previewCanvas.width, non pixel fissi: dato
+  // che previewCanvas è piccolo (PREVIEW_RASTER_WIDTH, sezione 4), un
+  // mirino a pixel fissi occuperebbe una frazione sproporzionata del
+  // riquadro — restando proporzionale, il mirino ha sempre la stessa
+  // dimensione RELATIVA qualunque sia la risoluzione scelta.
   if (manualSelection?.type === 'point') {
     const mx = manualSelection.xFrac * previewCanvas.width;
     const my = manualSelection.yFrac * previewCanvas.height;
@@ -797,13 +796,13 @@ const OLLAMA_TUNNEL_URL = "https://stoop-situation-trifle.ngrok-free.dev/api/gen
 // non risponde in fretta (o non sei sul PC), passa al tunnel — ma solo se
 // è stato configurato, altrimenti rilancia subito l'errore originale
 //
-// NOTA sul timeout locale: NON deve essere troppo corto. Se hai appena
-// (ri)avviato "ollama serve" (es. per cambiare OLLAMA_ORIGINS), il modello
-// va ricaricato in VRAM da zero alla prima richiesta, e questo può richiedere
-// qualche secondo — se il browser annulla la richiesta troppo presto,
-// Ollama la vede come "context canceled" e fallisce SEMPRE, anche restando
-// sul PC con tutto acceso e funzionante (bug osservato: con un timeout di
-// 1.2s il caricamento del modello veniva interrotto ogni volta a metà).
+// NOTA sul timeout locale: NON deve essere troppo corto. Se Ollama è stato
+// (ri)avviato da poco (es. per cambiare OLLAMA_ORIGINS), il modello va
+// ricaricato in VRAM da zero alla prima richiesta, e questo può richiedere
+// qualche secondo — con un timeout troppo corto (es. 1.2s) il browser
+// annullerebbe la richiesta mentre il modello è ancora a metà del
+// caricamento, e Ollama la vedrebbe come "context canceled", fallendo
+// sempre anche restando sul PC con tutto acceso e funzionante.
 // Un timeout di qualche secondo qui non rallenta il caso "sei sul telefono,
 // niente Ollama in locale": lì la connessione a "localhost" fallisce subito
 // (connessione rifiutata), non c'è nulla da aspettare.
@@ -817,8 +816,9 @@ const OLLAMA_TUNNEL_URL = "https://stoop-situation-trifle.ngrok-free.dev/api/gen
 // tra quelle ammesse dal CORS di Ollama (che ha un elenco fisso e non la
 // contiene): il browser farebbe passare il pre-controllo OPTIONS ma poi
 // bloccherebbe lui stesso la richiesta vera prima ancora di mandarla,
-// perché l'intestazione non è nella lista concordata — esattamente il bug
-// osservato su iPhone (OPTIONS 204, poi il POST non arrivava mai a Ollama).
+// perché l'intestazione non è nella lista concordata. Su iPhone questo si
+// manifesta con un OPTIONS che riceve 204 ma il POST successivo non arriva
+// mai a Ollama.
 async function ollamaFetch(body) {
   const tryUrl = (url, timeoutMs) => {
     const ctrl = new AbortController();
@@ -1062,7 +1062,7 @@ async function runFullSequence() {
 // JUDGMENT_LEN_MIN_SIZE scende fino a JUDGMENT_MIN_SCALE (fattore, non rem —
 // i rem veri e propri sono nel clamp() di #aiJudgment in style.css). Così un
 // giudizio lungo si legge tutto invece di sfondare il bordo dello schermo.
-const JUDGMENT_LEN_FULL_SIZE = 60;   // fino a questa lunghezza (caratteri): testo a dimensione piena (abbassata insieme a num_predict, sezione 10: i giudizi ora sono più corti)
+const JUDGMENT_LEN_FULL_SIZE = 60;   // fino a questa lunghezza (caratteri): testo a dimensione piena — coerente con num_predict in sezione 10, che tiene i giudizi brevi
 const JUDGMENT_LEN_MIN_SIZE  = 220;  // da questa lunghezza in su: dimensione minima
 const JUDGMENT_MIN_SCALE     = 0.55; // dimensione minima, come frazione di quella piena (1 = piena, 0.55 = 55%)
 
@@ -1257,14 +1257,13 @@ judgeBtn.addEventListener("click",()=>{
 requestAnimationFrame(loop);
 
 // ── 12. DATI OGGETTIVI ────────────────────────────────────────────
-// Pannello SEMPRE VISIBILE (non più una fase transitoria): mostra i
-// valori che il sistema misura DAVVERO — nome colore, HEX, RGB,
-// saturazione/luminosità, percentuale d'area di ciascun colore della
-// palette — senza nessuna interpretazione. Resta a sinistra, si
-// aggiorna da solo quando la palette cambia (chiamato da loop(),
-// sezione 9, tramite il flag paletteDirty) e non sparisce mai: prima
-// del primo aggiornamento resta semplicemente invisibile (opacity 0 in
-// style.css), poi resta visibile per sempre.
+// Pannello SEMPRE VISIBILE: mostra i valori che il sistema misura
+// DAVVERO — nome colore, HEX, RGB, saturazione/luminosità, percentuale
+// d'area di ciascun colore della palette — senza nessuna interpretazione.
+// Resta a sinistra, si aggiorna da solo quando la palette cambia
+// (chiamato da loop(), sezione 9, tramite il flag paletteDirty): prima
+// del primo aggiornamento resta invisibile (opacity 0 in style.css), poi
+// resta visibile per sempre.
 const dataPanel = document.getElementById('dataPanel');
 
 function updateDataPanel(domCol) {
@@ -1318,8 +1317,8 @@ function updateDataPanel(domCol) {
 // risolve quando l'osservatore clicca uno dei bottoni al suo interno, o
 // da sola dopo `timeoutMs` se nessuno risponde. Il timeout è la parte
 // importante: senza, un visitatore che si allontana senza rispondere
-// blocca la sequenza per sempre, e il prossimo GIUDICA sembra "non
-// funzionare più" — è il problema segnalato.
+// bloccherebbe la sequenza per sempre, e il GIUDICA successivo
+// sembrerebbe non funzionare più.
 function showOverlayChoice(el, buttons, readAnswer, timeoutMs) {
   return new Promise(resolve => {
     el.style.opacity = '1';
@@ -1713,10 +1712,11 @@ window.CHROMA_DEBUG = {
 };
 
 // ── 18. QR INGRANDITO ──────────────────────────────────────────────
-// #qrBox non è più un link che apre l'app in un'altra scheda: un clic
-// ingrandisce lo stesso QR al centro dello schermo (#qrModal), pensato
-// per mostrarlo a tutta la sala durante l'esposizione della tesi senza
-// uscire dall'app. Stesso pattern di #pageReactionBackdrop/#pageReaction
+// Un clic su #qrBox ingrandisce lo stesso QR al centro dello schermo
+// (#qrModal), pensato per mostrarlo a tutta la sala durante
+// l'esposizione della tesi senza uscire dall'app — #qrBox è un bottone,
+// non un link, proprio per poter intercettare il clic invece di aprire
+// una nuova scheda. Stesso pattern di #pageReactionBackdrop/#pageReaction
 // (sezione 17): sfondo che scurisce tutto, popup sopra, nessun timeout —
 // resta finché non lo si chiude a mano.
 const qrBoxBtn        = document.getElementById('qrBox');
