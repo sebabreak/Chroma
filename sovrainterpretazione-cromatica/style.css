@@ -988,7 +988,7 @@ body {
   #pulseCore { width: 120px; height: 120px; }
 
   #colorOverlay { width: 64px; height: 64px; }
-  #paletteSwatches { top: calc(10% + 76px); }
+  #paletteSwatches { top: calc(10% + 76px); bottom: auto; } /* bottom:auto: stesso motivo di #dataPanel qui sopra */
   .swatch { width: 18px; height: 18px; }
 
   /* #preview NON è più qui: sotto i 1101px la dimensione/posizione del
@@ -1005,9 +1005,15 @@ body {
   }
 
   /* pannello dati oggettivi: più stretto e più in alto, per non scontrarsi
-     con i quadratini di selezione colore (più in alto su schermi piccoli) */
+     con i quadratini di selezione colore (più in alto su schermi piccoli).
+     bottom:auto è necessario: senza, il "bottom" ereditato dal blocco
+     ≤1100px qui sopra resterebbe attivo insieme a questo "top" — con
+     entrambi impostati su un elemento position:fixed e height:auto, il
+     browser STIRA il pannello per riempire tutto lo spazio fra i due,
+     invece di dargli l'altezza naturale del contenuto. */
   #dataPanel {
     top: calc(10% + 100px);
+    bottom: auto;
     left: calc(20px - 1rem); /* vedi nota sull'allineamento nella regola base di #dataPanel */
     width: 58vw;
     max-width: 240px;
@@ -1058,7 +1064,12 @@ body {
     line-height: 1.7;
   }
 
+  /* top:auto qui per lo stesso motivo spiegato sopra (blocco ≤600px
+     generale): questa regola vuole ancorare il pannello al BASSO, quindi
+     deve annullare esplicitamente qualunque "top" ereditato da prima —
+     altrimenti torna a stirarsi fra i due. */
   #dataPanel {
+    top: auto;
     left: 10px;
     bottom: calc(12px + env(safe-area-inset-bottom, 0px));
     width: 57vw;
@@ -1100,6 +1111,7 @@ body {
   }
 
   #paletteSwatches {
+    top: auto; /* stesso motivo di #dataPanel qui sopra */
     left: 73px;
     bottom: calc(214px + env(safe-area-inset-bottom, 0px));
     gap: 4px;
