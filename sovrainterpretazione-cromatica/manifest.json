@@ -1,7 +1,7 @@
 {
   "name": "Sovrainterpretazione Cromatica",
   "short_name": "Sovrainterp.",
-  "description": "Installazione interattiva: la webcam osserva i colori della scena, un'AI locale nel browser li giudica.",
+  "description": "Installazione interattiva: la webcam osserva i colori della scena, un'AI locale (Ollama, sul PC) li giudica.",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
