@@ -704,9 +704,9 @@ function filterBadges(btn) {
 }
 
 function fit() {
-  const d = document.getElementById("device");
-  if (innerWidth <= 500) { d.style.transform = ""; return; }
-  const k = Math.min(1, (innerHeight - 32) / 812);
-  d.style.transform = `scale(${k})`;
+  document.documentElement.style.setProperty("--app-h", innerHeight + "px");
+  document.documentElement.style.setProperty("--app-w", innerWidth + "px");
 }
-addEventListener("resize", fit); fit();
+addEventListener("resize", fit);
+addEventListener("orientationchange", () => setTimeout(fit, 250));
+fit();
