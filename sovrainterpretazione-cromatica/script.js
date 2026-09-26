@@ -25,6 +25,8 @@
 //  15. RITRATTO CROMATICO ........... immagine astratta generata dai dati della singola osservazione, scaricabile
 //  16. LOG RISPOSTE .................. registro in memoria delle risposte + esportazione CSV (tasto "E")
 //  17. RICONOSCIMENTO PAGINA ........ riconosce la composizione cromatica stampata su una pagina della tesi e apre un popup a tema, chiudibile a mano
+//  18. QR INGRANDITO ................ un clic sul QR lo ingrandisce al centro, per mostrarlo a tutta la sala durante l'esposizione
+//  19. FORMA 3D PER CAPITOLO ........ genera e ruota una forma tridimensionale dai colori del capitolo, dentro al popup della sezione 17
 //
 //  MODIFICHE PIÙ COMUNI — dove intervenire:
 //  - Cambiare modello Ollama o i suoi parametri  → sezione 10, dentro fetchAIJudgment()
@@ -48,6 +50,9 @@
 //  - Colori/testo/tema di ogni pagina riconoscibile → sezione 17, costante PAGE_SIGNATURES
 //  - Quanto è tollerante il riconoscimento pagina (stampa/luce imprecise) → sezione 17, PAGE_MATCH_THRESHOLD / PAGE_MATCH_MIN_RATIO
 //  - Quanto resta "ignorata" una pagina dopo aver chiuso il suo popup    → sezione 17, PAGE_REOPEN_COOLDOWN
+//  - Quanto sono pronunciate le gobbe della forma 3D → sezione 19, i valori "strength"/"falloff" in generateChapterGeometry()
+//  - Velocità di rotazione automatica della forma 3D → sezione 19, il numero aggiunto a rotY in render3DLoop()
+//  - Passare a un modello 3D fatto a mano (Blender) invece che generato → sezione 19, vedi nota introduttiva della sezione
 // ══════════════════════════════════════════════════════════════════
 
 // Ollama gira sul PC (non nel telefono): il PC deve avere Ollama installato
@@ -1661,6 +1666,7 @@ async function triggerPageReaction(sig) {
   pageReactionTextEl.textContent = sig.fixedText || '…';
   pageReactionEl.classList.add('visible');
   pageReactionBackdrop.classList.add('visible');
+  show3DForChapter(sig);
 
   if (!sig.fixedText) {
     // risposta generata dal vivo (solo il cap. 3, vedi PAGE_SIGNATURES)
@@ -1682,6 +1688,7 @@ async function triggerPageReaction(sig) {
 function closePageReaction() {
   pageReactionEl.classList.remove('visible');
   pageReactionBackdrop.classList.remove('visible');
+  hide3DView();
   if (activePageId) pageCooldownUntil[activePageId] = performance.now() + PAGE_REOPEN_COOLDOWN;
   activePageId = null;
   pageRequestSeq++; // scarta un'eventuale risposta AI ancora in arrivo per la pagina appena chiusa
@@ -1735,6 +1742,192 @@ function closeQrModal() {
 qrBoxBtn.addEventListener('click', openQrModal);
 qrModalClose.addEventListener('click', closeQrModal);
 qrModalBackdrop.addEventListener('click', closeQrModal); // clic fuori dal popup = stesso effetto del bottone "chiudi"
+
+// ── 19. FORMA 3D PER CAPITOLO ───────────────────────────────────────
+// Quando il popup di riconoscimento pagina si apre (sezione 17), oltre
+// al testo mostra una forma tridimensionale generata dai dati DI QUEL
+// CAPITOLO — gli stessi colori della firma cromatica — invece di un
+// modello disegnato a mano: è CHROMA stessa a "scolpire" una forma a
+// partire dai dati, con lo stesso principio degli emblemi di capitolo
+// (macchie che nascono da un seed deterministico, non a caso). Ruotabile
+// trascinando col mouse o col dito; ruota lentamente da sola quando non
+// viene toccata.
+//
+// Per passare in futuro a modelli fatti a mano in Blender: basta
+// sostituire generateChapterGeometry()/colorizeGeometry() qui sotto con
+// un caricamento di file .glb (es. tramite GLTFLoader di Three.js, o il
+// componente <model-viewer> al posto del canvas) — il resto (apertura
+// popup, trascinamento, avvio/arresto del rendering) resta identico.
+
+const page3DCanvas = document.getElementById('pageReaction3D');
+
+// stesso PRNG deterministico usato per gli emblemi grafici di capitolo
+// (mulberry32, seed dalla stringa dell'id): stessa forma ogni volta per
+// lo stesso capitolo, non rigenerata a caso ad ogni apertura.
+function mulberry32_3d(seed) {
+  return function() {
+    seed |= 0; seed = (seed + 0x6D2B79F5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+function hashSeed3D(str) {
+  let h = 0;
+  for (let i = 0; i < str.length; i++) { h = (Math.imul(31, h) + str.charCodeAt(i)) | 0; }
+  return h;
+}
+
+let scene3D, camera3D, renderer3D, mesh3D, animFrame3D = null;
+let rotX = -0.3, rotY = 0.6; // orientamento iniziale, leggermente di tre-quarti invece che frontale piatto
+let dragging3D = false, lastPointerX = 0, lastPointerY = 0;
+
+function ensure3DScene() {
+  if (scene3D) return true; // già creata, riusala
+  if (typeof THREE === 'undefined') {
+    console.warn('Three.js non caricato: la forma 3D resta disattivata, il popup mostra comunque il testo.');
+    return false;
+  }
+  scene3D = new THREE.Scene();
+  camera3D = new THREE.PerspectiveCamera(40, 1, 0.1, 10);
+  camera3D.position.set(0, 0, 3.4);
+
+  renderer3D = new THREE.WebGLRenderer({ canvas: page3DCanvas, antialias: true, alpha: true });
+  renderer3D.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+
+  scene3D.add(new THREE.AmbientLight(0xffffff, 0.55));
+  const key = new THREE.DirectionalLight(0xffffff, 0.9);
+  key.position.set(2, 2.5, 3);
+  scene3D.add(key);
+  const rim = new THREE.DirectionalLight(0xffffff, 0.35);
+  rim.position.set(-2, -1, -2);
+  scene3D.add(rim);
+
+  // trascinamento manuale (mouse o tocco) per ruotare — niente libreria
+  // OrbitControls: bastano due variabili (rotX/rotY) aggiornate ad ogni
+  // spostamento del puntatore, più semplice da mantenere qui
+  const onDown = (x, y) => { dragging3D = true; lastPointerX = x; lastPointerY = y; page3DCanvas.classList.add('dragging'); };
+  const onMove = (x, y) => {
+    if (!dragging3D) return;
+    rotY += (x - lastPointerX) * 0.008;
+    rotX += (y - lastPointerY) * 0.008;
+    rotX = Math.max(-1.3, Math.min(1.3, rotX)); // non lasciare che la forma si "ribalti" sopra/sotto
+    lastPointerX = x; lastPointerY = y;
+  };
+  const onUp = () => { dragging3D = false; page3DCanvas.classList.remove('dragging'); };
+
+  page3DCanvas.addEventListener('pointerdown', e => { page3DCanvas.setPointerCapture(e.pointerId); onDown(e.clientX, e.clientY); });
+  page3DCanvas.addEventListener('pointermove', e => onMove(e.clientX, e.clientY));
+  page3DCanvas.addEventListener('pointerup', onUp);
+  page3DCanvas.addEventListener('pointercancel', onUp);
+
+  return true;
+}
+
+// deforma una sfera (icosaedro suddiviso) con alcune "gobbe" morbide
+// posizionate e dimensionate dal seed — stesso principio delle macchie
+// sfocate 2D degli emblemi, qui applicato come spostamento radiale su
+// una superficie sferica invece che su un piano
+function generateChapterGeometry(sig) {
+  const rnd = mulberry32_3d(hashSeed3D(sig.id + '-forma'));
+  const geo = new THREE.IcosahedronGeometry(1, 4);
+  const pos = geo.attributes.position;
+
+  const numBumps = 4 + Math.floor(rnd() * 3); // 4-6 gobbe
+  const bumps = [];
+  for (let i = 0; i < numBumps; i++) {
+    const theta = rnd() * Math.PI * 2;
+    const phi = Math.acos(2 * rnd() - 1);
+    bumps.push({
+      dir: new THREE.Vector3(Math.sin(phi) * Math.cos(theta), Math.sin(phi) * Math.sin(theta), Math.cos(phi)),
+      strength: 0.12 + rnd() * 0.30,
+      falloff: 1.4 + rnd() * 2.2,
+      sign: rnd() > 0.3 ? 1 : -1, // per lo più protuberanze verso fuori, qualche insenatura verso dentro
+    });
+  }
+
+  const v = new THREE.Vector3();
+  for (let i = 0; i < pos.count; i++) {
+    v.fromBufferAttribute(pos, i).normalize();
+    let disp = 0;
+    bumps.forEach(b => {
+      const influence = Math.max(0, v.dot(b.dir)); // 0-1: quanto questo punto guarda verso la gobba
+      disp += b.sign * b.strength * Math.pow(influence, b.falloff);
+    });
+    v.multiplyScalar(1 + disp);
+    pos.setXYZ(i, v.x, v.y, v.z);
+  }
+  geo.computeVertexNormals();
+  return geo;
+}
+
+// colora ogni vertice sfumando fra i colori della firma del capitolo: le
+// stesse identiche coordinate colore usate per il riconoscimento (sezione
+// 17) diventano qui il colore della forma — non una scelta estetica
+// indipendente
+function colorizeGeometry(geo, colors) {
+  const rnd = mulberry32_3d(hashSeed3D('colore-' + colors.map(c => c.join(',')).join('|')));
+  const anchors = colors.map(c => {
+    const theta = rnd() * Math.PI * 2, phi = Math.acos(2 * rnd() - 1);
+    return {
+      dir: new THREE.Vector3(Math.sin(phi) * Math.cos(theta), Math.sin(phi) * Math.sin(theta), Math.cos(phi)),
+      color: new THREE.Color(c[0] / 255, c[1] / 255, c[2] / 255),
+    };
+  });
+  const pos = geo.attributes.position;
+  const colArr = new Float32Array(pos.count * 3);
+  const v = new THREE.Vector3();
+  for (let i = 0; i < pos.count; i++) {
+    v.fromBufferAttribute(pos, i).normalize();
+    let totalW = 0, r = 0, g = 0, b = 0;
+    anchors.forEach(a => {
+      const w = Math.pow(Math.max(0, v.dot(a.dir)), 3);
+      totalW += w; r += a.color.r * w; g += a.color.g * w; b += a.color.b * w;
+    });
+    if (totalW > 0) { r /= totalW; g /= totalW; b /= totalW; } else { r = g = b = 0.5; }
+    colArr[i*3] = r; colArr[i*3+1] = g; colArr[i*3+2] = b;
+  }
+  geo.setAttribute('color', new THREE.BufferAttribute(colArr, 3));
+}
+
+function show3DForChapter(sig) {
+  if (!ensure3DScene()) return; // Three.js non disponibile: il popup resta solo testuale, nessun errore visibile
+
+  if (mesh3D) { scene3D.remove(mesh3D); mesh3D.geometry.dispose(); mesh3D.material.dispose(); }
+  const geo = generateChapterGeometry(sig);
+  colorizeGeometry(geo, sig.colors);
+  const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.55, metalness: 0.12 });
+  mesh3D = new THREE.Mesh(geo, mat);
+  scene3D.add(mesh3D);
+
+  rotX = -0.3; rotY = 0.6; // stesso orientamento di partenza ad ogni apertura, per coerenza fra un capitolo e l'altro
+
+  // display:'block' PRIMA di leggere clientWidth/clientHeight: un elemento
+  // display:none (lo stato di partenza in style.css) non ha una vera area
+  // occupata, quindi clientWidth/clientHeight risulterebbero sempre 0 —
+  // misurarli in quell'ordine darebbe un renderer di dimensione zero e un
+  // aspect ratio NaN, con la forma 3D che non apparirebbe mai.
+  page3DCanvas.style.display = 'block';
+
+  const w = page3DCanvas.clientWidth, h = page3DCanvas.clientHeight;
+  renderer3D.setSize(w, h, false);
+  camera3D.aspect = w / h;
+  camera3D.updateProjectionMatrix();
+
+  if (!animFrame3D) render3DLoop();
+}
+
+function render3DLoop() {
+  animFrame3D = requestAnimationFrame(render3DLoop);
+  if (!dragging3D) rotY += 0.004; // rotazione lenta automatica quando non viene trascinata
+  if (mesh3D) { mesh3D.rotation.x = rotX; mesh3D.rotation.y = rotY; }
+  renderer3D.render(scene3D, camera3D);
+}
+
+function hide3DView() {
+  page3DCanvas.style.display = 'none';
+  if (animFrame3D) { cancelAnimationFrame(animFrame3D); animFrame3D = null; }
+}
 
 document.addEventListener('keydown', e => {
   // ignora la scorciatoia mentre si sta scrivendo in un campo di testo
