@@ -723,6 +723,20 @@ video { display: none; }
   margin-top: 0.6rem;
 }
 
+/* forma 3D generata dai dati del capitolo (script.js, sezione 19).
+   display:none di default: JS la mostra solo quando la forma è pronta,
+   così non lascia un riquadro vuoto se WebGL non è disponibile o se la
+   libreria Three.js non si è caricata (rete assente, CDN irraggiungibile). */
+#pageReaction3D {
+  display: none;
+  width: 200px;
+  height: 200px;
+  margin: 0 auto;
+  cursor: grab;
+  touch-action: none; /* evita che trascinare la forma faccia anche scorrere la pagina sotto, su telefono */
+}
+#pageReaction3D.dragging { cursor: grabbing; }
+
 /* ── SCANLINES ───────────────────────────────────────────────────── */
 /* leggerissime righe orizzontali sopra tutto, effetto "schermo vecchio" */
 body::before {
@@ -1019,6 +1033,7 @@ body {
 
   #pageReaction { padding: 2rem 1.6rem 1.7rem; width: min(560px, 90vw); }
   #pageReactionText { font-size: 1.05rem; }
+  #pageReaction3D { width: 150px; height: 150px; }
 }
 
 /* ── TELEFONO VERTICALE ─────────────────────────────────────────── */
