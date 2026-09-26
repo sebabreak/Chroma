@@ -22,6 +22,14 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Sovrainterp.">
   <meta name="mobile-web-app-capable" content="yes">
+
+  <!-- Three.js: libreria per il rendering 3D nel browser, usata per la
+       forma tridimensionale generata nel popup di riconoscimento pagina
+       (script.js, sezione 17). Versione "classica" (non a moduli): si usa
+       come THREE.* nello script.js caricato dopo, senza bisogno di build
+       tool o import — coerente con il resto del progetto (tutto file
+       diretti, nessuna compilazione). -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 </head>
 
 <!--
@@ -155,13 +163,19 @@
        #pageReactionBackdrop scurisce TUTTO il resto (HUD, pannello dati,
        QR, GIUDICA, anteprima webcam) mentre il popup è aperto — senza,
        quegli elementi restavano visibili e in competizione visiva col
-       popup, specialmente su schermi piccoli (vedi nota in style.css). -->
+       popup, specialmente su schermi piccoli (vedi nota in style.css).
+       #pageReaction3D (script.js, sezione 19) mostra una forma tridimensionale
+       generata dai dati del capitolo — colori e geometria calcolati dalla
+       stessa firma cromatica che ha fatto scattare il riconoscimento —
+       ruotabile trascinandola col mouse o col dito. -->
   <div id="pageReactionBackdrop"></div>
   <div id="pageReaction">
     <button id="pageReactionClose" class="ghost-btn" type="button">chiudi ✕</button>
+    <canvas id="pageReaction3D"></canvas>
     <div id="pageReactionText"></div>
   </div>
 
   <script src="script.js"></script>
 </body>
+
 </html>
