@@ -207,7 +207,7 @@ function openCombo(id) {
 
 const DEF = { xp: 0, level: 1, xpTotal: 0, streak: 1, quizzes: 0, lessonsTotal: 0, done: [], onboarded: false,
   m: { lessons: 0, quiz: 0, days: 1, colors: 0 }, claimed: [], redeemed: [], lastDay: null, badges: [],
-  owned: ["rosso", "arancio", "giallo", "verde", "bosco", "ottanio", "blu", "viola"], theme: null,
+  owned: ["perla", "ardesia"], theme: null,
   name: "", time: 0, missionsDone: 0, myPalettes: [], dark: "auto" };
 let S;
 try { S = Object.assign({}, DEF, JSON.parse(localStorage.getItem("chroma") || "{}")); } catch { S = { ...DEF }; }
@@ -219,7 +219,7 @@ function render() {
   const lessonsDone = Math.min(3, S.m.lessons);
   const t = Math.floor(S.time / 60);
   const vals = { ...S, lessonsDone, xpTotal: S.xpTotal.toLocaleString("it-IT"),
-    greet: S.name || "Benvenuto", name: S.name || "Ospite", levelTitle: shownTitle(), levelNext: levelTitle(S.level + 1), xpLeft: 1000 - S.xp, titlesN: Math.min(S.level, 20),
+    greet: S.name || "Benvenuto", name: S.name || "Ospite", levelTitle: shownTitle(), levelNext: levelTitle(S.level + 1), xpLeft: 1000 - S.xp, titlesN: S.level,
     timeStr: t >= 60 ? `${Math.floor(t / 60)} h ${t % 60} min` : `${t} min`,
     quests: S.quizzes + S.lessonsTotal, ownedN: S.owned.length, totalColors: COLORS.length };
   document.querySelectorAll("[data-bind]").forEach(el => el.textContent = vals[el.dataset.bind]);
@@ -364,14 +364,13 @@ function openQuiz(id) {
 }
 
 const EV = {
-  blu: "cobalto", arancione: "arancione", viola: "ametista",
-  rosso: "scarlatto", giallo: "limone", verde: "giada", bianco: "avorio", nero: "ossidiana",
-  "Complementari": "petrolio", "Analoghi": "salvia", "Triade": "carminio",
-  "Split complementari": "ambra", "Rettangolo": "indaco", "Quadrato": "fucsia"
+  rosso: "rosso", arancione: "arancione", giallo: "giallo", verde: "verde", blu: "blu", viola: "viola", bianco: "bianco", nero: "nero",
+  "Complementari": "turchese", "Analoghi": "lime", "Triade": "magenta",
+  "Split complementari": "corallo", "Rettangolo": "oliva", "Quadrato": "petrolio"
 };
 function showEvent(l, score) {
   const tot = l.quiz.length, perfect = score === tot;
-  const colr = COLOR_BY[EV[l.id]] || COLOR_BY.cobalto, name = colr.n, col = colr.h;
+  const colr = COLOR_BY[EV[l.id]] || COLOR_BY.blu, name = colr.n, col = colr.h;
   const xp = perfect ? 100 : score * 30;
   addXP(xp);
   const scr = document.getElementById("evento"), $ = q => scr.querySelector(q);
@@ -405,34 +404,55 @@ function showEvent(l, score) {
 }
 
 const COLORS = [
-
-  { id: "rosso", n: "Rosso", h: "#e11d1d", src: "base" }, { id: "arancio", n: "Arancio", h: "#ff6a00", src: "base" },
-  { id: "giallo", n: "Giallo", h: "#ffbf00", src: "base" }, { id: "verde", n: "Verde", h: "#4cc41c", src: "base" },
-  { id: "bosco", n: "Verde bosco", h: "#2d6a1f", src: "base" }, { id: "ottanio", n: "Ottanio", h: "#22919e", src: "base" },
-  { id: "blu", n: "Blu", h: "#1434e0", src: "base" }, { id: "viola", n: "Viola", h: "#9b1ee0", src: "base" },
-
-  { id: "cobalto", n: "Blu cobalto", h: "#1f4fb8", src: "quiz", hint: "Quiz sul blu" },
-  { id: "arancione", n: "Arancione", h: "#e07a2c", src: "quiz", hint: "Quiz sull'arancione" },
-  { id: "ametista", n: "Ametista", h: "#6b3fb8", src: "quiz", hint: "Quiz sul viola" },
-  { id: "scarlatto", n: "Scarlatto", h: "#d0112b", src: "quiz", hint: "Quiz sul rosso" },
-  { id: "limone", n: "Limone", h: "#f2d31b", src: "quiz", hint: "Quiz sul giallo" },
-  { id: "giada", n: "Giada", h: "#00a86b", src: "quiz", hint: "Quiz sul verde" },
-  { id: "avorio", n: "Avorio", h: "#e9dfc4", src: "quiz", hint: "Quiz sul bianco" },
-  { id: "ossidiana", n: "Ossidiana", h: "#2b2b33", src: "quiz", hint: "Quiz sul nero" },
-  { id: "petrolio", n: "Petrolio", h: "#1f7a8c", src: "quiz", hint: "Quiz Complementari" },
-  { id: "salvia", n: "Salvia", h: "#5f9e6e", src: "quiz", hint: "Quiz Analoghi" },
-  { id: "carminio", n: "Carminio", h: "#b3203a", src: "quiz", hint: "Quiz Triade" },
-  { id: "ambra", n: "Ambra", h: "#d98a1a", src: "quiz", hint: "Quiz Split compl." },
-  { id: "indaco", n: "Indaco", h: "#4b3fcf", src: "quiz", hint: "Quiz Rettangolo" },
-  { id: "fucsia", n: "Fucsia", h: "#c2307a", src: "quiz", hint: "Quiz Quadrato" },
-
-  { id: "corallo", n: "Corallo", h: "#ff6f61", src: "reward", hint: "Reward missioni" },
-  { id: "menta", n: "Menta", h: "#2fbf8f", src: "reward", hint: "Reward missioni" },
-  { id: "lavanda", n: "Lavanda", h: "#8f73d9", src: "reward", hint: "Reward missioni" },
-  { id: "oro", n: "Oro", h: "#c9960f", src: "reward", hint: "Reward missioni" },
-  { id: "smeraldo", n: "Smeraldo", h: "#1f9d55", src: "reward", hint: "Reward missioni" },
-  { id: "magenta", n: "Magenta", h: "#d6248f", src: "reward", hint: "Reward missioni" }
+  { id: "perla", n: "Grigio perla", h: "#aab0b8", src: "base" },
+  { id: "ardesia", n: "Grigio ardesia", h: "#4f5763", src: "base" },
+  { id: "rosso", n: "Rosso", h: "#e3242b", src: "quiz", hint: "Quiz sul rosso" },
+  { id: "arancione", n: "Arancione", h: "#ff7a00", src: "quiz", hint: "Quiz sull'arancione" },
+  { id: "giallo", n: "Giallo", h: "#ffd000", src: "quiz", hint: "Quiz sul giallo" },
+  { id: "verde", n: "Verde", h: "#2fa84f", src: "quiz", hint: "Quiz sul verde" },
+  { id: "blu", n: "Blu", h: "#1f5fe0", src: "quiz", hint: "Quiz sul blu" },
+  { id: "viola", n: "Viola", h: "#8a2be2", src: "quiz", hint: "Quiz sul viola" },
+  { id: "bianco", n: "Bianco", h: "#f6f4ee", src: "quiz", hint: "Quiz sul bianco" },
+  { id: "nero", n: "Nero", h: "#18181d", src: "quiz", hint: "Quiz sul nero" },
+  { id: "turchese", n: "Turchese", h: "#12c4c0", src: "quiz", hint: "Quiz Complementari" },
+  { id: "lime", n: "Lime", h: "#a6d62b", src: "quiz", hint: "Quiz Analoghi" },
+  { id: "magenta", n: "Magenta", h: "#d6208f", src: "quiz", hint: "Quiz Triade" },
+  { id: "corallo", n: "Corallo", h: "#ff8a7a", src: "quiz", hint: "Quiz Split compl." },
+  { id: "oliva", n: "Oliva", h: "#76782a", src: "quiz", hint: "Quiz Rettangolo" },
+  { id: "petrolio", n: "Petrolio", h: "#15707a", src: "quiz", hint: "Quiz Quadrato" },
+  { id: "carminio", n: "Carminio", h: "#8e1630", src: "reward", hint: "Reward missioni" },
+  { id: "rosa", n: "Rosa", h: "#f5a9c6", src: "reward", hint: "Reward missioni" },
+  { id: "terracotta", n: "Terracotta", h: "#b0623a", src: "reward", hint: "Reward missioni" },
+  { id: "oro", n: "Oro", h: "#b8900f", src: "reward", hint: "Reward missioni" },
+  { id: "bosco", n: "Verde bosco", h: "#1d5530", src: "reward", hint: "Reward missioni" },
+  { id: "salvia", n: "Salvia", h: "#9ab596", src: "reward", hint: "Reward missioni" },
+  { id: "menta", n: "Menta", h: "#a6f0d2", src: "reward", hint: "Reward missioni" },
+  { id: "azzurro", n: "Azzurro", h: "#62b8f2", src: "reward", hint: "Reward missioni" },
+  { id: "notte", n: "Blu notte", h: "#172a5a", src: "reward", hint: "Reward missioni" },
+  { id: "lavanda", n: "Lavanda", h: "#b8a4ec", src: "reward", hint: "Reward missioni" },
+  { id: "prugna", n: "Prugna", h: "#6a2a5b", src: "reward", hint: "Reward missioni" },
+  { id: "marrone", n: "Marrone", h: "#5c3a22", src: "reward", hint: "Reward missioni" }
 ];
+const OLD_COLORS = { arancio: "arancione", ottanio: "petrolio", cobalto: "blu", ametista: "viola", scarlatto: "rosso",
+  limone: "giallo", giada: "verde", avorio: "bianco", ossidiana: "nero", ambra: "oro", indaco: "notte", fucsia: "magenta", smeraldo: "bosco" };
+
+function hueKey(hex) {
+  const [r, g, b] = [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16) / 255);
+  const mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn, l = (mx + mn) / 2;
+  const sat = d === 0 ? 0 : d / (1 - Math.abs(2 * l - 1));
+  if (sat < .18 || l < .1 || l > .93) return 1000 + (1 - l) * 100;
+  let h = mx === r ? ((g - b) / d) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  h = (h * 60 + 360) % 360;
+  if (h > 345) h -= 360;
+  return h + (1 - l) * 8;
+}
+const byHue = ids => [...ids].sort((a, b) => hueKey(COLOR_BY[a].h) - hueKey(COLOR_BY[b].h));
+
+function levelColor(l) {
+  if (l > 20) return "conic-gradient(#e3242b, #ff7a00, #ffd000, #2fa84f, #12c4c0, #1f5fe0, #8a2be2, #e3242b)";
+  const h = (l - 1) * (285 / 19), s = 78, li = h > 40 && h < 190 ? 42 : 52;
+  return `hsl(${h.toFixed(0)} ${s}% ${li}%)`;
+}
 const COLOR_BY = Object.fromEntries(COLORS.map(c => [c.id, c]));
 
 const hex2rgb = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
@@ -468,7 +488,9 @@ function renderColors() {
   const hs = document.querySelector("[data-home-swatches]");
   if (hs) {
     hs.innerHTML = "";
-    S.owned.slice(-8).forEach(id => {
+    let show = byHue(S.owned).slice(0, 8);
+    if (S.theme && S.owned.includes(S.theme) && !show.includes(S.theme)) show = byHue([...show.slice(0, 7), S.theme]);
+    show.forEach(id => {
       const c = COLOR_BY[id], b = document.createElement("button");
       b.style.background = c.h; b.title = c.n; b.setAttribute("aria-label", "Tema " + c.n);
       if (S.theme === id) b.className = "cur";
@@ -479,7 +501,7 @@ function renderColors() {
   const own = document.querySelector("[data-owned]");
   if (!own) return;
   own.innerHTML = ""; document.querySelector("[data-locked]").innerHTML = "";
-  COLORS.forEach(c => {
+  byHue(COLORS.map(c => c.id)).map(id => COLOR_BY[id]).forEach(c => {
     const has = S.owned.includes(c.id);
     const el = document.createElement(has ? "button" : "div");
     el.className = "sw" + (has ? "" : " locked") + (S.theme === c.id ? " cur" : "");
