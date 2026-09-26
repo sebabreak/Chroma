@@ -87,7 +87,7 @@ function drawEditor() {
   $$("[data-pe-count]").textContent = `${picked.length} / 6`;
   const g = $$("[data-pe-grid]");
   g.innerHTML = "";
-  S.owned.forEach(id => {
+  byHue(S.owned).forEach(id => {
     const c = COLOR_BY[id], b = document.createElement("button");
     b.className = "sw" + (picked.includes(id) ? " cur" : "");
     b.innerHTML = `<i style="background:${c.h}"></i><span>${c.n}</span>`;
@@ -186,7 +186,8 @@ function showLevelUp() {
   $$("[data-lu-title]").textContent = levelTitle(l);
   const burst = $$("[data-lu-burst]");
   burst.innerHTML = Array.from({ length: 18 }, (_, i) =>
-    `<i style="--a:${i * 20}deg;--c:${COLORS[(i * 5 + l) % COLORS.length].h};--d:${(i % 3) * .08}s"></i>`).join("");
+    `<i style="--a:${i * 20}deg;--c:hsl(${i * 20} 80% 55%);--d:${(i % 3) * .08}s"></i>`).join("");
+  $$("[data-lu-lv]").parentElement.style.color = l > 20 ? "" : levelColor(l);
   bg.hidden = false;
 }
 $$("[data-lu-ok]").onclick = () => {
@@ -214,7 +215,7 @@ function renderTimeline() {
     const got = l <= S.level, t = S.titles.find(x => x.l === l);
     const li = document.createElement("li");
     li.className = (got ? "got" : "locked") + (got && levelTitle(l) === shownTitle() ? " shown" : "") + (l === S.level + 1 ? " next" : "");
-    li.innerHTML = `<span class="tl-dot" style="--c:${COLORS[(l * 3) % COLORS.length].h}">${got ? l : "🔒"}</span>
+    li.innerHTML = `<span class="tl-dot" style="--c:${levelColor(l)}">${got ? l : "🔒"}</span>
       <div><b>${got || l === S.level + 1 ? levelTitle(l) : "???"}</b>
       <small>${got ? "Livello " + l + " · " + fmt(t?.d) : l === S.level + 1 ? `Prossimo · mancano ${1000 - S.xp} XP` : "Livello " + l}</small></div>
       ${got && levelTitle(l) === shownTitle() ? '<em>In mostra</em>' : ""}`;
@@ -340,11 +341,38 @@ $$("[data-demo]").addEventListener("click", e => {
   if (msg) toast(msg);
 });
 
+const standalone = matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
+const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+const isMobile = matchMedia("(max-width: 500px)").matches || /android|iphone|ipad|ipod/i.test(navigator.userAgent);
+let installEvt = null;
+addEventListener("beforeinstallprompt", e => { e.preventDefault(); installEvt = e; showInstallBar(); });
+function showInstallBar() {
+  let off = false; try { off = localStorage.getItem("chroma-install-off") === "1"; } catch {}
+  $$("[data-install]").hidden = standalone || off || !isMobile || !(installEvt || isIOS);
+}
+function doInstall() {
+  if (standalone) return toast("CHROMA è già installata");
+  if (installEvt) { installEvt.prompt(); installEvt.userChoice.then(() => { installEvt = null; showInstallBar(); }); return; }
+  const sh = $$("[data-sheet]");
+  sh.innerHTML = isIOS
+    ? `<h3>Installa CHROMA su iPhone</h3><ol class="ios-steps"><li>Apri questa pagina con <b>Safari</b></li><li>Tocca il tasto <b>Condividi</b> (il quadrato con la freccia ↑)</li><li>Scegli <b>Aggiungi a Home</b> e poi <b>Aggiungi</b></li><li>Apri CHROMA dall'icona: sarà a schermo intero</li></ol>`
+    : `<h3>Installa CHROMA</h3><ol class="ios-steps"><li>Apri il menu del browser <b>⋮</b></li><li>Scegli <b>Installa app</b> o <b>Aggiungi a schermata Home</b></li><li>Apri CHROMA dall'icona: sarà a schermo intero</li></ol>`;
+  const c = document.createElement("button"); c.className = "sheet-btn cancel"; c.textContent = "Ho capito";
+  c.onclick = () => $$("[data-sheet-bg]").hidden = true; sh.appendChild(c);
+  $$("[data-sheet-bg]").hidden = false;
+}
+document.querySelectorAll("[data-install-go]").forEach(b => b.onclick = doInstall);
+$$("[data-install-x]").onclick = () => { try { localStorage.setItem("chroma-install-off", "1"); } catch {} $$("[data-install]").hidden = true; };
+showInstallBar();
+
 if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
   navigator.serviceWorker.register("sw.js").catch(() => {});
 }
 
 if (!Array.isArray(S.owned)) S.owned = [...DEF.owned];
+S.owned = [...new Set(["perla", "ardesia", ...S.owned.map(id => OLD_COLORS[id] || id)].filter(id => COLOR_BY[id]))];
+if (S.theme) S.theme = COLOR_BY[OLD_COLORS[S.theme] || S.theme] ? (OLD_COLORS[S.theme] || S.theme) : null;
+(S.myPalettes || []).forEach(p => p.c = [...new Set(p.c.map(id => OLD_COLORS[id] || id).filter(id => COLOR_BY[id]))]);
 if (!Array.isArray(S.myPalettes)) S.myPalettes = [];
 fillTitles();
 S.redeemed.forEach(q => { const c = EV[q]; if (c && !S.owned.includes(c)) S.owned.push(c); });
