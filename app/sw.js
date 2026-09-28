@@ -1,9 +1,10 @@
-const VERSION = "chroma-v20";
+const VERSION = "chroma-v21";
 const FILES = [
   "./",
   "index.html",
   "style.css",
   "data.js",
+  "uk.js",
   "app.js",
   "tools.js",
   "manifest.webmanifest",
