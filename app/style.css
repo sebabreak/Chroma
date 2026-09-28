@@ -891,3 +891,64 @@ body { align-items: stretch; justify-content: center; }
 .lesson .go { top: 50%; margin-top: -7px; }
 #foto .av-upload { width: auto; max-width: 100%; padding: 0 22px; white-space: nowrap; display: table; }
 .g-opt { display: grid; place-items: center; text-align: center; }
+
+.lesson .thumb.wheel { padding: 8px; object-fit: contain; border-radius: 0; background: radial-gradient(circle closest-side, #fff 0 96%, rgba(255,255,255,0) 100%) content-box; }
+.lesson.qlock .thumb { filter: grayscale(.85); opacity: .55; }
+.lesson.qlock .t { opacity: .7; }
+.qstat.lock { background: #eef0f3; color: #555; }
+[data-dark="dark"] .qstat.lock { background: #2c2c33; color: #ccc; }
+.sw.locked, .badge.tap, .scale-strip i[data-unlock]:not([data-unlock=""]) { cursor: pointer; }
+.sw.locked:active, .badge.tap:active { transform: scale(.95); }
+.sw.locked i::before { content: "Sblocca"; position: absolute; left: 50%; bottom: -6px; transform: translateX(-50%); padding: 1px 5px; border-radius: 6px; background: var(--purple-btn); color: var(--on-accent, #fff); font: 700 7px/11px var(--roboto); letter-spacing: .2px; white-space: nowrap; z-index: 1; }
+.badge.tap::after { content: "Come si ottiene ›"; display: block; margin-top: 4px; font: 600 10px/14px var(--roboto); color: var(--link); }
+.lf-btn { margin-bottom: 6px; }
+.btn-link { font: 600 14px/20px var(--inter); color: var(--link); padding: 10px 14px; background: none; }
+.lf-back { position: relative; margin: 0 0 clamp(14px, 5vh, 50px); }
+.ph-again { display: block; margin: 8px auto 0; }
+
+.wheel { background: #888; }
+.tool-ic { width: 48px; height: 48px; border-radius: 14px; display: grid; place-items: center; }
+.tool-ic svg { width: 34px; height: 34px; display: block; }
+.lab-card .tool-ic { background: #fff; box-shadow: 0 1px 4px rgba(0,0,0,.18); outline: 0; }
+.tool-ic.cam { background: var(--purple-btn); color: var(--on-accent, #fff); }
+.tool-ic.cam svg { width: 26px; height: 26px; }
+
+.ph-hero { display: flex; align-items: center; gap: 14px; margin-top: 12px; padding: 14px; border-radius: 16px; background: var(--cream); color: var(--text, #000); box-shadow: var(--shadow); }
+.ph-hero p { font: 400 12.5px/18px var(--roboto); color: var(--text2, #444); }
+.ph-art { position: relative; flex: none; width: 74px; height: 74px; }
+.ph-art i { position: absolute; width: 34px; height: 34px; border-radius: 50%; box-shadow: 0 2px 5px rgba(0,0,0,.25), inset 0 0 0 2px rgba(255,255,255,.5); }
+.ph-art i:nth-child(1) { left: 0; top: 4px; } .ph-art i:nth-child(2) { left: 36px; top: 0; } .ph-art i:nth-child(3) { left: 20px; top: 22px; width: 36px; height: 36px; }
+.ph-art i:nth-child(4) { left: 2px; top: 40px; } .ph-art i:nth-child(5) { left: 40px; top: 40px; }
+.ph-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 14px; }
+.ph-btn { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 14px 8px; border-radius: 14px; background: var(--cream); color: var(--text, #000); box-shadow: var(--shadow); font: 600 13px/16px var(--inter); cursor: pointer; text-align: center; }
+.ph-btn.main { background: var(--purple-btn); color: var(--on-accent, #fff); }
+.ph-btn svg { width: 28px; height: 28px; }
+.ph-btn:active { transform: scale(.97); }
+.ph-intro[hidden] { display: none; }
+.ph-samples { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.ph-samples button { aspect-ratio: 1; border-radius: 14px; overflow: hidden; box-shadow: var(--shadow); }
+.ph-samples img { width: 100%; height: 100%; object-fit: cover; }
+.ph-steps { list-style: none; counter-reset: s; display: flex; flex-direction: column; gap: 10px; }
+.ph-steps li { counter-increment: s; position: relative; padding: 10px 12px 10px 50px; border-radius: 12px; background: var(--cream); color: var(--text, #000); box-shadow: 0 1px 3px rgba(0,0,0,.18); }
+.ph-steps li::before { content: counter(s); position: absolute; left: 12px; top: 50%; transform: translateY(-50%); width: 26px; height: 26px; border-radius: 50%; background: var(--purple-btn); color: var(--on-accent, #fff); display: grid; place-items: center; font: 700 13px/1 var(--inter); }
+.ph-steps b { display: block; font: 600 13px/18px var(--inter); }
+.ph-steps span { font: 400 12px/17px var(--roboto); color: var(--text2, #555); }
+.ph-frame { position: relative; border-radius: 16px; overflow: hidden; box-shadow: var(--shadow); margin-bottom: 12px; background: #0002; }
+.ph-frame img { width: 100%; max-height: 320px; object-fit: cover; border-radius: 0; box-shadow: none; margin: 0; }
+.ph-frame .photo-bar { margin: 0; border-radius: 0; box-shadow: none; height: 26px; }
+.pc span { flex: 1; }
+.pc u { display: block; height: 4px; border-radius: 2px; margin-top: 5px; text-decoration: none; }
+.pc b { font-family: var(--inter); }
+.pc em { font: 700 14px/1 var(--inter); color: var(--text, #000); }
+.ph-stats { display: flex; flex-direction: column; gap: 10px; }
+.ph-stat { padding: 12px 14px; border-radius: 14px; background: var(--cream); color: var(--text, #000); box-shadow: 0 1px 3px rgba(0,0,0,.18); }
+.ph-sh { display: flex; justify-content: space-between; font: 500 12px/16px var(--roboto); color: var(--text2, #555); }
+.ph-sh b { font: 700 13px/16px var(--inter); color: var(--text, #000); }
+.ph-track { position: relative; height: 10px; border-radius: 5px; margin-top: 8px; box-shadow: inset 0 0 0 1px rgba(0,0,0,.1); }
+.ph-track i { position: absolute; top: 50%; width: 18px; height: 18px; margin: -9px 0 0 -9px; border-radius: 50%; background: #fff; border: 3px solid #222; box-shadow: 0 1px 3px rgba(0,0,0,.35); }
+.ph-row { display: flex; align-items: center; gap: 12px; }
+.ph-row > div:last-child { flex: 1; }
+.ph-row small { display: block; font: 400 12px/17px var(--roboto); color: var(--text2, #555); margin-top: 3px; }
+.ph-ct { flex: none; width: 48px; height: 48px; border-radius: 12px; display: grid; place-items: center; font: 700 20px/1 var(--inter); box-shadow: inset 0 0 0 1px rgba(0,0,0,.12); }
+.ph-harm { flex: none; position: relative; width: 48px; height: 48px; border-radius: 50%; overflow: hidden; display: flex; flex-wrap: wrap; transform: rotate(-20deg); box-shadow: 0 1px 3px rgba(0,0,0,.25); }
+.ph-harm i { flex: 1 1 40%; }
