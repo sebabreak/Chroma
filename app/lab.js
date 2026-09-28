@@ -367,3 +367,64 @@ render = function () {
   }
   document.querySelectorAll("[data-best]").forEach(el => { const v = (S.games || {})[el.dataset.best]; el.textContent = v != null ? `Record ${v}/5` : "Da provare"; });
 };
+
+const SECRETS = [
+  { id: "arcobaleno", n: "Arcobaleno", d: "Tutto lo spettro in movimento", base: "#7b2cbf", on: "#fff", g: "linear-gradient(90deg,#c81d25,#d9480f,#a07800,#2b8a3e,#0b7285,#1c4fd8,#7b2cbf,#c81d25)" },
+  { id: "aurora", n: "Aurora boreale", d: "Verdi e viola che danzano", base: "#0e7c70", on: "#fff", g: "linear-gradient(120deg,#0b5d57,#0e8f7e,#4b3fc4,#7a2bb8,#0e8f7e,#0b5d57)" },
+  { id: "tramonto", n: "Tramonto", d: "Dall'arancio al magenta", base: "#c2255c", on: "#fff", g: "linear-gradient(120deg,#d9480f,#d6336c,#862e9c,#d6336c,#d9480f)" },
+  { id: "olografico", n: "Olografico", d: "Riflessi iridescenti", base: "#7a8cff", on: "#1a1a2e", g: "linear-gradient(120deg,#ffc6ec,#bfe9ff,#c9ffd0,#fff1a8,#e3c8ff,#ffc6ec)" }
+];
+const secretsOpen = () => S.level >= MAX_LEVEL;
+function paintSecret() {
+  const root = document.documentElement, sec = secretsOpen() && SECRETS.find(x => x.id === S.secret);
+  if (!sec) {
+    delete root.dataset.secret; ["--secret-g", "--secret-on"].forEach(k => root.style.removeProperty(k));
+  } else {
+    Object.entries(tokens(sec.base, isDark())).forEach(([k, v]) => root.style.setProperty(k, v));
+    root.dataset.secret = sec.id; root.style.setProperty("--secret-g", sec.g); root.style.setProperty("--secret-on", sec.on);
+    const nm = q("[data-theme-name]"); if (nm) nm.textContent = sec.n + " ✨";
+    const rs = q("[data-theme-reset]"); if (rs) rs.hidden = false;
+  }
+  renderSecrets();
+}
+function renderSecrets() {
+  const box = q("[data-secrets]"); if (!box) return;
+  if (!secretsOpen()) {
+    box.innerHTML = `<button class="secret-lock" data-secret-locked><span class="sl-glow"></span><b>🔒 Colori segreti</b><small>Raggiungi il livello ${MAX_LEVEL} completando tutto CHROMA per sbloccare 4 colorazioni animate. Completamento: ${Math.round(completion() * 100)}%</small></button>`;
+    return;
+  }
+  box.innerHTML = `<div class="section-row"><h2 class="section">Colori segreti ✨</h2></div><div class="secret-grid">${SECRETS.map(x =>
+    `<button class="secret-card${S.secret === x.id ? " cur" : ""}" data-secret-id="${x.id}"><i style="--g:${x.g}"></i><b>${x.n}</b><small>${S.secret === x.id ? "Attivo" : x.d}</small></button>`).join("")}</div>`;
+}
+const _applyTheme = applyTheme;
+applyTheme = function (id) {
+  if (id) S.secret = null;
+  _applyTheme(id);
+  paintSecret();
+};
+document.addEventListener("click", e => {
+  const c = e.target.closest("[data-secret-id]");
+  if (c) {
+    S.secret = S.secret === c.dataset.secretId ? null : c.dataset.secretId;
+    _applyTheme(null); paintSecret(); save();
+    toast(S.secret ? "Tema segreto “" + SECRETS.find(x => x.id === S.secret).n + "” attivato" : "Tema originale");
+    return;
+  }
+  if (e.target.closest("[data-secret-locked]")) { toast("Completa tutte le lezioni, i quiz e le missioni"); go("missioni"); }
+});
+q("[data-theme-reset]").addEventListener("click", () => { if (S.secret) { S.secret = null; save(); paintSecret(); } });
+function showSecretPop() {
+  const pop = q("[data-secret-pop]");
+  q("[data-sp-dots]").innerHTML = Array.from({ length: 22 }, (_, i) =>
+    `<i style="--x:${Math.round(rnd(4, 96))}%;--c:hsl(${i * 33 % 360} 85% 60%);--t:${rnd(0, 2.4).toFixed(2)}s;--s:${Math.round(rnd(6, 14))}px"></i>`).join("");
+  pop.hidden = false;
+}
+function checkSecret() {
+  if (!secretsOpen() || S.secretSeen || !q("[data-levelup]").hidden || ["splash", "onb1", "onb2", "onb3"].includes(current)) return;
+  S.secretSeen = true; save(); showSecretPop();
+}
+q("[data-sp-go]").onclick = () => { q("[data-secret-pop]").hidden = true; go("colori"); };
+q("[data-sp-close]").onclick = () => { q("[data-secret-pop]").hidden = true; };
+q("[data-lu-ok]").addEventListener("click", () => setTimeout(checkSecret, 350));
+const _renderLab = render;
+render = function () { _renderLab(); paintSecret(); setTimeout(checkSecret, 400); };
