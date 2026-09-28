@@ -83,14 +83,14 @@
             <img data-a="color-wheel.png" alt="">
           </div>
           <div class="xpbar"><i data-bind-width="xp"></i></div>
-          <div class="xp-lbl"><span data-bind="xp">760</span> / 1000 XP</div>
+          <div class="xp-lbl"><span data-bind="xp">0</span> / <span data-bind="xpNeed">200</span> XP</div>
         </button>
       </div>
 
       <div class="card blue challenge">
         <div class="ch-title">Sfida del giorno</div>
-        <div class="ch-sub">Completa 3 lezioni!</div>
-        <button class="glass-btn" data-go="missioni">Vai alle missioni</button>
+        <div class="ch-sub" data-ch-sub>Missioni di oggi</div>
+        <button class="glass-btn" data-go="missioni">Vai alle missioni <span class="m-ready" data-m-ready hidden></span></button>
       </div>
 
       <h2 class="section">Quest giornaliere</h2>
@@ -166,11 +166,12 @@
         <img class="chev" data-a="right-arrow.png" alt="">
       </button>
       <h2 class="section mt">Missioni attive</h2>
-      <button class="card cream mission" data-go="missioni">
-        <div class="qc-title">Completa 3 lezioni</div>
-        <div class="mission-row"><span><span data-bind="lessonsDone">2</span> / 3</span><span>+ 100 XP</span></div>
-        <div class="mbar"><i data-bind-width="mission"></i></div>
+      <button class="card cream mission" data-am>
+        <div class="qc-title" data-am-title></div>
+        <div class="mission-row"><span data-am-n></span><span data-am-xp></span></div>
+        <div class="mbar"><i data-am-bar></i></div>
       </button>
+      <button class="link-all" data-go="missioni">Tutte le missioni ›</button>
     </div>
   </section>
 
@@ -276,7 +277,7 @@
         </div>
       </div>
       <div class="lv-strip">
-        <div class="lv-top"><b>Livello <span data-bind="level">1</span></b><span><span data-bind="xp">0</span> / 1000 XP</span></div>
+        <div class="lv-top"><b>Livello <span data-bind="level">1</span></b><span><span data-bind="xp">0</span> / <span data-bind="xpNeed">200</span> XP</span></div>
         <div class="xpbar wide"><i data-bind-width="xp"></i></div>
         <div class="lv-next">Ancora <b data-bind="xpLeft">1000</b> XP per diventare <b data-bind="levelNext">Curioso del colore</b></div>
       </div>
@@ -351,18 +352,23 @@
   <section class="screen tabbed" id="missioni" data-tab="quest">
     <div class="scroll">
       <button class="back" data-back><img data-a="right-arrow.png" alt="Indietro"></button>
-      <h1 class="page-title center">Badge</h1>
-      <div class="mr-tabs">
-        <button class="on" data-mtab="m">Missioni</button>
-        <button data-mtab="r">Reward</button>
+      <h1 class="page-title center">Missioni</h1>
+      <div class="mr-tabs three">
+        <button class="on" data-mtab="percorso">Percorso</button>
+        <button data-mtab="giornaliera">Oggi</button>
+        <button data-mtab="serie">Speciali</button>
       </div>
-      <div data-mpane="m">
-        <h2 class="section mr-h">Missioni giornaliere</h2>
-        <div class="m-list" data-missions></div>
+      <div data-mpane="percorso">
+        <p class="mr-note">Completa lezioni e quiz per ottenere XP e sbloccare nuovi colori.</p>
+        <div class="m-list" data-missions="percorso"></div>
       </div>
-      <div data-mpane="r" hidden>
-        <h2 class="section mr-h">Reward</h2>
-        <div class="m-list" data-rewards></div>
+      <div data-mpane="giornaliera" hidden>
+        <p class="mr-note">Si rinnovano ogni giorno e danno XP extra per salire di livello.</p>
+        <div class="m-list" data-missions="giornaliera"></div>
+      </div>
+      <div data-mpane="serie" hidden>
+        <p class="mr-note">Torna ogni giorno: con la serie di giorni consecutivi sblocchi i colori speciali.</p>
+        <div class="m-list" data-missions="serie"></div>
       </div>
     </div>
   </section>
@@ -370,8 +376,8 @@
   <section class="screen tabbed" id="missione" data-tab="quest">
     <div class="scroll center-col">
       <button class="back" data-back><img data-a="right-arrow.png" alt="Indietro"></button>
-      <div class="detail-head">Dettaglio missione</div>
-      <div class="m-badge"><img data-a="badge-bloccato.svg" alt=""></div>
+      <div class="detail-head" data-md-kind>Dettaglio missione</div>
+      <div class="m-badge" data-md-pic></div>
       <h2 class="m-title" data-md-title></h2>
       <p class="m-desc" data-md-desc></p>
       <div class="card cream m-prog">
@@ -381,7 +387,7 @@
       </div>
       <div class="card blue m-rew">
         <div class="mp-lbl">Reward</div>
-        <div class="mr-row"><span data-md-xp></span><span>+ 1 colore casuale</span></div>
+        <div class="mr-row"><span data-md-xp></span><span class="md-extra" data-md-extra></span></div>
       </div>
       <button class="btn-primary m-btn" data-md-btn></button>
     </div>
