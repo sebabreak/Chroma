@@ -342,6 +342,11 @@ const SIM = {
     COLORS.slice(0, 22).forEach(c => { if (!S.owned.includes(c.id)) S.owned.push(c.id); });
     save(); render(); return "Profilo da utente esperto caricato";
   },
+  secret: () => {
+    SIM.missions();
+    S.owned = COLORS.map(c => c.id); S.level = MAX_LEVEL; S.xp = xpNeed(MAX_LEVEL); S.secretSeen = false;
+    fillTitles(); save(); render(); return "";
+  },
   fresh: () => { confirmBox("Nuovo utente?", "Tutti i progressi verranno azzerati e ripartirà l'onboarding.", resetAll); return ""; }
 };
 $$("[data-demo]").addEventListener("click", e => {
