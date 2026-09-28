@@ -316,7 +316,9 @@ function render() {
     let st = el.querySelector(".qstat");
     if (!st) { st = document.createElement("span"); st.className = "qstat"; el.appendChild(st); }
     const col = COLOR_BY[EV[el.dataset.id]], best = (S.best || {})[el.dataset.id];
-    if (S.redeemed.includes(el.dataset.id)) { st.className = "qstat ok"; st.innerHTML = `<i style="background:${col.h}"></i>✓ Completato`; }
+    el.classList.toggle("qlock", !quizOpen(el.dataset.id));
+    if (!quizOpen(el.dataset.id)) { st.className = "qstat lock"; st.textContent = "🔒 Prima la teoria"; }
+    else if (S.redeemed.includes(el.dataset.id)) { st.className = "qstat ok"; st.innerHTML = `<i style="background:${col.h}"></i>✓ Completato`; }
     else if (best === 3) { st.className = "qstat todo"; st.innerHTML = `<i style="background:${col.h}"></i>Colore da riscattare`; }
     else if (best) { st.className = "qstat part"; st.textContent = `Record ${best}/3`; }
     else { st.className = "qstat"; st.textContent = ""; }
@@ -457,14 +459,25 @@ function openLesson(id) {
     lf.querySelector("h2").textContent = first ? "Lezione completata!" : "Lezione ripassata!";
     lf.querySelector("p").textContent = first ? "Hai guadagnato" : "Gli XP di questa lezione li hai già ottenuti";
     lf.querySelector("b").textContent = first ? "+ 50 XP" : "";
+    const qb = lf.querySelector("[data-lf-quiz]");
+    qb.textContent = S.redeemed.includes(id) ? "Rifai il quiz" : "Fai il quiz";
+    qb.onclick = () => openQuiz(id);
     go("lezfine");
   };
   scr.querySelector("[data-lesson-quiz]").onclick = () => openQuiz(id);
   if (current === "lezione") { scr.querySelector(".scroll").scrollTo(0, 0); } else go("lezione");
 }
 
+const isCombo = id => COMBOS.some(c => c.id === id);
+const quizOpen = id => isCombo(id) ? S.combosRead.includes(id) : S.done.includes(id);
+function openTheory(id) { isCombo(id) ? openCombo(id) : openLesson(id); }
 function openQuiz(id) {
   const l = LESSONS.find(x => x.id === id) || COMBOS.find(x => x.id === id);
+  if (!quizOpen(id)) {
+    if (current === "lezione" || current === "combo") return toast("Arriva in fondo alla lezione per sbloccare il quiz");
+    toast("🔒 Prima studia la teoria: poi il quiz si sblocca");
+    return openTheory(id);
+  }
   if ((S.best || {})[id] === 3 && !S.redeemed.includes(id)) return showEvent(l, 3, true);
   const scr = document.getElementById("quiz");
   const $ = s => scr.querySelector(s);
@@ -705,16 +718,17 @@ function renderColors() {
     row.innerHTML = `<div class="fam-h"><span>${fam}</span><small>${got} / ${ids.length}</small></div><div class="fam-row"></div>`;
     ids.forEach(id => {
       const c = COLOR_BY[id], has = S.owned.includes(id);
-      const el = document.createElement(has ? "button" : "div");
+      const el = document.createElement("button");
       el.className = "sw" + (has ? "" : " locked") + (S.theme === id ? " cur" : "");
       el.innerHTML = `<i style="background:${c.h}"></i><span>${c.n}</span>${has ? "" : `<small>${c.hint}</small>`}`;
-      if (has) el.onclick = () => { applyTheme(S.theme === id ? null : id); };
+      el.onclick = has ? () => { applyTheme(S.theme === id ? null : id); } : () => unlockPath(id);
+      if (!has) el.title = "Come si sblocca: " + c.hint;
       row.querySelector(".fam-row").appendChild(el);
     });
     own.appendChild(row);
   });
   const strip = document.querySelector("[data-scale]");
-  if (strip) strip.innerHTML = SCALE.map(id => `<i class="${S.owned.includes(id) ? "" : "off"}" style="background:${COLOR_BY[id].h}" title="${COLOR_BY[id].n}"></i>`).join("");
+  if (strip) strip.innerHTML = SCALE.map(id => `<i data-unlock="${S.owned.includes(id) ? "" : id}" class="${S.owned.includes(id) ? "" : "off"}" style="background:${COLOR_BY[id].h}" title="${COLOR_BY[id].n}"></i>`).join("");
   document.querySelector("[data-owned-n]").textContent = `${S.owned.length} / ${COLORS.length}`;
   document.querySelector("[data-theme-name]").textContent = S.theme ? COLOR_BY[S.theme].n : "Tema originale";
   document.querySelector("[data-theme-reset]").hidden = !S.theme;
@@ -863,7 +877,7 @@ function renderBadges() {
     el.className = "badge " + (got ? "got" : "locked " + (k % 2 ? "brownish" : "violet"));
     el.innerHTML = got ? `<div class="badge-art">${badgeArt(b.icon, b.c)}</div><b>${b.n}</b><span>${b.d}</span>`
                        : `<img alt="Badge bloccato"><b>${b.n}</b><span>${b.d}</span>`;
-    if (!got) setImg(el.querySelector("img"), "badge-bloccato.svg");
+    if (!got) { setImg(el.querySelector("img"), "badge-bloccato.svg"); el.classList.add("tap"); el.onclick = () => badgePath(b); }
     if (f !== "all" && !el.classList.contains(f)) el.classList.add("hide");
     grid.appendChild(el);
   });
@@ -945,3 +959,22 @@ function fit() {
 addEventListener("resize", fit);
 addEventListener("orientationchange", () => setTimeout(fit, 250));
 fit();
+
+function unlockPath(id) {
+  const q = [...LESSONS, ...COMBOS].find(l => EV[l.id] === id);
+  if (q) {
+    if (S.best[q.id] === 3 && !S.redeemed.includes(q.id)) return showEvent(q, 3, true);
+    if (!quizOpen(q.id)) { toast("Studia “" + q.title + "” e fai 3 su 3 nel quiz"); return openTheory(q.id); }
+    toast("Fai 3 su 3 in questo quiz per sbloccarlo"); return openQuiz(q.id);
+  }
+  const m = MISSIONS.find(x => x.color === id);
+  if (m) return openMission(m.id);
+  toast("Continua a giocare per sbloccarlo");
+}
+function badgePath(b) {
+  const m = MISSIONS.find(x => x.badge === b.n);
+  if (m) return openMission(m.id);
+  if (b.icon === "crown") return go("titoli");
+  toast(b.d); go("colori");
+}
+document.addEventListener("click", e => { const t = e.target.closest("[data-unlock]"); if (t && t.dataset.unlock) unlockPath(t.dataset.unlock); });
