@@ -93,6 +93,11 @@
         <button class="glass-btn" data-go="missioni">Vai alle missioni <span class="m-ready" data-m-ready hidden></span></button>
       </div>
 
+      <button class="card cream cotd" data-cotd>
+        <span class="cotd-sw" data-cotd-sw></span>
+        <span class="cotd-txt"><small>Colore del giorno</small><b data-cotd-name></b><em data-cotd-hex></em><span data-cotd-emo></span></span>
+        <span class="cotd-go">Apri ›</span>
+      </button>
       <h2 class="section">Quest giornaliere</h2>
       <button class="card cream quest-card" data-go="quizhub">
         <div class="qc-text">
@@ -123,6 +128,11 @@
     <div class="scroll">
       <button class="back" data-back><img data-a="right-arrow.png" alt="Indietro"></button>
       <h1 class="page-title">Scopri</h1>
+      <h2 class="section mt">Strumenti</h2>
+      <div class="tools">
+        <button class="tool-card lab-card" data-go="lab"><span class="tool-ic"></span><b>Laboratorio</b><small>Ruota dei colori, codici e armonie</small></button>
+        <button class="tool-card photo-card" data-go="foto"><span class="tool-ic">📷</span><b>Colori da una foto</b><small>Estrai e interpreta una palette</small></button>
+      </div>
       <h2 class="section mt">Le mie palette</h2>
       <div class="row gap">
         <button class="pill outline-blue" data-go="palette">Le mie palette</button>
@@ -184,6 +194,8 @@
       </div>
       <div class="section-row sr-mt"><h2 class="section">Percorso guidato</h2><span class="sec-note" data-lessons-done-n></span></div>
       <div class="lesson-list" data-lessons></div>
+      <div class="section-row sr-mt"><h2 class="section">Il colore nel digitale</h2><span class="sec-note" data-dig-done-n></span></div>
+      <div class="lesson-list" data-lessons="digitale"></div>
       <div class="section-row sr-mt"><h2 class="section">Altre lezioni - Combinazioni di colori</h2><span class="sec-note" data-combo-read-n></span></div>
       <div class="combo-grid small">
         <button data-combo="Complementari"><img data-a="complementari.png" alt=""><span>Complementari</span></button>
@@ -279,7 +291,9 @@
       <div class="lv-strip">
         <div class="lv-top"><b>Livello <span data-bind="level">1</span></b><span><span data-bind="xp">0</span> / <span data-bind="xpNeed">200</span> XP</span></div>
         <div class="xpbar wide"><i data-bind-width="xp"></i></div>
-        <div class="lv-next">Ancora <b data-bind="xpLeft">1000</b> XP per diventare <b data-bind="levelNext">Curioso del colore</b></div>
+        <div class="lv-next" data-lv-next></div>
+        <div class="compl"><span>Completamento di CHROMA</span><b data-bind="completion">0%</b></div>
+        <div class="xpbar wide compl-bar"><i data-bind-width="completion"></i></div>
       </div>
       <div class="card cream stats3">
         <div><span>Livello</span><b data-bind="level">8</b></div>
@@ -468,6 +482,19 @@
         <img class="cat-wheel" data-a="complementari.png" alt="">
         <img class="chev" data-a="right-arrow.png" alt="">
       </button>
+      <h2 class="section mt">Quiz sul colore digitale</h2>
+      <button class="card cat-card cat-dig" data-go="quizdig">
+        <div class="cat-t">Il colore nel digitale</div>
+        <div class="cat-s">RGB, HEX, HSL, CMYK e contrasto · 5 quiz</div>
+        <div class="cat-prog" data-qprog-dig></div>
+        <img class="chev" data-a="right-arrow.png" alt="">
+      </button>
+      <h2 class="section mt">Allenamento dell'occhio</h2>
+      <div class="games">
+        <button class="game-card" data-game="guess"><span class="g-ic">#</span><b>Indovina il colore</b><small>Dal codice HEX al colore</small><em data-best="guess"></em></button>
+        <button class="game-card" data-game="order"><span class="g-ic">◐</span><b>Dal chiaro allo scuro</b><small>Ordina per luminosità</small><em data-best="order"></em></button>
+        <button class="game-card" data-game="comp"><span class="g-ic">◑</span><b>Trova il complementare</b><small>Il colore opposto sulla ruota</small><em data-best="comp"></em></button>
+      </div>
       <p class="cat-note">Fai 3 su 3 in un quiz per sbloccare un nuovo colore e usarlo come tema dell'app.</p>
     </div>
   </section>
@@ -598,6 +625,94 @@
     </div>
   </div>
 
+
+  <section class="screen tabbed digbg" id="quizdig" data-tab="quest">
+    <div class="scroll">
+      <button class="back light" data-back><img data-a="right-arrow.png" alt="Indietro"></button>
+      <h1 class="page-title white">Il colore nel digitale</h1>
+      <button class="btn-primary theory" data-go="lezioni">Consulta la teoria</button>
+      <div class="lesson-list" data-lessons="quiz-digitale"></div>
+    </div>
+  </section>
+
+  <section class="screen tabbed" id="lab" data-tab="explore">
+    <div class="scroll">
+      <button class="back" data-back><img data-a="right-arrow.png" alt="Indietro"></button>
+      <h1 class="page-title">Laboratorio</h1>
+      <p class="subtitle">Trascina sulla ruota per scegliere la tinta, poi regola saturazione e luminosità.</p>
+      <div class="wheel-wrap">
+        <div class="wheel" data-wheel>
+          <div class="wheel-hole"><span class="lab-preview" data-lab-preview></span></div>
+          <div class="wheel-marks" data-wheel-marks></div>
+        </div>
+      </div>
+      <label class="slider"><span>Saturazione <b data-s-val></b></span><input type="range" min="0" max="100" data-sat></label>
+      <label class="slider"><span>Luminosità <b data-l-val></b></span><input type="range" min="0" max="100" data-lig></label>
+      <div class="card cream lab-values">
+        <div class="lv-row"><span>HEX</span><input class="hex-in" data-hex maxlength="7" spellcheck="false"><button class="copy" data-copy>Copia</button></div>
+        <div class="lv-row"><span>RGB</span><b data-rgb></b></div>
+        <div class="lv-row"><span>HSL</span><b data-hsl></b></div>
+        <div class="lv-row"><span>CMYK</span><b data-cmyk></b></div>
+        <div class="lv-row"><span>Somiglia a</span><b data-near></b></div>
+        <div class="lv-row"><span>Emozioni</span><b data-emo></b></div>
+      </div>
+      <div class="card cream lab-contrast">
+        <div class="ct" data-ct-white><span>Aa</span><small></small></div>
+        <div class="ct" data-ct-black><span>Aa</span><small></small></div>
+      </div>
+      <h2 class="section mt">Armonie</h2>
+      <div class="chips-sel" data-harm>
+        <button data-h="none" class="on">Nessuna</button><button data-h="comp">Complementari</button><button data-h="anal">Analoghi</button>
+        <button data-h="triad">Triade</button><button data-h="split">Split</button><button data-h="rect">Rettangolo</button><button data-h="square">Quadrato</button>
+      </div>
+      <div class="harm-row" data-harm-row></div>
+      <h2 class="section mt">Come lo vede chi è daltonico</h2>
+      <div class="chips-sel" data-cvd>
+        <button data-v="none" class="on">Vista normale</button><button data-v="protan">Protanopia</button><button data-v="deutan">Deuteranopia</button><button data-v="tritan">Tritanopia</button>
+      </div>
+      <p class="cvd-note" data-cvd-note></p>
+      <button class="btn-primary m-btn" data-lab-save>Salva come palette</button>
+    </div>
+  </section>
+
+  <section class="screen tabbed" id="foto" data-tab="explore">
+    <div class="scroll">
+      <button class="back" data-back><img data-a="right-arrow.png" alt="Indietro"></button>
+      <h1 class="page-title">Colori da una foto</h1>
+      <p class="subtitle">Scatta o scegli una foto: CHROMA ne estrae i colori principali e li interpreta. La foto resta sul tuo telefono.</p>
+      <label class="btn-primary av-upload">📷 Scegli o scatta una foto<input type="file" accept="image/*" data-photo hidden></label>
+      <div class="photo-box" data-photo-box hidden>
+        <img data-photo-img alt="La tua foto">
+        <div class="chips-sel small" data-pcvd>
+          <button data-v="none" class="on">Normale</button><button data-v="protan">Protanopia</button><button data-v="deutan">Deuteranopia</button><button data-v="tritan">Tritanopia</button>
+        </div>
+        <div class="photo-bar" data-photo-bar></div>
+        <div class="photo-list" data-photo-list></div>
+        <div class="card cream photo-read"><h3>Interpretazione</h3><p data-photo-read></p></div>
+        <p class="pe-hint">È un'interpretazione algoritmica: collega i colori ai significati studiati nelle lezioni, ma il senso di un'immagine dipende sempre dal contesto.</p>
+        <button class="btn-primary m-btn" data-photo-save>Salva come palette</button>
+      </div>
+      <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+        <filter id="cvd-protan"><feColorMatrix type="matrix" values="0.567 0.433 0 0 0 0.558 0.442 0 0 0 0 0.242 0.758 0 0 0 0 0 1 0"/></filter>
+        <filter id="cvd-deutan"><feColorMatrix type="matrix" values="0.625 0.375 0 0 0 0.7 0.3 0 0 0 0 0.3 0.7 0 0 0 0 0 1 0"/></filter>
+        <filter id="cvd-tritan"><feColorMatrix type="matrix" values="0.95 0.05 0 0 0 0 0.433 0.567 0 0 0 0.475 0.525 0 0 0 0 0 1 0"/></filter>
+      </svg>
+    </div>
+  </section>
+
+  <section class="screen tabbed" id="gioco" data-tab="quest">
+    <div class="scroll">
+      <button class="back" data-back><img data-a="right-arrow.png" alt="Indietro"></button>
+      <h1 class="page-title" data-g-title></h1>
+      <div class="g-head"><span data-g-round></span><span data-g-score></span></div>
+      <p class="g-prompt" data-g-prompt></p>
+      <div class="g-target" data-g-target></div>
+      <div class="g-opts" data-g-opts></div>
+      <p class="g-feedback" data-g-feedback></p>
+      <button class="btn-primary m-btn" data-g-next hidden>avanti</button>
+    </div>
+  </section>
+
   <nav id="tabbar">
     <button data-tab-go="home"><img data-a="ic-home.png" alt="Home"></button>
     <button data-tab-go="explore"><img data-a="ic-explore.png" alt="Esplora"></button>
@@ -609,6 +724,7 @@
   <div id="toast"></div>
 </div>
 <script src="app.js"></script>
+<script src="lab.js"></script>
 <script src="features.js"></script>
 </body>
 </html>
