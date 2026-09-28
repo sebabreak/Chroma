@@ -6,6 +6,8 @@ function setImg(img, name) {
   img.src = "assets/" + name;
 }
 
+const PSY = () => LESSONS.filter(l => !l.track);
+const DIG = () => LESSONS.filter(l => l.track === "digitale");
 const LESSONS = [
   {
     id: "blu", title: "Il significato del blu", img: "lezione-blu.png",
@@ -118,7 +120,67 @@ const LESSONS = [
       { q: "In quale settore il nero comunica raffinatezza?", a: ["A) Nei giochi per bambini", "B) Nella moda e nel lusso", "C) Nella segnaletica stradale"], ok: 1 },
       { q: "Qual è la combinazione più leggibile?", a: ["A) Giallo su bianco", "B) Blu su viola", "C) Testo nero su fondo chiaro"], ok: 2 }
     ]
-  }
+  },
+  { id: "rgb", track: "digitale", title: "RGB: i colori della luce", grad: "linear-gradient(135deg,#ff2d2d,#2dff6a 50%,#2d6bff)",
+    body: [
+      "Gli schermi creano i colori con la luce: ogni pixel è formato da tre piccole luci, rossa (Red), verde (Green) e blu (Blue). Per questo il modello si chiama RGB.",
+      "È un modello additivo: più luce aggiungi, più il colore si schiarisce. Rosso e verde danno il giallo, verde e blu il ciano, rosso e blu il magenta; tutte e tre al massimo danno il bianco.",
+      "Ogni canale va da 0 a 255: rgb(255, 0, 0) è il rosso puro, rgb(0, 0, 0) il nero e rgb(255, 255, 255) il bianco. In tutto si ottengono più di 16 milioni di colori."
+    ],
+    fact: "Se guardi uno schermo con una lente d'ingrandimento vedi davvero i puntini rossi, verdi e blu che, da lontano, l'occhio mescola in un unico colore.",
+    quiz: [
+      { q: "Che cosa significa RGB?", a: ["A) Rosso, Giallo, Blu", "B) Red, Green, Blue: rosso, verde, blu", "C) Rosa, Grigio, Bianco"], ok: 1 },
+      { q: "Cosa ottieni sommando luce rossa e luce verde?", a: ["A) Giallo", "B) Marrone", "C) Viola"], ok: 0 },
+      { q: "Quale valore rappresenta il bianco?", a: ["A) rgb(0, 0, 0)", "B) rgb(255, 0, 0)", "C) rgb(255, 255, 255)"], ok: 2 }
+    ] },
+  { id: "hex", track: "digitale", title: "Il codice HEX", grad: "linear-gradient(135deg,#fa42fa,#6a2aa8)",
+    body: [
+      "Il codice HEX è un modo compatto di scrivere un colore RGB: un cancelletto seguito da sei caratteri, come #FF7A00.",
+      "I sei caratteri sono tre coppie: la prima indica il rosso, la seconda il verde, la terza il blu. Ogni coppia va da 00 (niente) a FF (massimo), cioè da 0 a 255 in numerazione esadecimale.",
+      "È il formato più usato nel web e nel design: basta copiarlo per avere esattamente lo stesso colore in un sito, in Figma o in un'app."
+    ],
+    fact: "Il sistema esadecimale usa 16 simboli: le cifre da 0 a 9 e le lettere da A a F. Così FF vale 15 × 16 + 15 = 255.",
+    quiz: [
+      { q: "Quale di questi è un codice HEX valido?", a: ["A) #1F5FE0", "B) rgb#12", "C) 1F-5F-E0"], ok: 0 },
+      { q: "Nel codice #FF0000, quale canale è al massimo?", a: ["A) Il verde", "B) Il rosso", "C) Il blu"], ok: 1 },
+      { q: "Che colore è #000000?", a: ["A) Bianco", "B) Grigio", "C) Nero"], ok: 2 }
+    ] },
+  { id: "hsl", track: "digitale", title: "Tinta, saturazione e luminosità", grad: "linear-gradient(90deg,#ff3030,#ffd000,#30d060,#30b0ff,#8040ff,#ff30a0)",
+    body: [
+      "Il modello HSL descrive i colori come li pensiamo noi. La tinta (Hue) è la posizione sulla ruota cromatica, da 0° a 360°: il rosso è a 0°, il verde a 120°, il blu a 240°.",
+      "La saturazione dice quanto il colore è intenso: al 100% è vivo, allo 0% diventa grigio. La luminosità va dal nero (0%) al bianco (100%), con il colore pieno al 50%.",
+      "HSL è comodo per creare palette: tenendo ferma la tinta e cambiando saturazione e luminosità ottieni tante sfumature armoniche dello stesso colore."
+    ],
+    fact: "Le combinazioni che hai studiato si calcolano sulla tinta: il complementare di un colore è sempre a 180° di distanza, una triade a 120°.",
+    quiz: [
+      { q: "Cosa indica la tinta (Hue)?", a: ["A) La posizione del colore sulla ruota", "B) Quanto il colore è chiaro", "C) Quanto costa stamparlo"], ok: 0 },
+      { q: "Un colore con saturazione 0% appare…", a: ["A) Più vivo", "B) Grigio", "C) Fluorescente"], ok: 1 },
+      { q: "A quanti gradi di distanza si trova il complementare?", a: ["A) 90°", "B) 120°", "C) 180°"], ok: 2 }
+    ] },
+  { id: "cmyk", track: "digitale", title: "RGB e CMYK: schermo e stampa", grad: "linear-gradient(135deg,#00b7eb,#ff2fa0 50%,#ffe600)",
+    body: [
+      "Le stampanti non usano la luce ma gli inchiostri: ciano (Cyan), magenta, giallo (Yellow) e nero (Key). È il modello CMYK.",
+      "È un modello sottrattivo: ogni inchiostro assorbe una parte della luce, quindi più inchiostro aggiungi, più il colore si scurisce. Il nero si aggiunge a parte per avere neri profondi e risparmiare inchiostro.",
+      "Alcuni colori molto accesi dello schermo non si possono stampare: per questo un colore può apparire più spento su carta che sul monitor. Chi progetta per la stampa lavora in CMYK fin dall'inizio."
+    ],
+    fact: "La K di CMYK viene da Key plate, la lastra “chiave” che nella stampa tipografica portava i dettagli in nero.",
+    quiz: [
+      { q: "Quale modello usano le stampanti?", a: ["A) CMYK", "B) RGB", "C) HEX"], ok: 0 },
+      { q: "Nel modello sottrattivo, aggiungendo inchiostro il colore diventa…", a: ["A) Più chiaro", "B) Più scuro", "C) Trasparente"], ok: 1 },
+      { q: "Perché un colore acceso può sembrare spento su carta?", a: ["A) Perché la carta è bianca", "B) Perché lo schermo è rotto", "C) Perché alcuni colori RGB non sono stampabili in CMYK"], ok: 2 }
+    ] },
+  { id: "contrasto", track: "digitale", title: "Contrasto e accessibilità", grad: "linear-gradient(135deg,#ffffff 50%,#111111 50%)",
+    body: [
+      "Un testo è leggibile quando c'è abbastanza differenza di luminosità tra testo e sfondo. Questa differenza si misura con il rapporto di contrasto, da 1:1 (nessuna differenza) a 21:1 (nero su bianco).",
+      "Le linee guida internazionali WCAG chiedono almeno 4,5:1 per il testo normale e 3:1 per i testi grandi e le icone: è il livello AA. Il livello AAA chiede 7:1.",
+      "Circa l'8% degli uomini ha una forma di daltonismo: per questo non bisogna affidare un'informazione solo al colore, ma aggiungere anche testo, icone o forme."
+    ],
+    fact: "Anche CHROMA controlla il contrasto: quando scegli un tema, l'app corregge da sola i colori perché testi e pulsanti restino leggibili.",
+    quiz: [
+      { q: "Qual è il contrasto minimo AA per un testo normale?", a: ["A) 2:1", "B) 4,5:1", "C) 21:1"], ok: 1 },
+      { q: "Quale combinazione ha il contrasto più alto?", a: ["A) Nero su bianco", "B) Giallo su bianco", "C) Grigio su grigio"], ok: 0 },
+      { q: "Come aiuti chi è daltonico?", a: ["A) Usando solo rosso e verde", "B) Usando colori più chiari", "C) Affiancando al colore testo, icone o forme"], ok: 2 }
+    ] }
 ];
 
 const COMBOS = [
@@ -200,14 +262,14 @@ function openCombo(id) {
   p1.hidden = false; p2.hidden = true; btn.textContent = "avanti";
   btn.onclick = () => {
     if (p2.hidden) { p1.hidden = true; p2.hidden = false; btn.textContent = "Quiz"; scr.querySelector(".scroll").scrollTo(0, 0);
-      if (!S.combosRead.includes(c.id)) { S.combosRead.push(c.id); save(); render(); } }
+      if (!S.combosRead.includes(c.id)) { S.combosRead.push(c.id); addXP(0); } }
     else openQuiz(c.id);
   };
   go("combo");
 }
 
 const DEF = { xp: 0, level: 1, xpTotal: 0, streak: 1, quizzes: 0, lessonsTotal: 0, done: [], onboarded: false,
-  claimed: [], redeemed: [], lastDay: null, badges: [], best: {}, combosRead: [], bestStreak: 1,
+  claimed: [], redeemed: [], lastDay: null, badges: [], best: {}, combosRead: [], bestStreak: 1, games: {}, labSaved: false, photoDone: false,
   day: { d: "", lessons: 0, quiz: 0, perfect: 0, time: 0, claimed: [] },
   owned: ["perla", "ardesia"], theme: null,
   name: "", time: 0, missionsDone: 0, myPalettes: [], dark: "auto" };
@@ -229,13 +291,19 @@ const save = () => { try { localStorage.setItem("chroma", JSON.stringify(S)); } 
 function render() {
   const t = Math.floor(S.time / 60);
   const vals = { ...S, xpTotal: S.xpTotal.toLocaleString("it-IT"),
-    greet: S.name || "Benvenuto", name: S.name || "Ospite", levelTitle: shownTitle(), levelNext: levelTitle(S.level + 1), xpLeft: xpNeed(S.level) - S.xp, xpNeed: xpNeed(S.level), titlesN: S.level,
+    greet: S.name || "Benvenuto", name: S.name || "Ospite", levelTitle: shownTitle(), levelNext: levelTitle(S.level + 1), xpLeft: xpNeed(S.level) - S.xp, xpNeed: xpNeed(S.level),
+    completion: Math.round(completion() * 100) + "%", titlesN: S.level,
     timeStr: t >= 60 ? `${Math.floor(t / 60)} h ${t % 60} min` : `${t} min`,
     quests: S.quizzes + S.lessonsTotal, ownedN: S.owned.length, totalColors: COLORS.length };
   document.querySelectorAll("[data-bind]").forEach(el => el.textContent = vals[el.dataset.bind]);
-  document.querySelectorAll("[data-bind-width=xp]").forEach(el => el.style.width = (S.xp / xpNeed(S.level) * 100) + "%");
+  const ln = document.querySelector("[data-lv-next]");
+  if (ln) ln.innerHTML = S.level >= MAX_LEVEL ? "🏆 Livello massimo raggiunto: hai completato tutto CHROMA!"
+    : S.level === MAX_LEVEL - 1 && S.xp >= xpNeed(S.level) ? `Completa tutto il percorso per diventare <b>${levelTitle(MAX_LEVEL)}</b> (${vals.completion})`
+    : `Ancora <b>${vals.xpLeft}</b> XP per diventare <b>${vals.levelNext}</b>`;
+  document.querySelectorAll("[data-bind-width=xp]").forEach(el => el.style.width = Math.min(100, S.xp / xpNeed(S.level) * 100) + "%");
+  document.querySelectorAll("[data-bind-width=completion]").forEach(el => el.style.width = (completion() * 100) + "%");
   document.querySelectorAll(".lesson").forEach(el => {
-    const quizList = el.closest('[data-lessons="quiz"], [data-combo-quiz]');
+    const quizList = el.closest('[data-lessons^="quiz"], [data-combo-quiz]');
     if (!quizList) {
       el.classList.remove("done");
       let st = el.querySelector(".qstat");
@@ -261,10 +329,14 @@ function render() {
   const cr = document.querySelector("[data-combo-read-n]");
   if (cr) cr.textContent = `${S.combosRead.length} / ${COMBOS.length} lette`;
   const ld = document.querySelector("[data-lessons-done-n]");
-  if (ld) ld.textContent = `${S.done.length} / ${LESSONS.length} completate`;
+  if (ld) ld.textContent = `${PSY().filter(l => S.done.includes(l.id)).length} / ${PSY().length} completate`;
+  const ldd = document.querySelector("[data-dig-done-n]");
+  if (ldd) ldd.textContent = `${DIG().filter(l => S.done.includes(l.id)).length} / ${DIG().length} completate`;
   const doneIn = ids => ids.filter(id => S.redeemed.includes(id)).length;
   const qc = document.querySelector("[data-qprog-colors]"), qm = document.querySelector("[data-qprog-combo]");
-  if (qc) qc.textContent = `${doneIn(LESSONS.map(l => l.id))} / ${LESSONS.length} completati`;
+  if (qc) qc.textContent = `${doneIn(PSY().map(l => l.id))} / ${PSY().length} completati`;
+  const qd = document.querySelector("[data-qprog-dig]");
+  if (qd) qd.textContent = `${doneIn(DIG().map(l => l.id))} / ${DIG().length} completati`;
   if (qm) qm.textContent = `${doneIn(COMBOS.map(c => c.id))} / ${COMBOS.length} completati`;
   renderMissions(); renderBadges(); renderColors();
 }
@@ -274,21 +346,52 @@ const LEVEL_TITLES = ["Apprendista", "Curioso del colore", "Esploratore del colo
   "Maestro del colore", "Custode della ruota cromatica", "Architetto delle armonie", "Poeta della luce", "Virtuoso della palette",
   "Visionario cromatico", "Signore delle tonalità", "Guru del colore", "Mago dello spettro", "Oracolo dei colori", "Leggenda cromatica"];
 const ROMAN = n => [[10, "X"], [9, "IX"], [5, "V"], [4, "IV"], [1, "I"]].reduce((r, [v, s]) => { while (n >= v) { r += s; n -= v; } return r; }, "");
-function levelTitle(l) { return l <= 20 ? LEVEL_TITLES[Math.max(1, l) - 1] : "Leggenda cromatica " + ROMAN(l - 19); }
-function xpNeed(l) { return 200 + 50 * (l - 1); }
+function levelTitle(l) { return LEVEL_TITLES[Math.min(Math.max(1, l), LEVEL_TITLES.length) - 1]; }
+const MAX_LEVEL = LEVEL_TITLES.length;
+function totalXP() {
+  return LESSONS.length * 50 + (LESSONS.length + COMBOS.length) * 100 +
+    MISSIONS.filter(m => m.type !== "giornaliera").reduce((a, m) => a + m.xp, 0);
+}
+let NEEDS = null;
+function xpNeed(l) {
+  if (!NEEDS) {
+    const T = totalXP(), w = Array.from({ length: MAX_LEVEL - 1 }, (_, i) => 1 + .12 * i), sw = w.reduce((a, b) => a + b);
+    NEEDS = w.map(x => Math.round(x * T / sw));
+    NEEDS[NEEDS.length - 1] += T - NEEDS.reduce((a, b) => a + b);
+  }
+  return NEEDS[Math.min(Math.max(l, 1), MAX_LEVEL - 1) - 1];
+}
+function progressParts() {
+  const all = [...LESSONS, ...COMBOS].map(x => x.id), once = MISSIONS.filter(m => m.type !== "giornaliera");
+  return [
+    [S.done.length, LESSONS.length], [all.filter(id => S.best[id] === 3).length, all.length],
+    [all.filter(id => S.redeemed.includes(id)).length, all.length], [S.combosRead.length, COMBOS.length],
+    [once.filter(m => S.claimed.includes(m.id)).length, once.length]
+  ];
+}
+function completion() { const p = progressParts(); return p.reduce((a, [d]) => a + d, 0) / p.reduce((a, [, t]) => a + t, 0); }
+const allComplete = () => progressParts().every(([d, t]) => d >= t);
+function levelUpLoop() {
+  while (S.level < MAX_LEVEL && S.xp >= xpNeed(S.level)) {
+    if (S.level === MAX_LEVEL - 1 && !allComplete()) { S.xp = xpNeed(S.level); break; }
+    S.xp -= xpNeed(S.level); S.level++; onLevelUp();
+  }
+  if (S.level >= MAX_LEVEL) { S.level = MAX_LEVEL; S.xp = xpNeed(MAX_LEVEL); }
+}
 function addXP(n) {
   S.xp += n; S.xpTotal += n;
-  while (S.xp >= xpNeed(S.level)) { S.xp -= xpNeed(S.level); S.level++; onLevelUp(); }
+  levelUpLoop();
   save(); render();
 }
 
 document.querySelectorAll("[data-lessons]").forEach(list => {
-  const toQuiz = list.dataset.lessons === "quiz";
-  LESSONS.forEach(l => {
+  const kind = list.dataset.lessons || "", toQuiz = kind.startsWith("quiz");
+  const digital = kind.includes("digitale");
+  LESSONS.filter(l => digital ? l.track === "digitale" : !l.track).forEach(l => {
     const b = document.createElement("button");
     b.className = "lesson"; b.dataset.id = l.id;
     b.innerHTML = `${l.img ? '<img class="thumb" alt="">' : `<i class="thumb grad" style="background:${l.grad}"></i>`}<div class="info"><div class="t">${l.title}</div>
-      <div class="s">Psicologia del colore</div><div class="m"><img class="clock" alt="">5 min</div></div><img class="go" alt="">`;
+      <div class="s">${l.track ? "Il colore nel digitale" : "Psicologia del colore"}</div><div class="m"><img class="clock" alt="">5 min</div></div><img class="go" alt="">`;
     if (l.img) setImg(b.querySelector("img.thumb"), l.img);
     setImg(b.querySelector(".clock"), "time-forward.png"); setImg(b.querySelector(".go"), "right-arrow.png");
     b.onclick = () => toQuiz ? openQuiz(l.id) : openLesson(l.id);
@@ -402,7 +505,7 @@ function openQuiz(id) {
     S.quizzes++;
     const d = day(); d.quiz++; if (score === l.quiz.length) d.perfect++;
     const prev = S.best[l.id] || 0;
-    const xp = score === l.quiz.length && prev < score ? 100 : score > prev ? (score - prev) * 30 : score * 10;
+    const xp = score === l.quiz.length && prev < score ? 100 - prev * 30 : score > prev ? (score - prev) * 30 : score * 10;
     S.best[l.id] = Math.max(prev, score);
     showEvent(l, score, false, xp);
   }
@@ -414,6 +517,7 @@ function openQuiz(id) {
 
 const EV = {
   rosso: "rosso", arancione: "arancione", giallo: "giallo", verde: "verde", blu: "blu", viola: "viola", bianco: "bianco", nero: "nero",
+  rgb: "neon", hex: "fucsia", hsl: "oltremare", cmyk: "ghiaccio", contrasto: "pesca",
   "Complementari": "turchese", "Analoghi": "lime", "Triade": "magenta",
   "Split complementari": "corallo", "Rettangolo": "oliva", "Quadrato": "petrolio"
 };
@@ -480,7 +584,14 @@ const COLORS = [
   { id: "notte", n: "Blu notte", h: "#172a5a", src: "reward", hint: "Reward missioni" },
   { id: "lavanda", n: "Lavanda", h: "#b8a4ec", src: "reward", hint: "Reward missioni" },
   { id: "prugna", n: "Prugna", h: "#6a2a5b", src: "reward", hint: "Reward missioni" },
-  { id: "marrone", n: "Marrone", h: "#5c3a22", src: "reward", hint: "Reward missioni" }
+  { id: "marrone", n: "Marrone", h: "#5c3a22", src: "reward", hint: "Reward missioni" },
+  { id: "neon", n: "Verde neon", h: "#06f87f", src: "quiz", hint: "Quiz RGB" },
+  { id: "fucsia", n: "Fucsia", h: "#fa42fa", src: "quiz", hint: "Quiz HEX" },
+  { id: "oltremare", n: "Oltremare", h: "#2604ae", src: "quiz", hint: "Quiz HSL" },
+  { id: "ghiaccio", n: "Ghiaccio", h: "#b4eefd", src: "quiz", hint: "Quiz CMYK" },
+  { id: "pesca", n: "Pesca", h: "#efbf8f", src: "quiz", hint: "Quiz Contrasto" },
+  { id: "crema", n: "Crema", h: "#fdfdb4", src: "reward", hint: "Reward missioni" },
+  { id: "lampone", n: "Lampone", h: "#e65572", src: "reward", hint: "Reward missioni" }
 ];
 const OLD_COLORS = { arancio: "arancione", ottanio: "petrolio", cobalto: "blu", ametista: "viola", scarlatto: "rosso",
   limone: "giallo", giada: "verde", avorio: "bianco", ossidiana: "nero", ambra: "oro", indaco: "notte", fucsia: "magenta", smeraldo: "bosco" };
@@ -496,22 +607,22 @@ function hueKey(hex) {
   return h + (1 - l) * 8;
 }
 const FAMILIES = [
-  ["Rossi", ["corallo", "rosso", "carminio"]],
-  ["Arancioni e terre", ["arancione", "terracotta", "marrone"]],
-  ["Gialli", ["giallo", "oro"]],
+  ["Rossi", ["corallo", "lampone", "rosso", "carminio"]],
+  ["Arancioni e terre", ["pesca", "arancione", "terracotta", "marrone"]],
+  ["Gialli", ["crema", "giallo", "oro"]],
   ["Verdi-gialli", ["lime", "oliva"]],
-  ["Verdi", ["menta", "salvia", "verde", "bosco"]],
-  ["Ciano", ["turchese", "petrolio"]],
-  ["Blu", ["azzurro", "blu", "notte"]],
+  ["Verdi", ["menta", "neon", "salvia", "verde", "bosco"]],
+  ["Ciano", ["ghiaccio", "turchese", "petrolio"]],
+  ["Blu", ["azzurro", "blu", "oltremare", "notte"]],
   ["Viola", ["lavanda", "viola", "prugna"]],
-  ["Rosa e magenta", ["rosa", "magenta"]],
+  ["Rosa e magenta", ["rosa", "fucsia", "magenta"]],
   ["Neutri", ["bianco", "perla", "ardesia", "nero"]]
 ];
 const SCALE = FAMILIES.flatMap(f => f[1]);
 const byHue = ids => [...ids].sort((a, b) => SCALE.indexOf(a) - SCALE.indexOf(b));
 
 function levelColor(l) {
-  if (l > 20) return "conic-gradient(#e3242b, #ff7a00, #ffd000, #2fa84f, #12c4c0, #1f5fe0, #8a2be2, #e3242b)";
+  if (l >= 20) return "conic-gradient(#e3242b, #ff7a00, #ffd000, #2fa84f, #12c4c0, #1f5fe0, #8a2be2, #e3242b)";
   const h = (l - 1) * (285 / 19), s = 78, li = h > 40 && h < 190 ? 42 : 52;
   return `hsl(${h.toFixed(0)} ${s}% ${li}%)`;
 }
@@ -548,7 +659,8 @@ function tokens(h, dark) {
     "--blue-card": card, "--on-blue": onColor(card),
     "--brown": pageMid, "--darkbrown": pageDeep, "--teal": pageAlt,
     "--quiz-card": tint, "--yellow": tint2, "--yellow-top": tint3,
-    "--quiz-purple": strong, "--on-quiz-purple": "#fff"
+    "--quiz-purple": strong, "--on-quiz-purple": "#fff",
+    "--digbg": ensure(mix(h, "#000000", .55), "#ffffff", 7, "#000000")
   };
 }
 const THEME_PROPS = Object.keys(tokens("#888888", false));
@@ -566,7 +678,7 @@ function paintWith(el, hex) {
 }
 function unlockColor(id) {
   if (!S.owned.includes(id)) S.owned.push(id);
-  save(); render();
+  addXP(0);
 }
 function renderColors() {
 
@@ -629,13 +741,18 @@ const perfectIn = ids => ids.filter(id => S.best[id] === 3).length;
 const MISSIONS = [
   { id: "p1", type: "percorso", title: "Primi passi", desc: "Completa la tua prima lezione di psicologia del colore.", target: 1, v: () => S.done.length, xp: 50, color: "rosa", go: "lezioni", cta: "Vai alle lezioni" },
   { id: "p2", type: "percorso", title: "A metà strada", desc: "Completa 4 lezioni del percorso guidato.", target: 4, v: () => S.done.length, xp: 150, color: "terracotta", go: "lezioni", cta: "Vai alle lezioni" },
-  { id: "p3", type: "percorso", title: "Studente dei colori", desc: "Completa tutte le 8 lezioni del percorso guidato.", target: 8, v: () => S.done.length, xp: 300, color: "carminio", badge: "Badge dello studente", go: "lezioni", cta: "Vai alle lezioni" },
+  { id: "p3", type: "percorso", title: "Studente dei colori", desc: "Completa tutte le 8 lezioni di psicologia del colore.", target: 8, v: () => PSY().filter(l => S.done.includes(l.id)).length, xp: 300, color: "carminio", badge: "Badge dello studente", go: "lezioni", cta: "Vai alle lezioni" },
   { id: "p4", type: "percorso", title: "Primo 3 su 3", desc: "Rispondi correttamente a tutte le domande di un quiz.", target: 1, v: () => perfectIn(Object.keys(S.best)), xp: 100, color: "azzurro", go: "quizhub", cta: "Vai ai quiz" },
-  { id: "p5", type: "percorso", title: "Esperto di psicologia", desc: "Fai 3 su 3 in tutti gli 8 quiz sui colori.", target: 8, v: () => perfectIn(LESSONS.map(l => l.id)), xp: 400, color: "prugna", badge: "Badge dello studioso", go: "quizcat", cta: "Vai ai quiz" },
+  { id: "p5", type: "percorso", title: "Esperto di psicologia", desc: "Fai 3 su 3 in tutti gli 8 quiz sui colori.", target: 8, v: () => perfectIn(PSY().map(l => l.id)), xp: 400, color: "prugna", badge: "Badge dello studioso", go: "quizcat", cta: "Vai ai quiz" },
   { id: "p6", type: "percorso", title: "Teorico delle armonie", desc: "Leggi la teoria di tutte le 6 combinazioni di colori, fino alla seconda pagina.", target: 6, v: () => S.combosRead.length, xp: 200, color: "salvia", go: "explore", cta: "Vai alle combinazioni" },
   { id: "p7", type: "percorso", title: "Armonia perfetta", desc: "Fai 3 su 3 in tutti i 6 quiz sulle combinazioni.", target: 6, v: () => perfectIn(COMBOS.map(c => c.id)), xp: 400, color: "bosco", go: "quizcomb", cta: "Vai ai quiz" },
   { id: "p8", type: "percorso", title: "Creativo", desc: "Crea la tua prima palette personale con i colori sbloccati.", target: 1, v: () => S.myPalettes.length, xp: 100, color: "menta", go: "palette", cta: "Vai alle palette" },
   { id: "p9", type: "percorso", title: "Grande collezione", desc: "Sblocca 15 colori tra quiz e missioni.", target: 15, v: () => S.owned.length, xp: 300, color: "marrone", go: "colori", cta: "I tuoi colori" },
+  { id: "p10", type: "percorso", title: "Nativo digitale", desc: "Completa le 5 lezioni del percorso “Il colore nel digitale”.", target: 5, v: () => DIG().filter(l => S.done.includes(l.id)).length, xp: 250, badge: "Badge digitale", go: "lezioni", cta: "Vai alle lezioni" },
+  { id: "p11", type: "percorso", title: "Occhio digitale", desc: "Fai 3 su 3 in tutti i 5 quiz sul colore digitale.", target: 5, v: () => perfectIn(DIG().map(l => l.id)), xp: 300, go: "quizdig", cta: "Vai ai quiz" },
+  { id: "p12", type: "percorso", title: "Sperimentatore", desc: "Crea un'armonia nel Laboratorio e salvala come palette.", target: 1, v: () => S.labSaved ? 1 : 0, xp: 100, color: "crema", go: "lab", cta: "Apri il Laboratorio" },
+  { id: "p13", type: "percorso", title: "Detective del colore", desc: "Analizza i colori di una tua foto con “Colori da una foto”.", target: 1, v: () => S.photoDone ? 1 : 0, xp: 100, color: "lampone", go: "foto", cta: "Analizza una foto" },
+  { id: "p14", type: "percorso", title: "Occhio allenato", desc: "Fai almeno 4 su 5 in tutti e 3 i giochi dell'allenamento.", target: 3, v: () => ["guess", "order", "comp"].filter(g => (S.games || {})[g] >= 4).length, xp: 200, badge: "Occhio allenato", go: "quizhub", cta: "Vai ai giochi" },
   { id: "s1", type: "serie", title: "3 giorni di fila", desc: "Apri CHROMA per 3 giorni consecutivi. Colore speciale!", target: 3, v: () => S.bestStreak, xp: 100, color: "oro", go: "home", cta: "Torna domani" },
   { id: "s2", type: "serie", title: "Una settimana di colore", desc: "Apri CHROMA per 7 giorni consecutivi. Colore speciale!", target: 7, v: () => S.bestStreak, xp: 200, color: "lavanda", badge: "Badge sociale", go: "home", cta: "Torna domani" },
   { id: "s3", type: "serie", title: "Due settimane di colore", desc: "Apri CHROMA per 14 giorni consecutivi. Colore speciale!", target: 14, v: () => S.bestStreak, xp: 400, color: "notte", go: "home", cta: "Torna domani" },
@@ -732,6 +849,8 @@ const BADGES = [
   { n: "Badge dello studioso", d: "3/3 in tutti i quiz sui colori", icon: "check", c: "#6b3fb8", got: () => S.badges.includes("Badge dello studioso") },
   { n: "Badge sociale", d: "7 giorni di fila", icon: "flame", c: "#d0112b", got: () => S.badges.includes("Badge sociale") },
   { n: "Maestro del colore", d: "Raggiungi il livello 10", icon: "crown", c: "#c9960f", got: () => S.level >= 10 },
+  { n: "Badge digitale", d: "Completa le lezioni sul digitale", icon: "pixel", c: "#2604ae", got: () => S.badges.includes("Badge digitale") },
+  { n: "Occhio allenato", d: "4/5 in tutti i giochi", icon: "eye", c: "#15707a", got: () => S.badges.includes("Occhio allenato") },
   { n: "Collezionista", d: "Sblocca tutti i colori", icon: "gem", c: "#1f9d55", got: () => S.owned.length >= COLORS.length }
 ];
 function renderBadges() {
@@ -754,6 +873,8 @@ function badgeArt(icon, c) {
   const pts = Array.from({ length: 32 }, (_, i) => { const r = i % 2 ? 40 : 46, a = Math.PI * i / 16;
     return `${(60 + r * Math.sin(a)).toFixed(1)},${(56 - r * Math.cos(a)).toFixed(1)}`; }).join(" ");
   const I = {
+    pixel: '<rect x="42" y="38" width="10" height="10" fill="#fff"/><rect x="55" y="38" width="10" height="10" fill="#e3242b"/><rect x="68" y="38" width="10" height="10" fill="#fff"/><rect x="42" y="51" width="10" height="10" fill="#2fa84f"/><rect x="55" y="51" width="10" height="10" fill="#fff"/><rect x="68" y="51" width="10" height="10" fill="#1f5fe0"/><rect x="42" y="64" width="10" height="10" fill="#fff"/><rect x="55" y="64" width="10" height="10" fill="#fff"/><rect x="68" y="64" width="10" height="10" fill="#fff"/>',
+    eye: '<path d="M38 56q22-22 44 0-22 22-44 0z" fill="#fff"/><circle cx="60" cy="56" r="8" fill="' + c + '"/><circle cx="60" cy="56" r="3.5" fill="#111"/>',
     palette: '<circle cx="60" cy="56" r="17" fill="#fff"/><circle cx="52" cy="50" r="4" fill="#e11d1d"/><circle cx="62" cy="46" r="4" fill="#ffbf00"/><circle cx="69" cy="54" r="4" fill="#1434e0"/><circle cx="55" cy="62" r="4.5" fill="' + c + '"/>',
     book: '<path d="M42 44h14c3 0 4 2 4 4v24c0-2-1.5-3-4-3H42z M78 44H64c-3 0-4 2-4 4v24c0-2 1.5-3 4-3h14z" fill="#fff"/>',
     check: '<path d="M44 57l10 10 22-22" fill="none" stroke="#fff" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>',
