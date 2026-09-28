@@ -9,11 +9,54 @@ const byHue = ids => [...ids].sort((a, b) => SCALE.indexOf(a) - SCALE.indexOf(b)
 const familyOf = id => (FAMILIES.find(f => f[1].includes(id)) || ["Neutri"])[0];
 const colorOf = x => x && x[0] === "#" ? { id: x, n: x.toUpperCase(), h: x } : COLOR_BY[x];
 const MAX_LEVEL = LEVEL_TITLES.length;
-MISSIONS.forEach(m => { if (m.color) COLOR_BY[m.color].hint = (m.type === "serie" ? "Serie: " : "Missione: ") + m.title; });
+MISSIONS.forEach(m => { if (m.color) COLOR_BY[m.color].mission = m; });
+
+const LANGS = { it: "Italiano", uk: "Українська" };
+let LANG = "it";
+function t(text, vars) {
+  const out = LANG === "uk" && UK[text] || text;
+  return vars ? out.replace(/\{(\w+)\}/g, (_, k) => vars[k]) : out;
+}
+const locale = () => LANG === "uk" ? "uk-UA" : "it-IT";
+const hintOf = c => c.mission ? t(c.mission.type === "serie" ? "Serie: {m}" : "Missione: {m}", { m: t(c.mission.title) }) : t(c.hint);
+const langOfName = name => /[\u0400-\u04ff]/.test(name) ? "uk" : /[a-zà-ÿ]/i.test(name) ? "it" : null;
+const originals = new WeakMap();
+function translateDOM() {
+  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+  for (let node; (node = walker.nextNode());) {
+    if (!originals.has(node)) {
+      const key = node.parentElement.dataset.t || node.nodeValue.trim();
+      if (!key || !(key in UK)) continue;
+      originals.set(node, [node.nodeValue, key]);
+    }
+    const [src, key] = originals.get(node);
+    node.nodeValue = LANG === "it" ? src : src.replace(src.trim(), t(key));
+  }
+  $$("[placeholder], [aria-label], [title], img[alt]").forEach(el => {
+    if (!originals.has(el)) originals.set(el, Object.fromEntries(["placeholder", "aria-label", "title", "alt"].filter(a => el.hasAttribute(a)).map(a => [a, el.getAttribute(a)])));
+    Object.entries(originals.get(el)).forEach(([a, v]) => el.setAttribute(a, t(v)));
+  });
+}
+function setLang(lang) {
+  if (!LANGS[lang]) return;
+  const changed = lang !== LANG;
+  LANG = S.lang = lang;
+  document.documentElement.lang = lang;
+  $$("[data-lang-seg] button").forEach(b => b.classList.toggle("on", b.dataset.lang === lang));
+  translateDOM();
+  if (!changed) return;
+  save();
+  $$("[data-lessons]").forEach(list => list.innerHTML = "");
+  buildLessonLists(); renderPalettes(); render(); drawLab(); showVersion();
+}
+function langFromName(name) {
+  const lang = langOfName(name);
+  if (lang && !S.langManual) setLang(lang);
+}
 
 const hexToRgb = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
 const rgbToHex = rgb => "#" + rgb.map(v => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, "0")).join("").toUpperCase();
-const mix = (a, b, t) => rgbToHex(hexToRgb(a).map((v, i) => v + (hexToRgb(b)[i] - v) * t));
+const mix = (a, b, k) => rgbToHex(hexToRgb(a).map((v, i) => v + (hexToRgb(b)[i] - v) * k));
 const lum = h => {
   const [r, g, b] = hexToRgb(h).map(v => { v /= 255; return v <= .03928 ? v / 12.92 : ((v + .055) / 1.055) ** 2.4; });
   return .2126 * r + .7152 * g + .0722 * b;
@@ -33,7 +76,7 @@ function levelColor(l) {
 
 const DEF = {
   xp: 0, level: 1, xpTotal: 0, streak: 1, bestStreak: 1, lastDay: null, quizzes: 0, lessonsTotal: 0, missionsDone: 0, time: 0,
-  onboarded: false, name: "", dark: "auto", theme: null, secret: null, secretSeen: false, avatar: null, titles: [], shownTitle: null,
+  onboarded: false, name: "", dark: "auto", lang: null, langManual: false, theme: null, secret: null, secretSeen: false, avatar: null, titles: [], shownTitle: null,
   done: [], best: {}, redeemed: [], combosRead: [], claimed: [], badges: [], owned: ["perla", "ardesia"], myPalettes: [],
   games: {}, labSaved: false, photoDone: false, hist: {},
   day: { d: "", lessons: 0, quiz: 0, perfect: 0, time: 0, claimed: [] }
@@ -77,7 +120,7 @@ function updateStreak() {
   day(); save();
 }
 
-const levelTitle = l => LEVEL_TITLES[Math.min(Math.max(1, l), MAX_LEVEL) - 1];
+const levelTitle = l => t(LEVEL_TITLES[Math.min(Math.max(1, l), MAX_LEVEL) - 1]);
 const shownTitle = () => levelTitle(S.shownTitle && S.shownTitle <= S.level ? S.shownTitle : S.level);
 const onceMissions = () => MISSIONS.filter(m => m.type !== "giornaliera");
 const totalXP = () => LESSONS.length * 50 + (LESSONS.length + COMBOS.length) * 100 + onceMissions().reduce((a, m) => a + m.xp, 0);
@@ -152,21 +195,21 @@ document.addEventListener("click", e => {
   else if (d.unlock) unlockPath(d.unlock);
   else if (d.game) startGame(d.game);
   else if (d.secretId) pickSecret(d.secretId);
-  else if ("secretLocked" in d) { toast("Completa tutte le lezioni, i quiz e le missioni"); go("missioni"); }
+  else if ("secretLocked" in d) { toast(t("Completa tutte le lezioni, i quiz e le missioni")); go("missioni"); }
 });
 
 function render() {
   const min = Math.floor(S.time / 60), compl = Math.round(completion() * 100) + "%";
   const vals = {
-    ...S, xpTotal: S.xpTotal.toLocaleString("it-IT"), greet: S.name || "Benvenuto", name: S.name || "Ospite",
+    ...S, xpTotal: S.xpTotal.toLocaleString(locale()), greet: S.name || t("Benvenuto"), name: S.name || t("Ospite"),
     levelTitle: shownTitle(), xpNeed: xpNeed(S.level), completion: compl, titlesN: S.level,
-    timeStr: min >= 60 ? `${Math.floor(min / 60)} h ${min % 60} min` : `${min} min`,
+    timeStr: min >= 60 ? `${Math.floor(min / 60)} ${t("h")} ${min % 60} ${t("min")}` : `${min} ${t("min")}`,
     quests: S.quizzes + S.lessonsTotal, ownedN: S.owned.length, totalColors: COLORS.length
   };
   $$("[data-bind]").forEach(el => el.textContent = vals[el.dataset.bind]);
-  $("[data-lv-next]").innerHTML = S.level >= MAX_LEVEL ? "🏆 Livello massimo raggiunto: hai completato tutto CHROMA!"
-    : S.level === MAX_LEVEL - 1 && S.xp >= xpNeed(S.level) ? `Completa tutto il percorso per diventare <b>${levelTitle(MAX_LEVEL)}</b> (${compl})`
-    : `Ancora <b>${xpNeed(S.level) - S.xp}</b> XP per diventare <b>${levelTitle(S.level + 1)}</b>`;
+  $("[data-lv-next]").innerHTML = S.level >= MAX_LEVEL ? t("🏆 Livello massimo raggiunto: hai completato tutto CHROMA!")
+    : S.level === MAX_LEVEL - 1 && S.xp >= xpNeed(S.level) ? t("Completa tutto il percorso per diventare <b>{t}</b> ({c})", { t: levelTitle(MAX_LEVEL), c: compl })
+    : t("Ancora <b>{xp}</b> XP per diventare <b>{t}</b>", { xp: xpNeed(S.level) - S.xp, t: levelTitle(S.level + 1) });
   $$("[data-bind-width=xp]").forEach(el => el.style.width = Math.min(100, S.xp / xpNeed(S.level) * 100) + "%");
   $$("[data-bind-width=completion]").forEach(el => el.style.width = completion() * 100 + "%");
   renderLessonState(); renderMissions(); renderBadges(); renderColors(); renderSecrets();
@@ -178,26 +221,26 @@ function renderLessonState() {
     const id = el.dataset.id, st = $(".qstat", el), col = COLOR_BY[QUIZ_COLOR[id]], best = S.best[id];
     if (!el.closest("[data-quiz-list]")) {
       const done = S.done.includes(id);
-      st.className = "qstat" + (done ? " ok" : ""); st.textContent = done ? "✓ Completata" : "";
+      st.className = "qstat" + (done ? " ok" : ""); st.textContent = done ? t("✓ Completata") : "";
       return;
     }
     const open = quizOpen(id);
     el.classList.toggle("qlock", !open);
-    if (!open) { st.className = "qstat lock"; st.innerHTML = `<img class="lk" src="assets/lucchetto.png" alt="">Prima la teoria`; }
-    else if (S.redeemed.includes(id)) { st.className = "qstat ok"; st.innerHTML = `<i style="background:${col.h}"></i>✓ Completato`; }
-    else if (best === 3) { st.className = "qstat todo"; st.innerHTML = `<i style="background:${col.h}"></i>Colore da riscattare`; }
-    else if (best) { st.className = "qstat part"; st.textContent = `Record ${best}/3`; }
+    if (!open) { st.className = "qstat lock"; st.innerHTML = `<img class="lk" src="assets/lucchetto.png" alt="">${t("Prima la teoria")}`; }
+    else if (S.redeemed.includes(id)) { st.className = "qstat ok"; st.innerHTML = `<i style="background:${col.h}"></i>${t("✓ Completato")}`; }
+    else if (best === 3) { st.className = "qstat todo"; st.innerHTML = `<i style="background:${col.h}"></i>${t("Colore da riscattare")}`; }
+    else if (best) { st.className = "qstat part"; st.textContent = t("Record {n}/3", { n: best }); }
     else { st.className = "qstat"; st.textContent = ""; }
   });
   $$("[data-combo]").forEach(b => b.classList.toggle("read", S.combosRead.includes(b.dataset.combo)));
   const doneOf = list => list.filter(l => S.done.includes(l.id)).length;
   const redeemedOf = list => list.filter(l => S.redeemed.includes(l.id)).length;
-  $("[data-combo-read-n]").textContent = `${S.combosRead.length} / ${COMBOS.length} lette`;
-  $("[data-lessons-done-n]").textContent = `${doneOf(PSY())} / ${PSY().length} completate`;
-  $("[data-dig-done-n]").textContent = `${doneOf(DIG())} / ${DIG().length} completate`;
-  $("[data-qprog-colors]").textContent = `${redeemedOf(PSY())} / ${PSY().length} completati`;
-  $("[data-qprog-dig]").textContent = `${redeemedOf(DIG())} / ${DIG().length} completati`;
-  $("[data-qprog-combo]").textContent = `${redeemedOf(COMBOS)} / ${COMBOS.length} completati`;
+  $("[data-combo-read-n]").textContent = t("{a} / {b} lette", { a: S.combosRead.length, b: COMBOS.length });
+  $("[data-lessons-done-n]").textContent = t("{a} / {b} completate", { a: doneOf(PSY()), b: PSY().length });
+  $("[data-dig-done-n]").textContent = t("{a} / {b} completate", { a: doneOf(DIG()), b: DIG().length });
+  $("[data-qprog-colors]").textContent = t("{a} / {b} completati", { a: redeemedOf(PSY()), b: PSY().length });
+  $("[data-qprog-dig]").textContent = t("{a} / {b} completati", { a: redeemedOf(DIG()), b: DIG().length });
+  $("[data-qprog-combo]").textContent = t("{a} / {b} completati", { a: redeemedOf(COMBOS), b: COMBOS.length });
 }
 
 function lessonItem(l, onOpen) {
@@ -207,8 +250,8 @@ function lessonItem(l, onOpen) {
   const thumb = combo ? `<img class="thumb wheel" src="assets/${l.img}" alt="">`
     : l.img ? `<img class="thumb" src="assets/${l.img}" alt="">` : `<i class="thumb grad" style="background:${l.grad}"></i>`;
   const kind = combo ? "Combinazioni di colori" : l.track ? "Il colore nel digitale" : "Psicologia del colore";
-  b.innerHTML = `${thumb}<div class="info"><div class="t">${l.title}</div><div class="s">${kind}</div>
-    <div class="m"><img class="clock" src="assets/time-forward.png" alt="">${combo ? 3 : 5} min</div></div>
+  b.innerHTML = `${thumb}<div class="info"><div class="t">${t(l.title)}</div><div class="s">${t(kind)}</div>
+    <div class="m"><img class="clock" src="assets/time-forward.png" alt="">${combo ? 3 : 5} ${t("min")}</div></div>
     <img class="go" src="assets/right-arrow.png" alt=""><span class="qstat"></span>`;
   b.onclick = () => onOpen(l.id);
   return b;
@@ -226,20 +269,20 @@ function openLesson(id) {
   $(".detail-img", scr).style.background = l.grad || "";
   img.hidden = !l.img;
   if (l.img) img.src = "assets/" + l.img;
-  $("[data-lesson-title]", scr).textContent = l.title;
-  $(".detail-meta", scr).textContent = "5 min · livello base" + (S.done.includes(id) ? " · ✓ Completata" : "");
-  $("[data-lesson-body]", scr).innerHTML = l.body.map(p => `<p>${p}</p>`).join("");
-  $("[data-lesson-fact]", scr).textContent = l.fact;
+  $("[data-lesson-title]", scr).textContent = t(l.title);
+  $(".detail-meta", scr).textContent = t("5 min · livello base") + (S.done.includes(id) ? " · " + t("✓ Completata") : "");
+  $("[data-lesson-body]", scr).innerHTML = l.body.map(p => `<p>${t(p)}</p>`).join("");
+  $("[data-lesson-fact]", scr).textContent = t(l.fact);
   $("[data-lesson-quiz]", scr).onclick = () => openQuiz(id);
   $("[data-lesson-next]", scr).onclick = () => {
     const first = !S.done.includes(id), end = $("#lezfine");
     day().lessons++;
     if (first) { S.done.push(id); S.lessonsTotal++; addXP(50); } else save();
-    $("h2", end).textContent = first ? "Lezione completata!" : "Lezione ripassata!";
-    $("p", end).textContent = first ? "Hai guadagnato" : "Gli XP di questa lezione li hai già ottenuti";
+    $("h2", end).textContent = t(first ? "Lezione completata!" : "Lezione ripassata!");
+    $("p", end).textContent = t(first ? "Hai guadagnato" : "Gli XP di questa lezione li hai già ottenuti");
     $("b", end).textContent = first ? "+ 50 XP" : "";
     const quiz = $("[data-lf-quiz]", end);
-    quiz.textContent = S.redeemed.includes(id) ? "Rifai il quiz" : "Fai il quiz";
+    quiz.textContent = t(S.redeemed.includes(id) ? "Rifai il quiz" : "Fai il quiz");
     quiz.onclick = () => openQuiz(id);
     go("lezfine");
   };
@@ -249,17 +292,17 @@ function openLesson(id) {
 function comboPage(n) {
   $("[data-combo-p1]").hidden = n !== 1;
   $("[data-combo-p2]").hidden = n !== 2;
-  $("[data-combo-next]").textContent = n === 1 ? "avanti" : "Quiz";
+  $("[data-combo-next]").textContent = t(n === 1 ? "avanti" : "Quiz");
 }
 function openCombo(id) {
   const c = COMBOS.find(x => x.id === id), scr = $("#combo");
-  $("[data-combo-name]", scr).textContent = c.id + (S.combosRead.includes(c.id) ? "  ·  ✓ Letta" : "");
+  $("[data-combo-name]", scr).textContent = t(c.title) + (S.combosRead.includes(c.id) ? "  ·  " + t("✓ Letta") : "");
   $("[data-combo-img]", scr).src = "assets/" + c.img;
-  $("[data-combo-intro]", scr).textContent = c.intro;
-  $("[data-combo-how]", scr).textContent = c.how;
-  $("[data-combo-when]", scr).textContent = c.when;
-  $("[data-combo-extra1]", scr).textContent = c.extra[0];
-  $("[data-combo-extra2]", scr).textContent = c.extra[1];
+  $("[data-combo-intro]", scr).textContent = t(c.intro);
+  $("[data-combo-how]", scr).textContent = t(c.how);
+  $("[data-combo-when]", scr).textContent = t(c.when);
+  $("[data-combo-extra1]", scr).textContent = t(c.extra[0]);
+  $("[data-combo-extra2]", scr).textContent = t(c.extra[1]);
   comboPage(1);
   $("[data-combo-next]", scr).onclick = () => {
     if (!$("[data-combo-p2]", scr).hidden) return openQuiz(c.id);
@@ -276,27 +319,27 @@ const openTheory = id => isCombo(id) ? openCombo(id) : openLesson(id);
 function openQuiz(id) {
   const l = LESSONS.find(x => x.id === id) || COMBOS.find(x => x.id === id);
   if (!quizOpen(id)) {
-    if (current === "lezione" || current === "combo") return toast("Arriva in fondo alla lezione per sbloccare il quiz");
-    toast("Prima studia la teoria: poi il quiz si sblocca");
+    if (current === "lezione" || current === "combo") return toast(t("Arriva in fondo alla lezione per sbloccare il quiz"));
+    toast(t("Prima studia la teoria: poi il quiz si sblocca"));
     return openTheory(id);
   }
   if (S.best[id] === 3 && !S.redeemed.includes(id)) return showEvent(l, 3, true);
   const scr = $("#quiz"), box = $("[data-quiz-answers]", scr), next = $("[data-quiz-next]", scr);
   let n = 0, score = 0;
   paintWith(scr, COLOR_BY[QUIZ_COLOR[id]].h);
-  $("[data-quiz-title]", scr).textContent = l.title;
+  $("[data-quiz-title]", scr).textContent = t(l.title);
   const show = () => {
     const item = l.quiz[n];
     let answered = false;
     $("[data-quiz-n]", scr).textContent = `${n + 1} / ${l.quiz.length}`;
-    $("[data-quiz-q]", scr).textContent = item.q;
+    $("[data-quiz-q]", scr).textContent = t(item.q);
     $("[data-quiz-feedback]", scr).textContent = "";
     next.hidden = true;
     box.innerHTML = "";
     item.a.forEach((txt, k) => {
       const b = document.createElement("button");
       b.className = "answer";
-      b.innerHTML = `<span class="dot"></span>${txt}`;
+      b.innerHTML = `<span class="dot"></span>${t(txt)}`;
       b.onclick = () => {
         if (answered) return;
         answered = true;
@@ -304,7 +347,7 @@ function openQuiz(id) {
         if (right) score++;
         b.classList.add(right ? "right" : "wrong");
         box.children[item.ok].classList.add("right");
-        $("[data-quiz-feedback]", scr).innerHTML = right ? 'Esatto! <img class="emo" src="assets/trombetta.png" alt="">' : "Non proprio… la risposta giusta è evidenziata.";
+        $("[data-quiz-feedback]", scr).innerHTML = right ? t("Esatto!") + ' <img class="emo" src="assets/trombetta.png" alt="">' : t("Non proprio… la risposta giusta è evidenziata.");
         next.hidden = false;
       };
       box.appendChild(b);
@@ -334,22 +377,22 @@ function showEvent(l, score, replay, gained = 0) {
   paintWith(scr, col.h);
   $("[data-ev-score]", scr).textContent = `${score} / ${tot}`;
   $("[data-ev-acc]", scr).textContent = Math.round(score / tot * 100) + " %";
-  $("[data-ev-xp]", scr).textContent = replay ? "XP già ottenuti" : `+ ${xp} XP`;
-  $("[data-ev-bname]", scr).textContent = col.n;
-  $("[data-ev-name]", scr).textContent = l.title;
+  $("[data-ev-xp]", scr).textContent = replay ? t("XP già ottenuti") : `+ ${xp} XP`;
+  $("[data-ev-bname]", scr).textContent = t(col.n);
+  $("[data-ev-name]", scr).textContent = t(l.title);
   $("[data-ev-badge]", scr).hidden = !perfect;
   $("[data-ev-retry]", scr).hidden = perfect;
   const redeem = $("[data-ev-redeem]", scr), apply = $("[data-ev-apply]", scr), got = S.redeemed.includes(l.id);
-  redeem.disabled = got; redeem.textContent = got ? "Già riscattato" : "Riscatta";
+  redeem.disabled = got; redeem.textContent = t(got ? "Già riscattato" : "Riscatta");
   apply.hidden = !got;
-  apply.textContent = S.theme === col.id ? "Tema attivo ✓" : "Usa come tema";
-  apply.onclick = () => { applyTheme(col.id); apply.textContent = "Tema attivo ✓"; toast(`Tema “${col.n}” applicato`); };
+  apply.textContent = t(S.theme === col.id ? "Tema attivo ✓" : "Usa come tema");
+  apply.onclick = () => { applyTheme(col.id); apply.textContent = t("Tema attivo ✓"); toast(t("Tema “{n}” applicato", { n: t(col.n) })); };
   redeem.onclick = () => {
     if (S.redeemed.includes(l.id)) return;
     S.redeemed.push(l.id);
     unlockColor(col.id);
-    redeem.disabled = true; redeem.textContent = "Riscattato ✓"; apply.hidden = false;
-    toast("Nuovo colore sbloccato: " + col.n);
+    redeem.disabled = true; redeem.textContent = t("Riscattato ✓"); apply.hidden = false;
+    toast(t("Nuovo colore sbloccato: {n}", { n: t(col.n) }));
   };
   $$("[data-ev-back]", scr).forEach(b => b.onclick = () => { navStack.pop(); back(); });
   go("evento");
@@ -400,11 +443,11 @@ function pickSecret(id) {
   S.secret = S.secret === id ? null : id;
   S.theme = null;
   save(); paintTheme();
-  toast(S.secret ? `Tema segreto “${SECRETS.find(x => x.id === id).n}” attivato` : "Tema originale");
+  toast(S.secret ? t("Tema segreto “{n}” attivato", { n: t(SECRETS.find(x => x.id === id).n) }) : t("Tema originale"));
 }
 function paintWith(el, hex) {
-  const t = tokens(hex, false);
-  ["--darkbrown", "--brown", "--quiz-card", "--purple-btn", "--on-accent"].forEach(k => el.style.setProperty(k, t[k]));
+  const vars = tokens(hex, false);
+  ["--darkbrown", "--brown", "--quiz-card", "--purple-btn", "--on-accent"].forEach(k => el.style.setProperty(k, vars[k]));
 }
 function applyDark() {
   const dark = S.dark === "dark" || (S.dark === "auto" && matchMedia("(prefers-color-scheme: dark)").matches);
@@ -425,9 +468,9 @@ function renderColors() {
   home.innerHTML = "";
   show.forEach(id => {
     const c = COLOR_BY[id], b = document.createElement("button");
-    b.style.background = c.h; b.title = c.n; b.setAttribute("aria-label", "Tema " + c.n);
+    b.style.background = c.h; b.title = t(c.n); b.setAttribute("aria-label", t("Tema {n}", { n: t(c.n) }));
     if (S.theme === id) b.className = "cur";
-    b.onclick = () => { applyTheme(S.theme === id ? null : id); toast(S.theme ? `Tema “${c.n}” applicato` : "Tema originale"); };
+    b.onclick = () => { applyTheme(S.theme === id ? null : id); toast(S.theme ? t("Tema “{n}” applicato", { n: t(c.n) }) : t("Tema originale")); };
     home.appendChild(b);
   });
   const own = $("[data-owned]");
@@ -435,47 +478,47 @@ function renderColors() {
   FAMILIES.forEach(([fam, ids]) => {
     const row = document.createElement("div");
     row.className = "fam";
-    row.innerHTML = `<div class="fam-h"><span>${fam}</span><small>${ids.filter(id => S.owned.includes(id)).length} / ${ids.length}</small></div><div class="fam-row"></div>`;
+    row.innerHTML = `<div class="fam-h"><span>${t(fam)}</span><small>${ids.filter(id => S.owned.includes(id)).length} / ${ids.length}</small></div><div class="fam-row"></div>`;
     ids.forEach(id => {
       const c = COLOR_BY[id], has = S.owned.includes(id), el = document.createElement("button");
       el.className = "sw" + (has ? "" : " locked") + (S.theme === id ? " cur" : "");
-      el.innerHTML = `<i style="background:${c.h}"></i><span>${c.n}</span>${has ? "" : `<small>${c.hint}</small>`}`;
-      if (!has) el.title = "Come si sblocca: " + c.hint;
+      el.innerHTML = `<i style="background:${c.h}"></i><span>${t(c.n)}</span>${has ? "" : `<small>${hintOf(c)}</small>`}`;
+      if (!has) el.title = t("Come si sblocca: {h}", { h: hintOf(c) });
       el.onclick = () => has ? applyTheme(S.theme === id ? null : id) : unlockPath(id);
       $(".fam-row", row).appendChild(el);
     });
     own.appendChild(row);
   });
   $("[data-scale]").innerHTML = SCALE.map(id => { const has = S.owned.includes(id);
-    return `<i data-unlock="${has ? "" : id}" class="${has ? "" : "off"}" style="background:${COLOR_BY[id].h}" title="${COLOR_BY[id].n}"></i>`; }).join("");
+    return `<i data-unlock="${has ? "" : id}" class="${has ? "" : "off"}" style="background:${COLOR_BY[id].h}" title="${t(COLOR_BY[id].n)}"></i>`; }).join("");
   $("[data-owned-n]").textContent = `${S.owned.length} / ${COLORS.length}`;
   const sec = secretsOpen() && SECRETS.find(x => x.id === S.secret);
-  $("[data-theme-name]").textContent = sec ? sec.n + " ✨" : S.theme ? COLOR_BY[S.theme].n : "Tema originale";
+  $("[data-theme-name]").textContent = sec ? t(sec.n) + " ✨" : S.theme ? t(COLOR_BY[S.theme].n) : t("Tema originale");
   $("[data-theme-reset]").hidden = !S.theme && !sec;
 }
-$("[data-theme-reset]").onclick = () => { applyTheme(null); toast("Tema originale ripristinato"); };
+$("[data-theme-reset]").onclick = () => { applyTheme(null); toast(t("Tema originale ripristinato")); };
 
 function unlockPath(id) {
   const q = [...LESSONS, ...COMBOS].find(l => QUIZ_COLOR[l.id] === id);
   if (q) {
     if (S.best[q.id] === 3 && !S.redeemed.includes(q.id)) return showEvent(q, 3, true);
-    if (!quizOpen(q.id)) { toast(`Studia “${q.title}” e fai 3 su 3 nel quiz`); return openTheory(q.id); }
-    toast("Fai 3 su 3 in questo quiz per sbloccarlo");
+    if (!quizOpen(q.id)) { toast(t("Studia “{n}” e fai 3 su 3 nel quiz", { n: t(q.title) })); return openTheory(q.id); }
+    toast(t("Fai 3 su 3 in questo quiz per sbloccarlo"));
     return openQuiz(q.id);
   }
   const m = MISSIONS.find(x => x.color === id);
   if (m) return openMission(m.id);
-  toast("Continua a giocare per sbloccarlo");
+  toast(t("Continua a giocare per sbloccarlo"));
 }
 
 function renderSecrets() {
   const box = $("[data-secrets]");
   if (!secretsOpen()) {
-    box.innerHTML = `<button class="secret-lock" data-secret-locked><span class="sl-glow"></span><b><img class="lk" src="assets/lucchetto.png" alt="">Colori segreti</b><small>Raggiungi il livello ${MAX_LEVEL} completando tutto CHROMA per sbloccare 4 colorazioni animate. Completamento: ${Math.round(completion() * 100)}%</small></button>`;
+    box.innerHTML = `<button class="secret-lock" data-secret-locked><span class="sl-glow"></span><b><img class="lk" src="assets/lucchetto.png" alt="">${t("Colori segreti")}</b><small>${t("Raggiungi il livello {l} completando tutto CHROMA per sbloccare 4 colorazioni animate. Completamento: {p}%", { l: MAX_LEVEL, p: Math.round(completion() * 100) })}</small></button>`;
     return;
   }
-  box.innerHTML = `<div class="section-row"><h2 class="section">Colori segreti ✨</h2></div><div class="secret-grid">${SECRETS.map(x =>
-    `<button class="secret-card${S.secret === x.id ? " cur" : ""}" data-secret-id="${x.id}"><i style="--g:${x.g}"></i><b>${x.n}</b><small>${S.secret === x.id ? "Attivo" : x.d}</small></button>`).join("")}</div>`;
+  box.innerHTML = `<div class="section-row"><h2 class="section">${t("Colori segreti")} ✨</h2></div><div class="secret-grid">${SECRETS.map(x =>
+    `<button class="secret-card${S.secret === x.id ? " cur" : ""}" data-secret-id="${x.id}"><i style="--g:${x.g}"></i><b>${t(x.n)}</b><small>${t(S.secret === x.id ? "Attivo" : x.d)}</small></button>`).join("")}</div>`;
 }
 function showSecretPop() {
   const r = (a, b) => a + Math.random() * (b - a);
@@ -494,34 +537,34 @@ const perfectIn = ids => ids.filter(id => S.best[id] === 3).length;
 const prog = m => Math.min(m.target, m.v());
 const isClaimed = m => (m.type === "giornaliera" ? day().claimed : S.claimed).includes(m.id);
 const isReady = m => prog(m) >= m.target && !isClaimed(m);
-const rewardText = (m, c) => (c ? `<i style="background:${c.h}"></i>${c.n}` : m.badge ? "" : "Solo XP") + (m.badge ? (c ? " · " : "") + m.badge : "");
+const rewardText = (m, c) => (c ? `<i style="background:${c.h}"></i>${t(c.n)}` : m.badge ? "" : t("Solo XP")) + (m.badge ? (c ? " · " : "") + t(m.badge) : "");
 
 function missionItem(m) {
   const p = prog(m), claimed = isClaimed(m), ready = isReady(m), c = COLOR_BY[m.color];
   const b = document.createElement("button");
   b.className = "m-item" + (ready ? " ready" : "") + (claimed ? " claimed" : "");
-  b.innerHTML = `<div class="top"><span>${m.title}</span><b>+ ${m.xp} XP</b></div>
-    <div class="m-sub">${c ? `<i style="background:${c.h}"></i>${c.n}` : m.badge ? "" : "Solo XP"}${m.badge ? ` · ${m.badge}` : ""}<em>${p} / ${m.target}</em></div>
+  b.innerHTML = `<div class="top"><span>${t(m.title)}</span><b>+ ${m.xp} XP</b></div>
+    <div class="m-sub">${c ? `<i style="background:${c.h}"></i>${t(c.n)}` : m.badge ? "" : t("Solo XP")}${m.badge ? ` · ${t(m.badge)}` : ""}<em>${p} / ${m.target}</em></div>
     <div class="mbar"><i style="width:${p / m.target * 100}%"></i></div>
-    ${ready ? '<div class="tag">Completata! Tocca per riscattare</div>' : claimed ? '<div class="tag">Riscattata ✓</div>' : ""}`;
+    ${ready ? `<div class="tag">${t("Completata! Tocca per riscattare")}</div>` : claimed ? `<div class="tag">${t("Riscattata ✓")}</div>` : ""}`;
   b.onclick = () => openMission(m.id);
   return b;
 }
 function renderMissions() {
-  ["percorso", "giornaliera", "serie"].forEach(t => {
-    const el = $(`[data-missions="${t}"]`);
+  ["percorso", "giornaliera", "serie"].forEach(type => {
+    const el = $(`[data-missions="${type}"]`);
     el.innerHTML = "";
-    MISSIONS.filter(m => m.type === t).sort((a, b) => isClaimed(a) - isClaimed(b)).forEach(m => el.appendChild(missionItem(m)));
+    MISSIONS.filter(m => m.type === type).sort((a, b) => isClaimed(a) - isClaimed(b)).forEach(m => el.appendChild(missionItem(m)));
   });
   const daily = MISSIONS.filter(m => m.type === "giornaliera"), doneToday = daily.filter(isClaimed).length, ready = MISSIONS.filter(isReady).length;
-  $("[data-ch-sub]").textContent = doneToday === daily.length ? "Hai completato le missioni di oggi!" : `Missioni di oggi: ${doneToday} / ${daily.length} completate`;
+  $("[data-ch-sub]").textContent = doneToday === daily.length ? t("Hai completato le missioni di oggi!") : t("Missioni di oggi: {a} / {b} completate", { a: doneToday, b: daily.length });
   const badge = $("[data-m-ready]");
   badge.textContent = ready; badge.hidden = !ready;
   const next = MISSIONS.find(m => m.type === "percorso" && !isClaimed(m)), card = $("[data-am]");
   card.hidden = !next;
   if (!next) return;
   card.onclick = () => openMission(next.id);
-  $("[data-am-title]").textContent = next.title + (isReady(next) ? " ✓" : "");
+  $("[data-am-title]").textContent = t(next.title) + (isReady(next) ? " ✓" : "");
   $("[data-am-n]").textContent = `${prog(next)} / ${next.target}`;
   $("[data-am-xp]").textContent = `+ ${next.xp} XP`;
   $("[data-am-bar]").style.width = prog(next) / next.target * 100 + "%";
@@ -529,9 +572,9 @@ function renderMissions() {
 function openMission(id) {
   const m = MISSIONS.find(x => x.id === id), scr = $("#missione");
   const p = prog(m), claimed = isClaimed(m), ready = isReady(m), c = COLOR_BY[m.color], badge = BADGES.find(x => x.n === m.badge);
-  $("[data-md-kind]", scr).textContent = { percorso: "Missione del percorso", giornaliera: "Missione giornaliera", serie: "Missione speciale" }[m.type];
-  $("[data-md-title]", scr).textContent = m.title;
-  $("[data-md-desc]", scr).textContent = m.desc;
+  $("[data-md-kind]", scr).textContent = t({ percorso: "Missione del percorso", giornaliera: "Missione giornaliera", serie: "Missione speciale" }[m.type]);
+  $("[data-md-title]", scr).textContent = t(m.title);
+  $("[data-md-desc]", scr).textContent = t(m.desc);
   $("[data-md-n]", scr).textContent = `${p} / ${m.target}`;
   $("[data-md-bar]", scr).style.width = p / m.target * 100 + "%";
   $("[data-md-xp]", scr).textContent = `+ ${m.xp} XP`;
@@ -540,7 +583,7 @@ function openMission(id) {
     : badge ? `<img class="bimg" src="assets/${badge.img}" alt="">` : `<span class="md-xp">XP</span>`;
   const btn = $("[data-md-btn]", scr);
   btn.disabled = claimed || (m.type === "serie" && !ready);
-  btn.textContent = claimed ? "Già riscattata" : ready ? "Riscatta reward" : m.cta;
+  btn.textContent = t(claimed ? "Già riscattata" : ready ? "Riscatta reward" : m.cta);
   btn.onclick = () => {
     if (!ready) return go(m.go);
     (m.type === "giornaliera" ? day().claimed : S.claimed).push(id);
@@ -548,11 +591,11 @@ function openMission(id) {
     if (m.badge && !S.badges.includes(m.badge)) S.badges.push(m.badge);
     if (c) unlockColor(c.id);
     const won = $("[data-ro-color]");
-    won.textContent = c ? "+ " + c.n : ""; won.hidden = !c;
+    won.textContent = c ? "+ " + t(c.n) : ""; won.hidden = !c;
     won.style.setProperty("--won", c ? c.h : "transparent");
     addXP(m.xp);
     $("[data-ro-xp]").textContent = `+ ${m.xp} XP`;
-    $("[data-ro-badge]").textContent = m.badge ? "+ " + m.badge : "";
+    $("[data-ro-badge]").textContent = m.badge ? "+ " + t(m.badge) : "";
     go("rewardok");
   };
   go("missione");
@@ -564,11 +607,11 @@ function renderBadges() {
   BADGES.forEach((b, k) => {
     const got = b.got(), el = document.createElement("div");
     el.className = "badge " + (got ? "got" : "locked tap " + (k % 2 ? "brownish" : "violet"));
-    el.innerHTML = `<div class="badge-art${got ? "" : " off"}"><img class="bimg" src="assets/${b.img}" alt=""></div><b>${b.n}</b><span>${b.d}</span>`;
+    el.innerHTML = `<div class="badge-art${got ? "" : " off"}"><img class="bimg" src="assets/${b.img}" alt=""></div><b>${t(b.n)}</b><span>${t(b.d)}</span>`;
     if (!got) el.onclick = () => {
       const m = MISSIONS.find(x => x.badge === b.n);
       if (m) return openMission(m.id);
-      toast(b.d); go(b.to);
+      toast(t(b.d)); go(b.to);
     };
     if (filter !== "all" && !el.classList.contains(filter)) el.classList.add("hide");
     grid.appendChild(el);
@@ -583,44 +626,44 @@ function renderPalettes() {
     const b = document.createElement("div");
     b.className = "pal-item" + (mine ? " mine" : "");
     b.tabIndex = 0; b.setAttribute("role", "button");
-    b.innerHTML = `<div class="n">${name}${mine ? " <small>personale</small>" : ""}</div>
-      <div class="pal-dots">${swatches(hexes)}</div><button class="more" aria-label="Opzioni">⋮</button>`;
+    b.innerHTML = `<div class="n">${name}${mine ? ` <small>${t("personale")}</small>` : ""}</div>
+      <div class="pal-dots">${swatches(hexes)}</div><button class="more" aria-label="${t("Opzioni")}">⋮</button>`;
     b.onclick = e => { if (!e.target.closest(".more")) open(); };
     $(".more", b).onclick = e => { e.stopPropagation(); menu(); };
     list.appendChild(b);
   };
-  PALETTES.forEach((p, k) => add(p.n, p.c, () => openPalette(k), () => sheet(p.n, [
-    ["Apri", () => openPalette(k)],
-    ["Crea una palette simile", () => openEditor(null, p.n + " (mia)")],
-    ["Condividi", () => sharePalette(p.n, p.c, p.e)]
+  PALETTES.forEach((p, k) => add(t(p.n), p.c, () => openPalette(k), () => sheet(t(p.n), [
+    [t("Apri"), () => openPalette(k)],
+    [t("Crea una palette simile"), () => openEditor(null, t("{n} (mia)", { n: t(p.n) }))],
+    [t("Condividi"), () => sharePalette(t(p.n), p.c, p.e.map(x => t(x)))]
   ])));
   S.myPalettes.forEach(p => add(p.n, p.c.map(id => colorOf(id).h), () => openMyPalette(p.id), () => sheet(p.n, [
-    ["Apri", () => openMyPalette(p.id)],
-    ["Modifica", () => openEditor(p.id)],
-    COLOR_BY[p.c[0]] ? ["Usa il primo colore come tema", () => { applyTheme(p.c[0]); toast(`Tema “${COLOR_BY[p.c[0]].n}” applicato`); }]
-      : ["Apri nel Laboratorio", () => openLab(p.c[0])],
-    ["Condividi", () => sharePalette(p.n, p.c.map(id => colorOf(id).h))],
-    ["Elimina", () => confirmBox("Eliminare la palette?", `“${p.n}” verrà cancellata.`, () => {
-      S.myPalettes = S.myPalettes.filter(x => x.id !== p.id); save(); renderPalettes(); toast("Palette eliminata");
+    [t("Apri"), () => openMyPalette(p.id)],
+    [t("Modifica"), () => openEditor(p.id)],
+    COLOR_BY[p.c[0]] ? [t("Usa il primo colore come tema"), () => { applyTheme(p.c[0]); toast(t("Tema “{n}” applicato", { n: t(COLOR_BY[p.c[0]].n) })); }]
+      : [t("Apri nel Laboratorio"), () => openLab(p.c[0])],
+    [t("Condividi"), () => sharePalette(p.n, p.c.map(id => colorOf(id).h))],
+    [t("Elimina"), () => confirmBox(t("Eliminare la palette?"), t("“{n}” verrà cancellata.", { n: p.n }), () => {
+      S.myPalettes = S.myPalettes.filter(x => x.id !== p.id); save(); renderPalettes(); toast(t("Palette eliminata"));
     }), "danger"]
   ]), true));
 }
 function palettePage(title, heading, text, emoHead, emoHtml, fact, share) {
   const scr = $("#palettedet"), cards = $$(".pal-card", scr);
   $("[data-pal-title]", scr).textContent = title;
-  $(".pal-card h3", scr).textContent = heading;
+  $(".pal-card h3", scr).textContent = t(heading);
   $("[data-pal-text]", scr).textContent = text;
-  $(".pal-emo-h", scr).textContent = emoHead;
+  $(".pal-emo-h", scr).textContent = t(emoHead);
   $("[data-pal-emo]", scr).innerHTML = emoHtml;
   cards[1].hidden = !fact;
-  $("[data-pal-fact]", scr).textContent = fact || "";
+  $("[data-pal-fact]", scr).textContent = fact ? t(fact) : "";
   $("[data-pal-share]", scr).onclick = share;
   go("palettedet");
 }
 function openPalette(k) {
   const p = PALETTES[k];
   $("[data-pal-dots]").innerHTML = swatches(p.c);
-  palettePage(p.n, "Significato", p.t, "Emozioni associate", p.e.map(x => `<span>${x}</span>`).join(""), PAL_FACT, () => sharePalette(p.n, p.c, p.e));
+  palettePage(t(p.n), "Significato", t(p.t), "Emozioni associate", p.e.map(x => `<span>${t(x)}</span>`).join(""), PAL_FACT, () => sharePalette(t(p.n), p.c, p.e.map(x => t(x))));
 }
 function openMyPalette(id) {
   const p = S.myPalettes.find(x => x.id === id), cols = p.c.map(colorOf), own = cols.some(c => COLOR_BY[c.id]);
@@ -629,14 +672,14 @@ function openMyPalette(id) {
   cols.forEach(c => {
     const b = document.createElement("button"), mine = COLOR_BY[c.id];
     b.className = "pal-dot-btn"; b.style.background = c.h;
-    b.title = mine ? `Usa ${c.n} come tema` : `Apri ${c.n} nel Laboratorio`;
-    b.onclick = () => mine ? (applyTheme(c.id), toast(`Tema “${c.n}” applicato`)) : openLab(c.h);
+    b.title = t(mine ? "Usa {n} come tema" : "Apri {n} nel Laboratorio", { n: t(c.n) });
+    b.onclick = () => mine ? (applyTheme(c.id), toast(t("Tema “{n}” applicato", { n: t(c.n) }))) : openLab(c.h);
     dots.appendChild(b);
   });
   palettePage(p.n, "La tua palette",
-    own ? `Creata da te con ${cols.length} colori. Tocca un colore sbloccato qui sopra per usarlo come tema dell'app, o un codice per aprirlo nel Laboratorio.`
-      : `Creata da te con ${cols.length} colori. Tocca un colore qui sopra per aprirlo nel Laboratorio e scoprirne i codici.`,
-    "Colori", cols.map(c => `<span style="background:${c.h};color:${onColor(c.h)}">${c.n}</span>`).join(""), null,
+    t(own ? "Creata da te con {n} colori. Tocca un colore sbloccato qui sopra per usarlo come tema dell'app, o un codice per aprirlo nel Laboratorio."
+      : "Creata da te con {n} colori. Tocca un colore qui sopra per aprirlo nel Laboratorio e scoprirne i codici.", { n: cols.length }),
+    "Colori", cols.map(c => `<span style="background:${c.h};color:${onColor(c.h)}">${t(c.n)}</span>`).join(""), null,
     () => sharePalette(p.n, cols.map(c => c.h)));
 }
 
@@ -644,7 +687,7 @@ let editing = null, picked = [];
 function openEditor(id, suggestedName = "") {
   const p = S.myPalettes.find(x => x.id === id);
   editing = id; picked = p ? [...p.c] : [];
-  $("[data-pe-title]").textContent = p ? "Modifica palette" : "Nuova palette";
+  $("[data-pe-title]").textContent = t(p ? "Modifica palette" : "Nuova palette");
   $("[data-pe-name]").value = p ? p.n : suggestedName;
   drawEditor();
   go("paledit");
@@ -658,11 +701,11 @@ function drawEditor() {
   [...picked.filter(id => !COLOR_BY[id]), ...byHue(S.owned)].forEach(id => {
     const c = colorOf(id), b = document.createElement("button");
     b.className = "sw" + (picked.includes(id) ? " cur" : "");
-    b.innerHTML = `<i style="background:${c.h}"></i><span>${c.n}</span>`;
+    b.innerHTML = `<i style="background:${c.h}"></i><span>${t(c.n)}</span>`;
     b.onclick = () => {
       if (picked.includes(id)) picked = picked.filter(x => x !== id);
       else if (picked.length < 6) picked.push(id);
-      else toast("Massimo 6 colori per palette");
+      else toast(t("Massimo 6 colori per palette"));
       drawEditor();
     };
     grid.appendChild(b);
@@ -671,19 +714,19 @@ function drawEditor() {
 $("[data-new-palette]").onclick = () => openEditor(null);
 $("[data-pe-save]").onclick = () => {
   const n = $("[data-pe-name]").value.trim();
-  if (!n) return toast("Dai un nome alla palette");
-  if (picked.length < 2) return toast("Scegli almeno 2 colori");
+  if (!n) return toast(t("Dai un nome alla palette"));
+  if (picked.length < 2) return toast(t("Scegli almeno 2 colori"));
   if (editing) Object.assign(S.myPalettes.find(x => x.id === editing), { n, c: [...picked] });
   else S.myPalettes.push({ id: "p" + Date.now(), n, c: [...picked] });
   save(); renderPalettes(); addXP(0);
-  toast(editing ? "Palette aggiornata" : "Palette creata!");
+  toast(t(editing ? "Palette aggiornata" : "Palette creata!"));
   navStack.length = 0; go("explore", false); go("palette");
 };
 
 function sheet(title, actions) {
   const bg = $("[data-sheet-bg]"), sh = $("[data-sheet]");
   sh.innerHTML = `<h3>${title}</h3>`;
-  [...actions, ["Annulla", () => {}, "cancel"]].forEach(([label, fn, cls]) => {
+  [...actions, [t("Annulla"), () => {}, "cancel"]].forEach(([label, fn, cls]) => {
     const b = document.createElement("button");
     b.className = "sheet-btn " + (cls || ""); b.textContent = label;
     b.onclick = () => { bg.hidden = true; fn(); };
@@ -701,27 +744,32 @@ function confirmBox(title, text, yes) {
   bg.hidden = false;
 }
 
-$("[data-set-name]").addEventListener("change", e => { S.name = e.target.value.trim(); save(); render(); toast("Nome salvato"); });
+$("[data-set-name]").addEventListener("change", e => { S.name = e.target.value.trim(); langFromName(S.name); save(); render(); toast(t("Nome salvato")); });
+$("[data-onb-name]").addEventListener("input", e => langFromName(e.target.value));
+$("[data-lang-seg]").addEventListener("click", e => {
+  const b = e.target.closest("[data-lang]");
+  if (b) { S.langManual = true; setLang(b.dataset.lang); }
+});
 $("[data-dark-seg]").addEventListener("click", e => {
   const b = e.target.closest("[data-dark]");
   if (b) { S.dark = b.dataset.dark; save(); applyDark(); }
 });
 matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyDark);
 function resetAll() {
-  try { localStorage.setItem("chroma", JSON.stringify({ ...structuredClone(DEF), dark: S.dark })); } catch {}
+  try { localStorage.setItem("chroma", JSON.stringify({ ...structuredClone(DEF), dark: S.dark, lang: S.lang, langManual: S.langManual })); } catch {}
   location.reload();
 }
-$("[data-reset]").onclick = () => confirmBox("Azzerare tutto?", "XP, livelli, lezioni, colori, badge e palette torneranno a zero e ripartirà l'onboarding.", resetAll);
+$("[data-reset]").onclick = () => confirmBox(t("Azzerare tutto?"), t("XP, livelli, lezioni, colori, badge e palette torneranno a zero e ripartirà l'onboarding."), resetAll);
 
 function fillTitles() {
-  for (let l = 1; l <= S.level; l++) if (!S.titles.some(t => t.l === l)) S.titles.push({ l, d: null });
-  S.titles = S.titles.filter(t => t.l <= S.level).sort((a, b) => a.l - b.l);
+  for (let l = 1; l <= S.level; l++) if (!S.titles.some(x => x.l === l)) S.titles.push({ l, d: null });
+  S.titles = S.titles.filter(x => x.l <= S.level).sort((a, b) => a.l - b.l);
 }
 const levelUps = [];
 function onLevelUp() {
   fillTitles();
-  const t = S.titles.find(x => x.l === S.level);
-  if (!t.d) t.d = isoDay(Date.now());
+  const title = S.titles.find(x => x.l === S.level);
+  if (!title.d) title.d = isoDay(Date.now());
   S.shownTitle = null;
   save();
   levelUps.push(S.level);
@@ -745,15 +793,15 @@ $("[data-lu-ok]").onclick = () => {
 const setShownTitle = l => { S.shownTitle = l === S.level ? null : l; save(); render(); };
 $("[data-title-pick]").onclick = () => {
   fillTitles();
-  const opts = S.titles.slice().reverse().slice(0, 8).map(t => [
-    (levelTitle(t.l) === shownTitle() ? "✓ " : "") + levelTitle(t.l) + "  · Lv " + t.l,
-    () => { setShownTitle(t.l); toast("Titolo aggiornato"); }
+  const opts = S.titles.slice().reverse().slice(0, 8).map(x => [
+    (levelTitle(x.l) === shownTitle() ? "✓ " : "") + levelTitle(x.l) + "  · Lv " + x.l,
+    () => { setShownTitle(x.l); toast(t("Titolo aggiornato")); }
   ]);
-  sheet("Scegli il titolo da mostrare", [...opts, ["Vedi tutti i titoli…", () => go("titoli")]]);
+  sheet(t("Scegli il titolo da mostrare"), [...opts, [t("Vedi tutti i titoli…"), () => go("titoli")]]);
 };
 function renderTimeline() {
   const ol = $("[data-timeline]"), next = S.level + 1;
-  const date = d => d ? new Date(d).toLocaleDateString("it-IT", { day: "numeric", month: "short", year: "numeric" }) : "prima del registro";
+  const date = d => d ? new Date(d).toLocaleDateString(locale(), { day: "numeric", month: "short", year: "numeric" }) : t("prima del registro");
   const order = [...(S.level < MAX_LEVEL ? [next] : []), ...Array.from({ length: S.level }, (_, i) => S.level - i),
     ...Array.from({ length: Math.max(0, MAX_LEVEL - next) }, (_, i) => next + 1 + i)];
   fillTitles();
@@ -763,15 +811,15 @@ function renderTimeline() {
     li.className = (got ? "got" : "locked") + (shown ? " shown" : "") + (l === next ? " next" : "");
     li.innerHTML = `<span class="tl-dot" style="--c:${levelColor(l)}">${got ? l : '<img class="lk" src="assets/lucchetto.png" alt="">'}</span>
       <div><b>${got || l === next ? levelTitle(l) : "???"}</b>
-      <small>${got ? `Livello ${l} · ${date(S.titles.find(x => x.l === l)?.d)}` : l === next ? `Prossimo · mancano ${xpNeed(S.level) - S.xp} XP` : "Livello " + l}</small></div>
-      ${shown ? "<em>In mostra</em>" : ""}`;
-    if (got) li.onclick = () => { setShownTitle(l); toast("Ora mostri: " + levelTitle(l)); };
+      <small>${got ? `${t("Livello {l}", { l })} · ${date(S.titles.find(x => x.l === l)?.d)}` : l === next ? t("Prossimo · mancano {xp} XP", { xp: xpNeed(S.level) - S.xp }) : t("Livello {l}", { l })}</small></div>
+      ${shown ? `<em>${t("In mostra")}</em>` : ""}`;
+    if (got) li.onclick = () => { setShownTitle(l); toast(t("Ora mostri: {n}", { n: levelTitle(l) })); };
     ol.appendChild(li);
   });
 }
 
 function avatarHTML(a = S.avatar || { type: "preset", id: "default" }) {
-  if (a.type === "photo") return `<img src="${a.data}" alt="La tua foto">`;
+  if (a.type === "photo") return `<img src="${a.data}" alt="${t("La tua foto")}">`;
   const p = AVATARS.find(x => x.id === a.id) || AVATARS[0];
   if (!p.bg) return `<span class="av-default"><img src="assets/ic-profilo.png" alt=""></span>`;
   if (p.img) return `<span class="av-img${p.full ? " full" : ""}" style="background:${p.bg}"><img src="assets/${p.img}" alt=""></span>`;
@@ -786,10 +834,10 @@ function renderAvatars() {
     const ok = S.level >= p.lv, cur = S.avatar?.type !== "photo" && (S.avatar?.id || "default") === p.id;
     const b = document.createElement("button");
     b.className = "av-opt" + (ok ? "" : " locked") + (cur ? " cur" : "");
-    b.innerHTML = `<span class="avatar-pic">${avatarHTML({ type: "preset", id: p.id })}</span><small>${ok ? p.n : "Lv " + p.lv}</small>`;
+    b.innerHTML = `<span class="avatar-pic">${avatarHTML({ type: "preset", id: p.id })}</span><small>${ok ? t(p.n) : "Lv " + p.lv}</small>`;
     b.onclick = () => {
-      if (!ok) return toast(`Si sblocca al livello ${p.lv}`);
-      S.avatar = { type: "preset", id: p.id }; save(); renderAvatars(); toast("Avatar aggiornato");
+      if (!ok) return toast(t("Si sblocca al livello {l}", { l: p.lv }));
+      S.avatar = { type: "preset", id: p.id }; save(); renderAvatars(); toast(t("Avatar aggiornato"));
     };
     grid.appendChild(b);
   });
@@ -804,14 +852,13 @@ $("[data-av-file]").addEventListener("change", e => {
     c.getContext("2d").drawImage(img, (n - w) / 2, (n - h) / 2, w, h);
     S.avatar = { type: "photo", data: c.toDataURL("image/jpeg", .85) };
     URL.revokeObjectURL(url); e.target.value = "";
-    save(); renderAvatars(); toast("Foto del profilo aggiornata");
+    save(); renderAvatars(); toast(t("Foto del profilo aggiornata"));
   };
-  img.onerror = () => toast("Immagine non valida");
+  img.onerror = () => toast(t("Immagine non valida"));
   img.src = url;
 });
 
-const WEEK_DAYS = ["D", "L", "M", "M", "G", "V", "S"];
-const WEEK_NAMES = ["domenica", "lunedì", "martedì", "mercoledì", "giovedì", "venerdì", "sabato"];
+const weekday = (d, format) => d.toLocaleDateString(locale(), { weekday: format });
 function lastDays(n = 7) {
   const today = day();
   return Array.from({ length: n }, (_, i) => {
@@ -821,34 +868,34 @@ function lastDays(n = 7) {
   });
 }
 function renderWeek() {
-  const key = $("[data-week].on").dataset.week, unit = { min: "min", quiz: "quiz", lessons: "lezioni" }[key];
+  const key = $("[data-week].on").dataset.week, unit = t({ min: "min", quiz: "quiz", lessons: "lezioni" }[key]);
   const days = lastDays(), max = Math.max(1, ...days.map(d => d[key])), top = days.reduce((a, d) => d[key] > a[key] ? d : a, days[0]);
   $("[data-week-bars]").innerHTML = days.map(d => {
     const v = d[key], label = d.today || (d === top && v) ? `<em>${v}</em>` : "";
-    return `<div class="wb${d.today ? " today" : ""}" title="${WEEK_NAMES[d.date.getDay()]}: ${v} ${unit}">${label}<i style="height:${Math.max(v ? 6 : 2, v / max * 100)}%"></i><span>${WEEK_DAYS[d.date.getDay()]}</span></div>`;
+    return `<div class="wb${d.today ? " today" : ""}" title="${weekday(d.date, "long")}: ${v} ${unit}">${label}<i style="height:${Math.max(v ? 6 : 2, v / max * 100)}%"></i><span>${weekday(d.date, "short").slice(0, 2)}</span></div>`;
   }).join("");
   const sum = days.reduce((a, d) => a + d[key], 0), active = days.filter(d => d.min || d.quiz || d.lessons).length;
-  $("[data-week-sum]").innerHTML = `<div><b>${sum}</b><span>${unit} in 7 giorni</span></div>
-    <div><b>${key === "min" ? Math.round(sum / 7) : (sum / 7).toFixed(1).replace(".", ",")}</b><span>media al giorno</span></div>
-    <div><b>${active}/7</b><span>giorni attivi</span></div>` + (top[key] ? `<p>Il tuo giorno migliore: <b>${WEEK_NAMES[top.date.getDay()]}</b> (${top[key]} ${unit})</p>` : "");
+  $("[data-week-sum]").innerHTML = `<div><b>${sum}</b><span>${t("{u} in 7 giorni", { u: unit })}</span></div>
+    <div><b>${key === "min" ? Math.round(sum / 7) : (sum / 7).toFixed(1).replace(".", ",")}</b><span>${t("media al giorno")}</span></div>
+    <div><b>${active}/7</b><span>${t("giorni attivi")}</span></div>` + (top[key] ? `<p>${t("Il tuo giorno migliore: <b>{d}</b> ({v} {u})", { d: weekday(top.date, "long"), v: top[key], u: unit })}</p>` : "");
 }
 
 const SIM = {
   xp: () => { addXP(100); return "+100 XP"; },
   level: () => {
-    if (S.level >= MAX_LEVEL - 1 && !allComplete()) return `Il livello ${MAX_LEVEL} si sblocca solo completando tutto`;
+    if (S.level >= MAX_LEVEL - 1 && !allComplete()) return t("Il livello {l} si sblocca solo completando tutto", { l: MAX_LEVEL });
     S.level++; onLevelUp(); save(); render(); return "";
   },
-  time: () => { S.time += 3600; day().time += 3600; save(); render(); return "+1 ora di studio"; },
-  day: () => { S.streak++; S.bestStreak = Math.max(S.bestStreak, S.streak); save(); render(); return `Streak: ${S.streak} giorni`; },
+  time: () => { S.time += 3600; day().time += 3600; save(); render(); return t("+1 ora di studio"); },
+  day: () => { S.streak++; S.bestStreak = Math.max(S.bestStreak, S.streak); save(); render(); return t("Streak: {n} giorni", { n: S.streak }); },
   lessons: () => {
     const todo = LESSONS.filter(l => !S.done.includes(l.id));
     todo.forEach(l => S.done.push(l.id));
     S.lessonsTotal += todo.length; day().lessons++;
     addXP(todo.length * 50);
-    return todo.length ? `${todo.length} lezioni completate (+${todo.length * 50} XP)` : "Lezioni già tutte completate";
+    return todo.length ? t("{n} lezioni completate (+{xp} XP)", { n: todo.length, xp: todo.length * 50 }) : t("Lezioni già tutte completate");
   },
-  quiz: () => { S.quizzes += 5; day().quiz += 5; day().perfect++; save(); render(); return "+5 quiz completati"; },
+  quiz: () => { S.quizzes += 5; day().quiz += 5; day().perfect++; save(); render(); return t("+5 quiz completati"); },
   missions: () => {
     LESSONS.forEach(l => { if (!S.done.includes(l.id)) { S.done.push(l.id); S.lessonsTotal++; } });
     [...LESSONS, ...COMBOS].forEach(l => {
@@ -859,38 +906,38 @@ const SIM = {
     if (!S.myPalettes.length) S.myPalettes.push({ id: "demo", n: "Palette demo", c: ["perla", "ardesia"] });
     Object.assign(S, { combosRead: COMBOS.map(c => c.id), games: { guess: 5, order: 5, comp: 5 }, labSaved: true, photoDone: true, streak: 4, bestStreak: 4 });
     Object.assign(day(), { lessons: 1, quiz: 2, perfect: 1, time: 300 });
-    save(); renderPalettes(); render(); return "Tutte le missioni sono pronte da riscattare!";
+    save(); renderPalettes(); render(); return t("Tutte le missioni sono pronte da riscattare!");
   },
-  colors: () => { S.owned = COLORS.map(c => c.id); save(); render(); return `Tutti i ${COLORS.length} colori sbloccati`; },
+  colors: () => { S.owned = COLORS.map(c => c.id); save(); render(); return t("Tutti i {n} colori sbloccati", { n: COLORS.length }); },
   badges: () => {
     S.badges = ["Badge dello studente", "Badge dello studioso", "Badge sociale", "Badge digitale", "Occhio allenato"];
     S.owned = COLORS.map(c => c.id); S.level = Math.max(S.level, 10); fillTitles();
-    save(); render(); return "Tutti i badge sbloccati";
+    save(); render(); return t("Tutti i badge sbloccati");
   },
   expert: () => {
     Object.assign(S, {
-      level: 12, xp: 450, xpTotal: 12450, time: 30 * 3600 + 25 * 60, streak: 21, bestStreak: 21, quizzes: 42, lessonsTotal: 24,
+      level: 12, xp: Math.round(xpNeed(12) * .6), xpTotal: 3200, time: 30 * 3600 + 25 * 60, streak: 21, bestStreak: 21, quizzes: 42, lessonsTotal: 24,
       missionsDone: 25, done: LESSONS.map(l => l.id), badges: ["Badge dello studente", "Badge dello studioso", "Badge sociale"],
       claimed: ["p1", "p2", "p3", "p4", "s1", "s2"], onboarded: true, name: S.name || "Luca", shownTitle: null,
       games: { guess: 4, order: 3, comp: 5 }, labSaved: true, photoDone: true
     });
     COLORS.slice(0, 22).forEach(c => { if (!S.owned.includes(c.id)) S.owned.push(c.id); });
     [6, 5, 4, 3, 2, 1].forEach((n, i) => { const d = new Date(); d.setDate(d.getDate() - n); S.hist[isoDay(d)] = { t: [1500, 600, 0, 2400, 900, 1800][i], q: [3, 1, 0, 5, 2, 4][i], l: [2, 1, 0, 3, 1, 2][i] }; });
-    fillTitles(); save(); render(); return "Profilo da utente esperto caricato";
+    fillTitles(); save(); render(); return t("Profilo da utente esperto caricato");
   },
   secret: () => {
     SIM.missions();
     Object.assign(S, { owned: COLORS.map(c => c.id), level: MAX_LEVEL, xp: xpNeed(MAX_LEVEL), secretSeen: false });
     fillTitles(); save(); render(); checkSecret(); return "";
   },
-  fresh: () => { confirmBox("Nuovo utente?", "Tutti i progressi verranno azzerati e ripartirà l'onboarding.", resetAll); return ""; }
+  fresh: () => { confirmBox(t("Nuovo utente?"), t("Tutti i progressi verranno azzerati e ripartirà l'onboarding."), resetAll); return ""; }
 };
 function secretTaps(el) {
-  let n = 0, t;
+  let n = 0, timer;
   el.addEventListener("click", () => {
-    clearTimeout(t); t = setTimeout(() => n = 0, 1200);
+    clearTimeout(timer); timer = setTimeout(() => n = 0, 1200);
     if (++n >= 5) { n = 0; $("[data-demo]").hidden = false; }
-    else if (n >= 3) toast(`Ancora ${5 - n}…`);
+    else if (n >= 3) toast(t("Ancora {n}…", { n: 5 - n }));
   });
 }
 secretTaps($("[data-version]"));
@@ -914,14 +961,15 @@ function showInstallBar() {
   $("[data-install]").hidden = standalone || off || !isMobile || !(installEvent || isIOS);
 }
 function install() {
-  if (standalone) return toast("CHROMA è già installata");
+  if (standalone) return toast(t("CHROMA è già installata"));
   if (installEvent) { installEvent.prompt(); installEvent.userChoice.then(() => { installEvent = null; showInstallBar(); }); return; }
   const sh = $("[data-sheet]");
-  sh.innerHTML = isIOS
-    ? `<h3>Installa CHROMA su iPhone</h3><ol class="ios-steps"><li>Apri questa pagina con <b>Safari</b></li><li>Tocca il tasto <b>Condividi</b> (il quadrato con la freccia ↑)</li><li>Scegli <b>Aggiungi a Home</b> e poi <b>Aggiungi</b></li><li>Apri CHROMA dall'icona: sarà a schermo intero</li></ol>`
-    : `<h3>Installa CHROMA</h3><ol class="ios-steps"><li>Apri il menu del browser <b>⋮</b></li><li>Scegli <b>Installa app</b> o <b>Aggiungi a schermata Home</b></li><li>Apri CHROMA dall'icona: sarà a schermo intero</li></ol>`;
+  const steps = isIOS
+    ? ["Apri questa pagina con <b>Safari</b>", "Tocca il tasto <b>Condividi</b> (il quadrato con la freccia ↑)", "Scegli <b>Aggiungi a Home</b> e poi <b>Aggiungi</b>", "Apri CHROMA dall'icona: sarà a schermo intero"]
+    : ["Apri il menu del browser <b>⋮</b>", "Scegli <b>Installa app</b> o <b>Aggiungi a schermata Home</b>", "Apri CHROMA dall'icona: sarà a schermo intero"];
+  sh.innerHTML = `<h3>${t(isIOS ? "Installa CHROMA su iPhone" : "Installa CHROMA")}</h3><ol class="ios-steps">${steps.map(s => `<li>${t(s)}</li>`).join("")}</ol>`;
   const ok = document.createElement("button");
-  ok.className = "sheet-btn cancel"; ok.textContent = "Ho capito";
+  ok.className = "sheet-btn cancel"; ok.textContent = t("Ho capito");
   ok.onclick = () => $("[data-sheet-bg]").hidden = true;
   sh.appendChild(ok);
   $("[data-sheet-bg]").hidden = false;
@@ -942,12 +990,12 @@ if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
     if (!hadController) { hadController = true; return; }
     if (reloading) return;
     const reload = () => { reloading = true; save(); try { sessionStorage.setItem("chroma-updated", "1"); } catch {} location.reload(); };
-    if (["quiz", "paledit", "onb3"].includes(current)) sheet("È disponibile una nuova versione di CHROMA", [["Aggiorna ora", reload]]);
+    if (["quiz", "paledit", "onb3"].includes(current)) sheet(t("È disponibile una nuova versione di CHROMA"), [[t("Aggiorna ora"), reload]]);
     else reload();
   });
 }
 async function forceUpdate() {
-  toast("Aggiornamento in corso…");
+  toast(t("Aggiornamento in corso…"));
   save();
   try {
     const regs = await navigator.serviceWorker?.getRegistrations?.() || [];
@@ -957,10 +1005,10 @@ async function forceUpdate() {
   } catch {}
   location.reload();
 }
-$("[data-force-update]").onclick = () => confirmBox("Aggiornare l'app?", "Scarico l'ultima versione di CHROMA. I tuoi progressi restano salvati.", forceUpdate);
+$("[data-force-update]").onclick = () => confirmBox(t("Aggiornare l'app?"), t("Scarico l'ultima versione di CHROMA. I tuoi progressi restano salvati."), forceUpdate);
 const showVersion = () => (window.caches ? caches.keys() : Promise.resolve([])).then(keys => {
   const v = keys.filter(k => k.startsWith("chroma-v")).sort().pop();
-  $("[data-version]").textContent = `CHROMA ${v ? v.replace("chroma-", "") : "v1"} · Tesi magistrale`;
+  $("[data-version]").textContent = `CHROMA ${v ? v.replace("chroma-", "") : "v1"} · ${t("Tesi magistrale")}`;
 }).catch(() => {});
 
 function fit() {
@@ -981,6 +1029,8 @@ addEventListener("visibilitychange", () => { if (document.hidden) save(); });
 
 document.addEventListener("DOMContentLoaded", () => {
   fit();
+  LANG = S.lang || (navigator.language?.toLowerCase().startsWith("uk") ? "uk" : "it");
+  setLang(LANG);
   updateStreak();
   fillTitles();
   buildLessonLists();
@@ -992,7 +1042,7 @@ document.addEventListener("DOMContentLoaded", () => {
   try {
     if (sessionStorage.getItem("chroma-updated")) {
       sessionStorage.removeItem("chroma-updated");
-      setTimeout(() => toast("CHROMA aggiornata all'ultima versione ✨"), 2600);
+      setTimeout(() => toast(t("CHROMA aggiornata all'ultima versione ✨")), 2600);
     }
   } catch {}
   go("splash", false);
