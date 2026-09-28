@@ -1,11 +1,11 @@
-const VERSION = "chroma-v19";
+const VERSION = "chroma-v20";
 const FILES = [
   "./",
   "index.html",
   "style.css",
+  "data.js",
   "app.js",
-  "lab.js",
-  "features.js",
+  "tools.js",
   "manifest.webmanifest",
   "icons/icon-192.png",
   "icons/icon-512.png",
@@ -38,8 +38,6 @@ const FILES = [
   "assets/coriandoli.png",
   "assets/trombetta.png",
   "assets/lab-wheel.png",
-  "assets/avatar-bg.svg",
-  "assets/badge-bloccato.svg",
   "assets/chroma-faccia.png",
   "assets/chroma-lettering.png",
   "assets/chroma-logo.png",
@@ -59,7 +57,7 @@ const FILES = [
   "assets/impara-1.png",
   "assets/impara-2.png",
   "assets/impara-3.png",
-  "assets/lezione-arancione.png",
+  "assets/lezione-arancione.jpg",
   "assets/lezione-blu.png",
   "assets/lezione-viola.png",
   "assets/quadrato.png",
