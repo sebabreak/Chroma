@@ -52,7 +52,7 @@ const LESSONS = [
     ]
   },
   {
-    id: "rosso", title: "Il significato del rosso", grad: "linear-gradient(135deg,#ff6b6b,#b0001e)",
+    id: "rosso", title: "Il significato del rosso", img: "lezione-rosso.jpg", grad: "linear-gradient(135deg,#ff6b6b,#b0001e)",
     body: [
       "Il rosso è il colore con la lunghezza d'onda più lunga tra quelli visibili ed è il primo che l'occhio nota. È legato al fuoco, al sangue e alla passione.",
       "Nella psicologia del colore trasmette energia, urgenza e desiderio: aumenta l'attenzione e può perfino far percepire il tempo come più veloce.",
@@ -66,7 +66,7 @@ const LESSONS = [
     ]
   },
   {
-    id: "giallo", title: "Il significato del giallo", grad: "linear-gradient(135deg,#ffe86b,#f2b705)",
+    id: "giallo", title: "Il significato del giallo", img: "lezione-giallo.jpg", grad: "linear-gradient(135deg,#ffe86b,#f2b705)",
     body: [
       "Il giallo è il colore più luminoso dello spettro: richiama il sole, la luce e l'estate e cattura lo sguardo più di ogni altro.",
       "È associato all'ottimismo, alla creatività e alla curiosità, ma in grandi quantità può affaticare la vista e creare ansia.",
@@ -80,7 +80,7 @@ const LESSONS = [
     ]
   },
   {
-    id: "verde", title: "Il significato del verde", grad: "linear-gradient(135deg,#8be36a,#1c7c3c)",
+    id: "verde", title: "Il significato del verde", img: "lezione-verde.jpg", grad: "linear-gradient(135deg,#8be36a,#1c7c3c)",
     body: [
       "Il verde è il colore della natura, della crescita e del rinnovamento. L'occhio umano distingue più sfumature di verde che di qualsiasi altro colore.",
       "Trasmette equilibrio, salute e tranquillità: è un colore riposante che aiuta la concentrazione.",
@@ -94,7 +94,7 @@ const LESSONS = [
     ]
   },
   {
-    id: "bianco", title: "Il significato del bianco", grad: "linear-gradient(135deg,#ffffff,#d9d9d9)",
+    id: "bianco", title: "Il significato del bianco", img: "lezione-bianco.jpg", grad: "linear-gradient(135deg,#ffffff,#d9d9d9)",
     body: [
       "Il bianco contiene tutti i colori della luce. Nella cultura occidentale rappresenta purezza, pulizia e nuovi inizi.",
       "Nel design è fondamentale come spazio vuoto: dà respiro ai contenuti e comunica ordine, semplicità ed eleganza.",
@@ -108,7 +108,7 @@ const LESSONS = [
     ]
   },
   {
-    id: "nero", title: "Il significato del nero", grad: "linear-gradient(135deg,#4a4a55,#0b0b0f)",
+    id: "nero", title: "Il significato del nero", img: "lezione-nero.jpg", grad: "linear-gradient(135deg,#4a4a55,#0b0b0f)",
     body: [
       "Il nero è l'assenza di luce. Trasmette forza, eleganza e mistero, ma anche serietà e, in alcune culture, lutto.",
       "Nella moda e nel lusso è il colore della raffinatezza: fa sembrare gli oggetti più preziosi e senza tempo.",
@@ -317,7 +317,7 @@ function render() {
     if (!st) { st = document.createElement("span"); st.className = "qstat"; el.appendChild(st); }
     const col = COLOR_BY[EV[el.dataset.id]], best = (S.best || {})[el.dataset.id];
     el.classList.toggle("qlock", !quizOpen(el.dataset.id));
-    if (!quizOpen(el.dataset.id)) { st.className = "qstat lock"; st.textContent = "🔒 Prima la teoria"; }
+    if (!quizOpen(el.dataset.id)) { st.className = "qstat lock"; st.innerHTML = `<img class="lk" src="assets/lucchetto.png" alt="">Prima la teoria`; }
     else if (S.redeemed.includes(el.dataset.id)) { st.className = "qstat ok"; st.innerHTML = `<i style="background:${col.h}"></i>✓ Completato`; }
     else if (best === 3) { st.className = "qstat todo"; st.innerHTML = `<i style="background:${col.h}"></i>Colore da riscattare`; }
     else if (best) { st.className = "qstat part"; st.textContent = `Record ${best}/3`; }
@@ -475,7 +475,7 @@ function openQuiz(id) {
   const l = LESSONS.find(x => x.id === id) || COMBOS.find(x => x.id === id);
   if (!quizOpen(id)) {
     if (current === "lezione" || current === "combo") return toast("Arriva in fondo alla lezione per sbloccare il quiz");
-    toast("🔒 Prima studia la teoria: poi il quiz si sblocca");
+    toast("Prima studia la teoria: poi il quiz si sblocca");
     return openTheory(id);
   }
   if ((S.best || {})[id] === 3 && !S.redeemed.includes(id)) return showEvent(l, 3, true);
@@ -505,7 +505,7 @@ function openQuiz(id) {
         if (right) score++;
         b.classList.add(right ? "right" : "wrong");
         box.children[item.ok].classList.add("right");
-        $("[data-quiz-feedback]").textContent = right ? "Esatto! 🎉" : "Non proprio… la risposta giusta è evidenziata.";
+        $("[data-quiz-feedback]").innerHTML = right ? "Esatto! <img class=\"emo\" src=\"assets/trombetta.png\" alt=\"\">" : "Non proprio… la risposta giusta è evidenziata.";
         $("[data-quiz-next]").hidden = false;
       };
       box.appendChild(b);
@@ -801,7 +801,7 @@ function renderMissions() {
   const daily = MISSIONS.filter(m => m.type === "giornaliera");
   const doneToday = daily.filter(isClaimed).length, readyAll = MISSIONS.filter(isReady).length;
   const ch = document.querySelector("[data-ch-sub]");
-  if (ch) ch.textContent = doneToday === daily.length ? "Hai completato le missioni di oggi! 🎉" : `Missioni di oggi: ${doneToday} / ${daily.length} completate`;
+  if (ch) ch.textContent = doneToday === daily.length ? "Hai completato le missioni di oggi!" : `Missioni di oggi: ${doneToday} / ${daily.length} completate`;
   const badge = document.querySelector("[data-m-ready]");
   if (badge) { badge.textContent = readyAll; badge.hidden = !readyAll; }
   const next = MISSIONS.find(m => m.type === "percorso" && !isClaimed(m));
@@ -875,15 +875,18 @@ function renderBadges() {
   BADGES.forEach((b, k) => {
     const got = b.got(), el = document.createElement("div");
     el.className = "badge " + (got ? "got" : "locked " + (k % 2 ? "brownish" : "violet"));
-    el.innerHTML = got ? `<div class="badge-art">${badgeArt(b.icon, b.c)}</div><b>${b.n}</b><span>${b.d}</span>`
+    el.innerHTML = got || BADGE_IMG[b.icon] ? `<div class="badge-art${got ? "" : " off"}">${badgeArt(b.icon, b.c)}</div><b>${b.n}</b><span>${b.d}</span>`
                        : `<img alt="Badge bloccato"><b>${b.n}</b><span>${b.d}</span>`;
-    if (!got) { setImg(el.querySelector("img"), "badge-bloccato.svg"); el.classList.add("tap"); el.onclick = () => badgePath(b); }
+    if (!got) { if (!BADGE_IMG[b.icon]) setImg(el.querySelector("img"), "badge-bloccato.svg"); el.classList.add("tap"); el.onclick = () => badgePath(b); }
     if (f !== "all" && !el.classList.contains(f)) el.classList.add("hide");
     grid.appendChild(el);
   });
 }
 
+const BADGE_IMG = { palette: "badge-color-explorer.png", book: "badge-studente.png", check: "badge-studioso.png", flame: "badge-sociale.png",
+  crown: "badge-maestro.png", pixel: "badge-digitale.png", eye: "badge-occhio.png", gem: "badge-collezionista.png" };
 function badgeArt(icon, c) {
+  if (BADGE_IMG[icon]) return `<img class="bimg" src="assets/${BADGE_IMG[icon]}" alt="">`;
   const pts = Array.from({ length: 32 }, (_, i) => { const r = i % 2 ? 40 : 46, a = Math.PI * i / 16;
     return `${(60 + r * Math.sin(a)).toFixed(1)},${(56 - r * Math.cos(a)).toFixed(1)}`; }).join(" ");
   const I = {
