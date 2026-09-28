@@ -269,7 +269,7 @@ function openCombo(id) {
 }
 
 const DEF = { xp: 0, level: 1, xpTotal: 0, streak: 1, quizzes: 0, lessonsTotal: 0, done: [], onboarded: false,
-  claimed: [], redeemed: [], lastDay: null, badges: [], best: {}, combosRead: [], bestStreak: 1, games: {}, labSaved: false, photoDone: false,
+  claimed: [], redeemed: [], lastDay: null, badges: [], best: {}, combosRead: [], bestStreak: 1, games: {}, labSaved: false, photoDone: false, secret: null, secretSeen: false,
   day: { d: "", lessons: 0, quiz: 0, perfect: 0, time: 0, claimed: [] },
   owned: ["perla", "ardesia"], theme: null,
   name: "", time: 0, missionsDone: 0, myPalettes: [], dark: "auto" };
@@ -767,9 +767,9 @@ const MISSIONS = [
   { id: "p12", type: "percorso", title: "Sperimentatore", desc: "Crea un'armonia nel Laboratorio e salvala come palette.", target: 1, v: () => S.labSaved ? 1 : 0, xp: 100, color: "crema", go: "lab", cta: "Apri il Laboratorio" },
   { id: "p13", type: "percorso", title: "Detective del colore", desc: "Analizza i colori di una tua foto con “Colori da una foto”.", target: 1, v: () => S.photoDone ? 1 : 0, xp: 100, color: "lampone", go: "foto", cta: "Analizza una foto" },
   { id: "p14", type: "percorso", title: "Occhio allenato", desc: "Fai almeno 4 su 5 in tutti e 3 i giochi dell'allenamento.", target: 3, v: () => ["guess", "order", "comp"].filter(g => (S.games || {})[g] >= 4).length, xp: 200, badge: "Occhio allenato", go: "quizhub", cta: "Vai ai giochi" },
-  { id: "s1", type: "serie", title: "3 giorni di fila", desc: "Apri CHROMA per 3 giorni consecutivi. Colore speciale!", target: 3, v: () => S.bestStreak, xp: 100, color: "oro", go: "home", cta: "Torna domani" },
-  { id: "s2", type: "serie", title: "7 giorni di fila", desc: "Apri CHROMA per 7 giorni consecutivi. Colore speciale!", target: 7, v: () => S.bestStreak, xp: 200, color: "lavanda", badge: "Badge sociale", go: "home", cta: "Torna domani" },
-  { id: "s3", type: "serie", title: "14 giorni di fila", desc: "Apri CHROMA per 14 giorni consecutivi. Colore speciale!", target: 14, v: () => S.bestStreak, xp: 400, color: "notte", go: "home", cta: "Torna domani" },
+  { id: "s1", type: "serie", title: "2 giorni di fila", desc: "Apri CHROMA per 2 giorni consecutivi. Colore speciale!", target: 2, v: () => S.bestStreak, xp: 100, color: "oro", go: "home", cta: "Torna domani" },
+  { id: "s2", type: "serie", title: "3 giorni di fila", desc: "Apri CHROMA per 3 giorni consecutivi. Colore speciale!", target: 3, v: () => S.bestStreak, xp: 200, color: "lavanda", badge: "Badge sociale", go: "home", cta: "Torna domani" },
+  { id: "s3", type: "serie", title: "4 giorni di fila", desc: "Apri CHROMA per 4 giorni consecutivi. Colore speciale!", target: 4, v: () => S.bestStreak, xp: 400, color: "notte", go: "home", cta: "Torna domani" },
   { id: "d1", type: "giornaliera", title: "Completa o ripassa 1 lezione", desc: "Oggi completa una lezione nuova o ripassane una già fatta.", target: 1, v: () => day().lessons, xp: 40, go: "lezioni", cta: "Vai alle lezioni" },
   { id: "d2", type: "giornaliera", title: "Rispondi a 2 quiz", desc: "Oggi completa due quiz qualsiasi, anche già fatti.", target: 2, v: () => day().quiz, xp: 60, go: "quizhub", cta: "Vai ai quiz" },
   { id: "d3", type: "giornaliera", title: "Fai un quiz perfetto", desc: "Oggi rispondi correttamente a tutte le domande di un quiz.", target: 1, v: () => day().perfect, xp: 80, go: "quizhub", cta: "Vai ai quiz" },
@@ -861,7 +861,7 @@ const BADGES = [
   { n: "Color Explorer", d: "Sblocca 10 colori", icon: "palette", c: "#2e9fc0", got: () => S.owned.length >= 10 },
   { n: "Badge dello studente", d: "Completa tutte le lezioni", icon: "book", c: "#e07a2c", got: () => S.badges.includes("Badge dello studente") },
   { n: "Badge dello studioso", d: "3/3 in tutti i quiz sui colori", icon: "check", c: "#6b3fb8", got: () => S.badges.includes("Badge dello studioso") },
-  { n: "Badge sociale", d: "7 giorni di fila", icon: "flame", c: "#d0112b", got: () => S.badges.includes("Badge sociale") },
+  { n: "Badge sociale", d: "3 giorni di fila", icon: "flame", c: "#d0112b", got: () => S.badges.includes("Badge sociale") },
   { n: "Maestro del colore", d: "Raggiungi il livello 10", icon: "crown", c: "#c9960f", got: () => S.level >= 10 },
   { n: "Badge digitale", d: "Completa le lezioni sul digitale", icon: "pixel", c: "#2604ae", got: () => S.badges.includes("Badge digitale") },
   { n: "Occhio allenato", d: "4/5 in tutti i giochi", icon: "eye", c: "#15707a", got: () => S.badges.includes("Occhio allenato") },
