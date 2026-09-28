@@ -34,7 +34,7 @@ function nearest(hex) {
   LABS.forEach(([c, M]) => { const d = Math.hypot(L[0] - M[0], L[1] - M[1], L[2] - M[2]); if (d < dist) { dist = d; best = c; } });
   return best;
 }
-const emotionsOf = hex => FAM_EMO[familyOf(nearest(hex).id)];
+const emotionsOf = hex => FAM_EMO[familyOf(nearest(hex).id)].map(x => t(x));
 const simulate = (hex, v) => CVD[v] ? rgbToHex(CVD[v].map(row => row.reduce((a, k, i) => a + k * hexToRgb(hex)[i], 0))) : hex;
 function chips(box, onPick) {
   box.addEventListener("click", e => {
@@ -45,7 +45,7 @@ function chips(box, onPick) {
   });
 }
 function copy(text) {
-  try { navigator.clipboard.writeText(text); toast("Copiato: " + text); } catch { toast(text); }
+  try { navigator.clipboard.writeText(text); toast(t("Copiato: {v}", { v: text })); } catch { toast(text); }
 }
 
 const LAB = { h: 215, s: 75, l: 50, harm: "none", cvd: "none" };
@@ -63,12 +63,12 @@ function drawLab() {
   $("[data-rgb]", scr).textContent = `rgb(${rgb.join(", ")})`;
   $("[data-hsl]", scr).textContent = `hsl(${LAB.h}°, ${LAB.s}%, ${L}%)`;
   $("[data-cmyk]", scr).textContent = `C ${cmyk[0]}  M ${cmyk[1]}  Y ${cmyk[2]}  K ${cmyk[3]}`;
-  $("[data-near]", scr).innerHTML = `<i style="background:${near.h}"></i>${near.n}`;
+  $("[data-near]", scr).innerHTML = `<i style="background:${near.h}"></i>${t(near.n)}`;
   $("[data-emo]", scr).textContent = emotionsOf(hex).join(", ");
   [["[data-ct-white]", "#ffffff"], ["[data-ct-black]", "#111111"]].forEach(([sel, fg]) => {
     const el = $(sel, scr), r = contrast(hex, fg);
     el.style.background = hex; el.style.color = fg;
-    $("small", el).textContent = `${r.toFixed(1)}:1 · ${r >= 7 ? "AAA ✓" : r >= 4.5 ? "AA ✓" : r >= 3 ? "Solo testi grandi" : "Poco leggibile ✗"}`;
+    $("small", el).textContent = `${r.toFixed(1)}:1 · ${r >= 7 ? "AAA ✓" : r >= 4.5 ? "AA ✓" : t(r >= 3 ? "Solo testi grandi" : "Poco leggibile ✗")}`;
   });
   $("[data-wheel]", scr).style.background = `radial-gradient(circle closest-side, hsl(0 0% ${L}%) 40%, hsl(0 0% ${L}% / 0) 100%), conic-gradient(${Array.from({ length: 13 }, (_, i) => `hsl(${i * 30} 100% ${L}%)`).join(",")})`;
   const radius = 20 + 30 * LAB.s / 100;
@@ -78,9 +78,9 @@ function drawLab() {
   }).join("");
   $("[data-harm-row]", scr).innerHTML = labColors().map(c => {
     const sim = simulate(c, LAB.cvd);
-    return `<button class="hsw" data-copyhex="${c}"><i style="background:${sim};color:${onColor(sim)}">${c}</i><small>${nearest(c).n}</small></button>`;
+    return `<button class="hsw" data-copyhex="${c}"><i style="background:${sim};color:${onColor(sim)}">${c}</i><small>${t(nearest(c).n)}</small></button>`;
   }).join("");
-  $("[data-cvd-note]", scr).textContent = CVD_NOTE[LAB.cvd];
+  $("[data-cvd-note]", scr).textContent = t(CVD_NOTE[LAB.cvd]);
 }
 function openLab(hex) {
   if (hex) [LAB.h, LAB.s, LAB.l] = hexToHsl(hex);
@@ -113,10 +113,10 @@ function openLab(hex) {
   $("[data-lab-save]").onclick = () => {
     const shades = LAB.harm === "none";
     const cols = shades ? [labHex(LAB.h, LAB.s, Math.min(90, LAB.l + 25)), labHex(), labHex(LAB.h, LAB.s, Math.max(10, LAB.l - 25))] : labColors();
-    S.myPalettes.push({ id: "p" + Date.now(), n: `${HARM_N[LAB.harm]} · ${nearest(labHex()).n}`, c: cols });
+    S.myPalettes.push({ id: "p" + Date.now(), n: `${t(HARM_N[LAB.harm])} · ${t(nearest(labHex()).n)}`, c: cols });
     if (!shades) S.labSaved = true;
     renderPalettes(); addXP(0);
-    toast(shades ? "Palette di sfumature salvata" : "Armonia salvata in Le mie palette");
+    toast(t(shades ? "Palette di sfumature salvata" : "Armonia salvata in Le mie palette"));
   };
 })();
 
@@ -159,20 +159,20 @@ function photoStats(cols) {
   let spread = 0;
   hues.forEach(a => hues.forEach(b => { const d = Math.abs(a - b) % 360; spread = Math.max(spread, Math.min(d, 360 - d)); }));
   const harm = hues.length < 2 ? ["Neutra", "Pochi colori saturi: domina la luce più della tinta."]
-    : spread <= 40 ? ["Monocromatica / analoga", "Le tinte sono vicine sulla ruota: l'insieme è coerente e armonioso."]
-    : spread >= 150 ? ["Con contrasto complementare", "Ci sono tinte quasi opposte sulla ruota: l'immagine ha forte contrasto e vivacità."]
+    : spread <= 40 ? ["Monocromatica / analoga", "Le tinte sono vicine sulla ruota: l'insieme risulta coerente."]
+    : spread >= 150 ? ["Con contrasto complementare", "Ci sono tinte quasi opposte sulla ruota: l'immagine ha un forte contrasto di colore."]
     : ["Varia", "Le tinte sono distribuite sulla ruota senza uno schema preciso."];
   return { warm, cool, neutral, sat, lig, light, dark, ratio: contrast(light, dark), harm };
 }
 function readPhoto(cols, st) {
   const pct = v => Math.round(v * 100) + "%", main = nearest(cols[0].hex);
   return [
-    st.warm > st.cool && st.warm > st.neutral ? `Prevalgono i colori caldi (${pct(st.warm)}): l'immagine comunica energia, calore e vicinanza.`
-      : st.cool > st.warm && st.cool > st.neutral ? `Prevalgono i colori freddi (${pct(st.cool)}): l'immagine trasmette calma, distanza e riflessione.`
-      : `Prevalgono i toni neutri (${pct(st.neutral)}): l'immagine risulta sobria ed equilibrata, e i pochi colori accesi attirano l'attenzione.`,
-    st.sat > 55 ? "I colori sono molto saturi: l'effetto è vivace e dinamico." : st.sat > 30 ? "La saturazione è media: l'insieme è armonioso senza essere aggressivo." : "I colori sono tenui: l'atmosfera è delicata, quasi da mezzitoni.",
-    st.lig > 62 ? "L'immagine è luminosa e leggera." : st.lig > 38 ? "La luminosità è equilibrata." : "L'immagine è scura e raccolta, con un tono più intenso o misterioso.",
-    `Il colore principale è vicino al tono “${main.n}” e richiama ${FAM_EMO[familyOf(main.id)].join(", ")}.`
+    st.warm > st.cool && st.warm > st.neutral ? t("Prevalgono i colori caldi ({p}), che di solito vengono associati a energia, calore e vicinanza.", { p: pct(st.warm) })
+      : st.cool > st.warm && st.cool > st.neutral ? t("Prevalgono i colori freddi ({p}), che di solito vengono associati a calma, distanza e riflessione.", { p: pct(st.cool) })
+      : t("Prevalgono i toni neutri ({p}): l'immagine risulta sobria e i pochi colori accesi risaltano di più.", { p: pct(st.neutral) }),
+    t(st.sat > 55 ? "I colori sono molto saturi: l'effetto è vivace." : st.sat > 30 ? "La saturazione è media: i colori non sono né spenti né accesi." : "I colori sono tenui e poco saturi."),
+    t(st.lig > 62 ? "L'immagine è luminosa." : st.lig > 38 ? "La luminosità è media." : "L'immagine è scura."),
+    t("Il colore principale è vicino al tono “{n}”, che nelle lezioni viene associato a {e}.", { n: t(main.n), e: FAM_EMO[familyOf(main.id)].map(x => t(x)).join(", ") })
   ].join(" ");
 }
 const meter = (label, value, text, bg) =>
@@ -183,14 +183,14 @@ function drawPhoto() {
   $("[data-photo-bar]").innerHTML = PHOTO.cols.map(c => `<i style="flex:${c.share};background:${sim(c.hex)}"></i>`).join("");
   $("[data-photo-list]").innerHTML = PHOTO.cols.map((c, k) => {
     const near = nearest(c.hex), pct = Math.round(c.share * 100);
-    return `<button class="pc" data-labhex="${c.hex}"><i style="background:${sim(c.hex)}"></i><span><b>${near.n}${k ? "" : " · principale"}</b><small>${c.hex} · ${FAM_EMO[familyOf(near.id)].slice(0, 2).join(", ")}</small><u style="width:${Math.max(4, pct)}%;background:${sim(c.hex)}"></u></span><em>${pct}%</em></button>`;
+    return `<button class="pc" data-labhex="${c.hex}"><i style="background:${sim(c.hex)}"></i><span><b>${t(near.n)}${k ? "" : " · " + t("principale")}</b><small>${c.hex} · ${FAM_EMO[familyOf(near.id)].slice(0, 2).map(x => t(x)).join(", ")}</small><u style="width:${Math.max(4, pct)}%;background:${sim(c.hex)}"></u></span><em>${pct}%</em></button>`;
   }).join("");
   $("[data-photo-stats]").innerHTML =
-    meter("Temperatura", 100 - Math.round((st.warm - st.cool + 1) * 50), st.warm > st.cool + .1 ? "Calda" : st.cool > st.warm + .1 ? "Fredda" : "Equilibrata", "linear-gradient(90deg,#ff7a00,#f2d9b5 50%,#1f5fe0)") +
-    meter("Saturazione", st.sat, Math.round(st.sat) + "%", "linear-gradient(90deg,#9a9a9a,#e3242b)") +
-    meter("Luminosità", st.lig, Math.round(st.lig) + "%", "linear-gradient(90deg,#111,#888 50%,#fff)") +
-    `<div class="ph-stat ph-row"><div class="ph-ct" style="background:${sim(st.dark)};color:${sim(st.light)}">Aa</div><div><div class="ph-sh"><span>Contrasto interno</span><b>${r.toFixed(1)}:1</b></div><small>${r >= 7 ? "Molto forte: luci e ombre ben separate." : r >= 4.5 ? "Buono: la foto ha una chiara gerarchia di luce." : r >= 2.5 ? "Medio: toni abbastanza ravvicinati." : "Basso: immagine piatta e morbida."}</small></div></div>` +
-    `<div class="ph-stat ph-row"><div class="ph-harm">${PHOTO.cols.map(c => `<i style="background:${sim(c.hex)}"></i>`).join("")}</div><div><div class="ph-sh"><span>Armonia</span><b>${st.harm[0]}</b></div><small>${st.harm[1]}</small></div></div>`;
+    meter(t("Temperatura"), 100 - Math.round((st.warm - st.cool + 1) * 50), t(st.warm > st.cool + .1 ? "Calda" : st.cool > st.warm + .1 ? "Fredda" : "Equilibrata"), "linear-gradient(90deg,#ff7a00,#f2d9b5 50%,#1f5fe0)") +
+    meter(t("Saturazione"), st.sat, Math.round(st.sat) + "%", "linear-gradient(90deg,#9a9a9a,#e3242b)") +
+    meter(t("Luminosità"), st.lig, Math.round(st.lig) + "%", "linear-gradient(90deg,#111,#888 50%,#fff)") +
+    `<div class="ph-stat ph-row"><div class="ph-ct" style="background:${sim(st.dark)};color:${sim(st.light)}">Aa</div><div><div class="ph-sh"><span>${t("Contrasto interno")}</span><b>${r.toFixed(1)}:1</b></div><small>${t(r >= 7 ? "Molto forte: luci e ombre ben separate." : r >= 4.5 ? "Buono: luci e ombre sono ben distinte." : r >= 2.5 ? "Medio: toni abbastanza ravvicinati." : "Basso: toni molto simili tra loro.")}</small></div></div>` +
+    `<div class="ph-stat ph-row"><div class="ph-harm">${PHOTO.cols.map(c => `<i style="background:${sim(c.hex)}"></i>`).join("")}</div><div><div class="ph-sh"><span>${t("Armonia")}</span><b>${t(st.harm[0])}</b></div><small>${t(st.harm[1])}</small></div></div>`;
 }
 function analyzePhoto(src, done) {
   const img = new Image();
@@ -201,7 +201,7 @@ function analyzePhoto(src, done) {
     ctx.drawImage(img, 0, 0, c.width, c.height);
     const d = ctx.getImageData(0, 0, c.width, c.height).data, px = [];
     for (let i = 0; i < d.length; i += 4) if (d[i + 3] > 128) px.push([d[i], d[i + 1], d[i + 2]]);
-    if (!px.length) return toast("Immagine non valida");
+    if (!px.length) return toast(t("Immagine non valida"));
     PHOTO.cols = kmeans(px, 5); PHOTO.stats = photoStats(PHOTO.cols);
     $("[data-photo-img]").src = src;
     $("[data-photo-box]").hidden = false; $("[data-photo-intro]").hidden = true;
@@ -211,7 +211,7 @@ function analyzePhoto(src, done) {
     $("#foto .scroll").scrollTo({ top: $("[data-photo-box]").offsetTop - 70, behavior: "smooth" });
     done?.();
   };
-  img.onerror = () => toast("Non riesco a leggere questa immagine");
+  img.onerror = () => toast(t("Non riesco a leggere questa immagine"));
   img.src = src;
 }
 $$("[data-photo]").forEach(input => input.addEventListener("change", e => {
@@ -226,8 +226,8 @@ $("[data-photo-again]").onclick = () => {
 chips($("[data-pcvd]"), d => { PHOTO.cvd = d.v; drawPhoto(); });
 $("[data-photo-list]").addEventListener("click", e => { const b = e.target.closest("[data-labhex]"); if (b) openLab(b.dataset.labhex); });
 $("[data-photo-save]").onclick = () => {
-  S.myPalettes.push({ id: "p" + Date.now(), n: "Dalla foto · " + nearest(PHOTO.cols[0].hex).n, c: PHOTO.cols.map(c => c.hex) });
-  renderPalettes(); addXP(0); toast("Palette della foto salvata");
+  S.myPalettes.push({ id: "p" + Date.now(), n: t("Dalla foto") + " · " + t(nearest(PHOTO.cols[0].hex).n), c: PHOTO.cols.map(c => c.hex) });
+  renderPalettes(); addXP(0); toast(t("Palette della foto salvata"));
 };
 
 const rnd = (a, b) => a + Math.random() * (b - a);
@@ -266,7 +266,7 @@ function startGame(g) {
   let n = 0, score = 0, round, taps = [];
   const finishRound = right => {
     if (right) score++;
-    set("[data-g-score]", `Punti ${score}`);
+    set("[data-g-score]", t("Punti {n}", { n: score }));
     next.hidden = false;
   };
   const answer = b => {
@@ -274,7 +274,7 @@ function startGame(g) {
     const right = b.dataset.c === round.ok;
     b.classList.add(right ? "right" : "wrong");
     $(`[data-c="${round.ok}"]`, box).classList.add("right");
-    set("[data-g-feedback]", right ? "Esatto! " + HORN : "Non proprio: quello giusto è evidenziato.");
+    set("[data-g-feedback]", right ? t("Esatto!") + " " + HORN : t("Non proprio: quello giusto è evidenziato."));
     finishRound(right);
   };
   const tap = b => {
@@ -285,14 +285,14 @@ function startGame(g) {
     if (taps.length < round.opts.length) return;
     const right = taps.every((c, i) => c === round.order[i]);
     $$(".g-opt", box).forEach(x => x.classList.add(x.dataset.c === round.order[x.dataset.n - 1] ? "right" : "wrong"));
-    set("[data-g-feedback]", right ? "Ordine perfetto! " + HORN : `Quasi: l'ordine giusto è ${round.order.map(c => round.opts.indexOf(c) + 1).join(" → ")} (posizioni da sinistra).`);
+    set("[data-g-feedback]", right ? t("Ordine perfetto!") + " " + HORN : t("Quasi: l'ordine giusto è {o} (posizioni da sinistra).", { o: round.order.map(c => round.opts.indexOf(c) + 1).join(" → ") }));
     finishRound(right);
   };
   const show = () => {
     round = game.round(); taps = [];
-    set("[data-g-round]", `Round ${n + 1} / 5`);
-    set("[data-g-score]", `Punti ${score}`);
-    $("[data-g-prompt]", scr).textContent = game.prompt;
+    set("[data-g-round]", t("Round {n} / 5", { n: n + 1 }));
+    set("[data-g-score]", t("Punti {n}", { n: score }));
+    $("[data-g-prompt]", scr).textContent = t(game.prompt);
     set("[data-g-target]", round.target || "");
     set("[data-g-feedback]", "");
     next.hidden = true;
@@ -305,21 +305,21 @@ function startGame(g) {
       box.appendChild(b);
     });
   };
-  next.textContent = "avanti";
+  next.textContent = t("avanti");
   next.onclick = () => {
     if (++n < 5) return show();
     S.games[g] = Math.max(S.games[g] || 0, score);
     const d = day(); d.quiz++; if (score === 5) d.perfect++;
-    set("[data-g-round]", "Fine!");
-    $("[data-g-prompt]", scr).textContent = `Hai fatto ${score} su 5. ${score >= 4 ? "Ottimo occhio!" : "Riprova per allenarti ancora."}`;
+    set("[data-g-round]", t("Fine!"));
+    $("[data-g-prompt]", scr).textContent = t("Hai fatto {n} su 5.", { n: score }) + " " + t(score >= 4 ? "Ottimo occhio!" : "Riprova per allenarti ancora.");
     set("[data-g-target]", `<b class="g-hex">${score} / 5</b>`);
     box.innerHTML = "";
-    set("[data-g-feedback]", `Record: ${S.games[g]} / 5 · + ${score * 5} XP`);
+    set("[data-g-feedback]", t("Record: {n} / 5", { n: S.games[g] }) + ` · + ${score * 5} XP`);
     addXP(score * 5);
-    next.textContent = "Rigioca";
+    next.textContent = t("Rigioca");
     next.onclick = () => startGame(g);
   };
-  $("[data-g-title]", scr).textContent = game.title;
+  $("[data-g-title]", scr).textContent = t(game.title);
   show();
   if (current !== "gioco") go("gioco");
 }
@@ -332,10 +332,10 @@ $("[data-cotd]").onclick = () => openLab(colorOfTheDay().h);
 function renderTools() {
   const c = colorOfTheDay();
   $("[data-cotd-sw]").style.background = c.h;
-  $("[data-cotd-name]").textContent = c.n;
+  $("[data-cotd-name]").textContent = t(c.n);
   $("[data-cotd-hex]").textContent = c.h.toUpperCase();
-  $("[data-cotd-emo]").textContent = FAM_EMO[familyOf(c.id)].join(" · ");
-  $$("[data-best]").forEach(el => { const v = S.games[el.dataset.best]; el.textContent = v != null ? `Record ${v}/5` : "Da provare"; });
+  $("[data-cotd-emo]").textContent = FAM_EMO[familyOf(c.id)].map(x => t(x)).join(" · ");
+  $$("[data-best]").forEach(el => { const v = S.games[el.dataset.best]; el.textContent = v != null ? t("Record {n}/5", { n: v }) : t("Da provare"); });
 }
 
 const loadImage = src => new Promise((ok, fail) => { const i = new Image(); i.onload = () => ok(i); i.onerror = fail; i.src = src; });
@@ -378,7 +378,7 @@ async function drawAvatar(ctx, x, y, r) {
   ctx.restore();
 }
 async function shareProfile() {
-  toast("Preparo la tua card…");
+  toast(t("Preparo la tua card…"));
   const W = 1080, H = 1920, { c, ctx } = await cardBase(W, H), cx = W / 2;
   const ring = ctx.createConicGradient ? ctx.createConicGradient(0, cx, 470, 210) : null;
   if (ring) ["#e3242b", "#ff7a00", "#ffd000", "#2fa84f", "#12c4c0", "#1f5fe0", "#8a2be2", "#e3242b"].forEach((col, i, a) => ring.addColorStop(i / (a.length - 1), col));
@@ -387,14 +387,15 @@ async function shareProfile() {
   await drawAvatar(ctx, cx, 470, 180);
   ctx.fillStyle = "#fff"; roundRect(ctx, cx - 100, 640, 200, 64, 32); ctx.fill();
   ctx.fillStyle = "#16142a"; ctx.font = `700 34px ${FONT}`; ctx.fillText("Lv " + S.level, cx, 684);
-  ctx.fillStyle = "#fff"; fitText(ctx, S.name || "Ospite", 900, 92); ctx.fillText(S.name || "Ospite", cx, 820);
+  const name = S.name || t("Ospite");
+  ctx.fillStyle = "#fff"; fitText(ctx, name, 900, 92); ctx.fillText(name, cx, 820);
   ctx.fillStyle = "#cfc9ff"; fitText(ctx, shownTitle(), 900, 48, 500); ctx.fillText(shownTitle(), cx, 885);
   const pct = Math.round(completion() * 100);
   ctx.fillStyle = "rgba(255,255,255,.12)"; roundRect(ctx, 140, 950, 800, 22, 11); ctx.fill();
   ctx.save(); roundRect(ctx, 140, 950, Math.max(22, 800 * pct / 100), 22, 11); ctx.clip(); spectrum(ctx, 140, 950, 800, 22); ctx.restore();
-  ctx.fillStyle = "rgba(255,255,255,.75)"; ctx.font = `500 30px ${FONT}`; ctx.fillText(`${pct}% di CHROMA completato`, cx, 1020);
+  ctx.fillStyle = "rgba(255,255,255,.75)"; ctx.font = `500 30px ${FONT}`; ctx.fillText(t("{p}% di CHROMA completato", { p: pct }), cx, 1020);
   const min = Math.floor(S.time / 60);
-  const stats = [["#ff7a00", S.streak, "giorni di fila"], ["#1f5fe0", S.done.length, "lezioni"], ["#2fa84f", S.quizzes, "quiz"], ["#8a2be2", min >= 60 ? Math.floor(min / 60) + " h" : min + " min", "di studio"]];
+  const stats = [["#ff7a00", S.streak, t("giorni di fila")], ["#1f5fe0", S.done.length, t("lezioni")], ["#2fa84f", S.quizzes, t("quiz")], ["#8a2be2", min >= 60 ? Math.floor(min / 60) + " " + t("h") : min + " " + t("min"), t("di studio")]];
   stats.forEach(([col, v, l], i) => {
     const x = 90 + (i % 2) * 460, y = 1080 + Math.floor(i / 2) * 170;
     ctx.fillStyle = "rgba(255,255,255,.08)"; roundRect(ctx, x, y, 440, 150, 28); ctx.fill();
@@ -403,7 +404,7 @@ async function shareProfile() {
     ctx.fillStyle = "rgba(255,255,255,.65)"; ctx.font = `500 28px ${FONT}`; ctx.fillText(l, x + 70, y + 118);
   });
   ctx.textAlign = "center"; ctx.fillStyle = "#fff"; ctx.font = `600 34px ${FONT}`;
-  ctx.fillText(`I miei colori · ${S.owned.length}/${COLORS.length}`, cx, 1460);
+  ctx.fillText(t("I miei colori · {a}/{b}", { a: S.owned.length, b: COLORS.length }), cx, 1460);
   const owned = byHue(S.owned), per = Math.min(owned.length, 12), size = 62, gap = 14;
   owned.forEach((id, i) => {
     const row = Math.floor(i / per), inRow = Math.min(per, owned.length - row * per);
@@ -415,18 +416,18 @@ async function shareProfile() {
   for (const [i, b] of badges.entries()) {
     try { ctx.drawImage(await loadImage("assets/" + b.img), cx - (badges.length * (bs + 12) - 12) / 2 + i * (bs + 12), by, bs, bs); } catch {}
   }
-  showShare(c, "chroma-profilo.png", "Il mio profilo CHROMA");
+  showShare(c, "chroma-profilo.png", t("Il mio profilo CHROMA"));
 }
 async function sharePalette(name, hexes, emotions) {
   const W = 1080, H = 1350, { c, ctx } = await cardBase(W, H), cx = W / 2;
   ctx.fillStyle = "#fff"; fitText(ctx, name, 900, 76); ctx.fillText(name, cx, 280);
-  ctx.fillStyle = "rgba(255,255,255,.6)"; ctx.font = `500 30px ${FONT}`; ctx.fillText("Palette creata con CHROMA", cx, 330);
+  ctx.fillStyle = "rgba(255,255,255,.6)"; ctx.font = `500 30px ${FONT}`; ctx.fillText(t("Palette creata con CHROMA"), cx, 330);
   const top = 390, bottom = emotions ? 1110 : 1180, h = (bottom - top) / hexes.length;
   hexes.forEach((hex, i) => {
     const y = top + i * h, on = onColor(hex) === "#fff" ? "#ffffff" : "#111111";
     ctx.fillStyle = hex; roundRect(ctx, 90, y, 900, h - 14, 26); ctx.fill();
     ctx.fillStyle = on; ctx.textAlign = "left"; ctx.textBaseline = "middle"; ctx.font = `700 ${Math.min(46, h * .34)}px ${FONT}`;
-    ctx.fillText(nearest(hex).n, 130, y + h / 2 + 2);
+    ctx.fillText(t(nearest(hex).n), 130, y + h / 2 + 2);
     ctx.textAlign = "right"; ctx.font = `600 ${Math.min(38, h * .3)}px ui-monospace, Menlo, monospace`;
     ctx.fillText(hex.toUpperCase(), 950, y + h / 2 + 2);
   });
