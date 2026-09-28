@@ -28,7 +28,7 @@
 
   <section class="screen onb" id="onb1">
     <h1 class="onb-title">Benvenuto in <b>CHROMA</b></h1>
-    <p class="onb-text">L’applicazione che ti insegna<br>il vero significato dei colori</p>
+    <p class="onb-text">L’applicazione che ti insegna<br>i significati dei colori</p>
     <img class="onb-omino" src="assets/chroma-omino.png" alt="">
     <button class="btn-primary onb-btn wide" data-go="onb2">Impara con Chroma</button>
     <img class="onb-dots" src="assets/dots-1.svg" alt="">
@@ -115,7 +115,7 @@
 
       <div class="card indigo ai-box">
         <div class="ai-text">
-          <div class="ai-title">Aiutaci a insegnare qualcosa di nuovo a Chroma !</div>
+          <div class="ai-title">Aiutaci a insegnare qualcosa di nuovo a Chroma!</div>
           <div class="ai-sub">Il nostro modello di AI per la critica del colore</div>
         </div>
         <img class="ai-wheel" src="assets/color-wheel.png" alt="">
@@ -167,7 +167,7 @@
           <div class="qc-bars"><img src="assets/quest-bar-dark-1.svg" alt=""><img src="assets/quest-bar-dark-2.svg" alt=""><img src="assets/quest-bar-dark-3.svg" alt=""></div>
         </div>
       </div>
-      <h2 class="section mt">Quiz</h2>
+      <h2 class="section mt" data-t="Quiz (elenco)">Quiz</h2>
       <button class="card purple quest-card" data-go="quizhub">
         <div class="qc-text">
           <div class="qc-title">Fammi vedere cosa hai imparato sui colori</div>
@@ -307,7 +307,7 @@
       </div>
       <div class="card cream week">
         <div class="week-h"><b>Ultimi 7 giorni</b>
-          <div class="week-tabs"><button class="on" data-week="min">Minuti</button><button data-week="quiz">Quiz</button><button data-week="lessons">Lezioni</button></div>
+          <div class="week-tabs"><button class="on" data-week="min">Minuti</button><button data-week="quiz" data-t="Quiz (elenco)">Quiz</button><button data-week="lessons">Lezioni</button></div>
         </div>
         <div class="week-bars" data-week-bars></div>
         <div class="week-sum" data-week-sum></div>
@@ -475,7 +475,7 @@
   <section class="screen tabbed" id="quizhub" data-tab="quest">
     <div class="scroll">
       <button class="back" data-back><img src="assets/right-arrow.png" alt="Indietro"></button>
-      <h1 class="page-title">Quiz</h1>
+      <h1 class="page-title" data-t="Quiz (elenco)">Quiz</h1>
       <h2 class="section mt">Quiz sui colori</h2>
       <button class="card cat-card cat-colors" data-go="quizcat">
         <div class="cat-t">Psicologia del colore</div>
@@ -560,6 +560,11 @@
           <button data-dark="auto">Automatico</button><button data-dark="light">Chiaro</button><button data-dark="dark">Scuro</button>
         </div>
         <button class="set-link" data-go="colori">Colore del tema <span>›</span></button>
+      </div>
+      <div class="card cream set-card">
+        <div class="set-row"><span>Lingua</span></div>
+        <div class="seg3" data-lang-seg><button data-lang="it">Italiano</button><button data-lang="uk">Українська</button></div>
+        <p class="set-note">La lingua cambia da sola se scrivi il tuo nome con un altro alfabeto.</p>
       </div>
       <div class="card cream set-card">
         <button class="set-link" data-install-go>Installa l'app sul telefono <span>›</span></button>
@@ -779,6 +784,7 @@
   <div id="toast"></div>
 </div>
 <script src="data.js"></script>
+<script src="uk.js"></script>
 <script src="app.js"></script>
 <script src="tools.js"></script>
 </body>
