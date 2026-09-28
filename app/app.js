@@ -189,7 +189,7 @@ function openCombo(id) {
   const c = COMBOS.find(x => x.id === id);
   const scr = document.getElementById("combo");
   const $ = s => scr.querySelector(s);
-  $("[data-combo-name]").textContent = c.id;
+  $("[data-combo-name]").textContent = c.id + (S.combosRead.includes(c.id) ? "  ·  ✓ Letta" : "");
   setImg($("[data-combo-img]"), c.img);
   $("[data-combo-intro]").textContent = c.intro;
   $("[data-combo-how]").textContent = c.how;
@@ -236,7 +236,14 @@ function render() {
   document.querySelectorAll("[data-bind-width=xp]").forEach(el => el.style.width = (S.xp / xpNeed(S.level) * 100) + "%");
   document.querySelectorAll(".lesson").forEach(el => {
     const quizList = el.closest('[data-lessons="quiz"], [data-combo-quiz]');
-    if (!quizList) { el.classList.toggle("done", S.done.includes(el.dataset.id)); return; }
+    if (!quizList) {
+      el.classList.remove("done");
+      let st = el.querySelector(".qstat");
+      if (!st) { st = document.createElement("span"); el.appendChild(st); }
+      const d = S.done.includes(el.dataset.id);
+      st.className = "qstat" + (d ? " ok" : ""); st.textContent = d ? "✓ Completata" : "";
+      return;
+    }
     el.classList.remove("done");
     let st = el.querySelector(".qstat");
     if (!st) { st = document.createElement("span"); st.className = "qstat"; el.appendChild(st); }
@@ -246,6 +253,15 @@ function render() {
     else if (best) { st.className = "qstat part"; st.textContent = `Record ${best}/3`; }
     else { st.className = "qstat"; st.textContent = ""; }
   });
+  document.querySelectorAll("[data-combo]").forEach(b => {
+    const r = S.combosRead.includes(b.dataset.combo);
+    b.classList.toggle("read", r);
+    b.title = r ? "Teoria letta ✓" : "";
+  });
+  const cr = document.querySelector("[data-combo-read-n]");
+  if (cr) cr.textContent = `${S.combosRead.length} / ${COMBOS.length} lette`;
+  const ld = document.querySelector("[data-lessons-done-n]");
+  if (ld) ld.textContent = `${S.done.length} / ${LESSONS.length} completate`;
   const doneIn = ids => ids.filter(id => S.redeemed.includes(id)).length;
   const qc = document.querySelector("[data-qprog-colors]"), qm = document.querySelector("[data-qprog-combo]");
   if (qc) qc.textContent = `${doneIn(LESSONS.map(l => l.id))} / ${LESSONS.length} completati`;
@@ -327,6 +343,7 @@ function openLesson(id) {
   scr.querySelector(".detail-img").style.background = l.grad || "";
   if (l.img) { dimg.hidden = false; setImg(dimg, l.img); } else dimg.hidden = true;
   scr.querySelector("[data-lesson-title]").textContent = l.title;
+  scr.querySelector(".detail-meta").textContent = "5 min · livello base" + (S.done.includes(id) ? " · ✓ Completata" : "");
   scr.querySelector("[data-lesson-body]").innerHTML = l.body.map(p => `<p>${p}</p>`).join("");
   scr.querySelector("[data-lesson-fact]").textContent = l.fact;
   scr.querySelector("[data-lesson-next]").onclick = () => {
@@ -478,7 +495,20 @@ function hueKey(hex) {
   if (h > 345) h -= 360;
   return h + (1 - l) * 8;
 }
-const byHue = ids => [...ids].sort((a, b) => hueKey(COLOR_BY[a].h) - hueKey(COLOR_BY[b].h));
+const FAMILIES = [
+  ["Rossi", ["corallo", "rosso", "carminio"]],
+  ["Arancioni e terre", ["arancione", "terracotta", "marrone"]],
+  ["Gialli", ["giallo", "oro"]],
+  ["Verdi-gialli", ["lime", "oliva"]],
+  ["Verdi", ["menta", "salvia", "verde", "bosco"]],
+  ["Ciano", ["turchese", "petrolio"]],
+  ["Blu", ["azzurro", "blu", "notte"]],
+  ["Viola", ["lavanda", "viola", "prugna"]],
+  ["Rosa e magenta", ["rosa", "magenta"]],
+  ["Neutri", ["bianco", "perla", "ardesia", "nero"]]
+];
+const SCALE = FAMILIES.flatMap(f => f[1]);
+const byHue = ids => [...ids].sort((a, b) => SCALE.indexOf(a) - SCALE.indexOf(b));
 
 function levelColor(l) {
   if (l > 20) return "conic-gradient(#e3242b, #ff7a00, #ffd000, #2fa84f, #12c4c0, #1f5fe0, #8a2be2, #e3242b)";
@@ -555,15 +585,24 @@ function renderColors() {
   }
   const own = document.querySelector("[data-owned]");
   if (!own) return;
-  own.innerHTML = ""; document.querySelector("[data-locked-grid]").innerHTML = "";
-  byHue(COLORS.map(c => c.id)).map(id => COLOR_BY[id]).forEach(c => {
-    const has = S.owned.includes(c.id);
-    const el = document.createElement(has ? "button" : "div");
-    el.className = "sw" + (has ? "" : " locked") + (S.theme === c.id ? " cur" : "");
-    el.innerHTML = `<i style="background:${c.h}"></i><span>${c.n}</span>${has ? "" : `<small>${c.hint}</small>`}`;
-    if (has) el.onclick = () => { applyTheme(S.theme === c.id ? null : c.id); };
-    document.querySelector(has ? "[data-owned]" : "[data-locked-grid]").appendChild(el);
+  own.innerHTML = "";
+  FAMILIES.forEach(([fam, ids]) => {
+    const row = document.createElement("div");
+    row.className = "fam";
+    const got = ids.filter(id => S.owned.includes(id)).length;
+    row.innerHTML = `<div class="fam-h"><span>${fam}</span><small>${got} / ${ids.length}</small></div><div class="fam-row"></div>`;
+    ids.forEach(id => {
+      const c = COLOR_BY[id], has = S.owned.includes(id);
+      const el = document.createElement(has ? "button" : "div");
+      el.className = "sw" + (has ? "" : " locked") + (S.theme === id ? " cur" : "");
+      el.innerHTML = `<i style="background:${c.h}"></i><span>${c.n}</span>${has ? "" : `<small>${c.hint}</small>`}`;
+      if (has) el.onclick = () => { applyTheme(S.theme === id ? null : id); };
+      row.querySelector(".fam-row").appendChild(el);
+    });
+    own.appendChild(row);
   });
+  const strip = document.querySelector("[data-scale]");
+  if (strip) strip.innerHTML = SCALE.map(id => `<i class="${S.owned.includes(id) ? "" : "off"}" style="background:${COLOR_BY[id].h}" title="${COLOR_BY[id].n}"></i>`).join("");
   document.querySelector("[data-owned-n]").textContent = `${S.owned.length} / ${COLORS.length}`;
   document.querySelector("[data-theme-name]").textContent = S.theme ? COLOR_BY[S.theme].n : "Tema originale";
   document.querySelector("[data-theme-reset]").hidden = !S.theme;
