@@ -130,8 +130,8 @@
       <h1 class="page-title">Scopri</h1>
       <h2 class="section mt">Strumenti</h2>
       <div class="tools">
-        <button class="tool-card lab-card" data-go="lab"><span class="tool-ic"></span><b>Laboratorio</b><small>Ruota dei colori, codici e armonie</small></button>
-        <button class="tool-card photo-card" data-go="foto"><span class="tool-ic">📷</span><b>Colori da una foto</b><small>Estrai e interpreta una palette</small></button>
+        <button class="tool-card lab-card" data-go="lab"><span class="tool-ic"><svg viewBox="0 0 40 40"><path d="M20 20 L15.34 2.61 A18 18 0 0 1 24.66 2.61Z" fill="hsl(0,85%,55%)"/><path d="M20 20 L24.66 2.61 A18 18 0 0 1 32.73 7.27Z" fill="hsl(30,85%,55%)"/><path d="M20 20 L32.73 7.27 A18 18 0 0 1 37.39 15.34Z" fill="hsl(60,85%,55%)"/><path d="M20 20 L37.39 15.34 A18 18 0 0 1 37.39 24.66Z" fill="hsl(90,85%,55%)"/><path d="M20 20 L37.39 24.66 A18 18 0 0 1 32.73 32.73Z" fill="hsl(120,85%,55%)"/><path d="M20 20 L32.73 32.73 A18 18 0 0 1 24.66 37.39Z" fill="hsl(150,85%,55%)"/><path d="M20 20 L24.66 37.39 A18 18 0 0 1 15.34 37.39Z" fill="hsl(180,85%,55%)"/><path d="M20 20 L15.34 37.39 A18 18 0 0 1 7.27 32.73Z" fill="hsl(210,85%,55%)"/><path d="M20 20 L7.27 32.73 A18 18 0 0 1 2.61 24.66Z" fill="hsl(240,85%,55%)"/><path d="M20 20 L2.61 24.66 A18 18 0 0 1 2.61 15.34Z" fill="hsl(270,85%,55%)"/><path d="M20 20 L2.61 15.34 A18 18 0 0 1 7.27 7.27Z" fill="hsl(300,85%,55%)"/><path d="M20 20 L7.27 7.27 A18 18 0 0 1 15.34 2.61Z" fill="hsl(330,85%,55%)"/><circle cx="20" cy="20" r="7" fill="#fff"/></svg></span><b>Laboratorio</b><small>Ruota dei colori, codici e armonie</small></button>
+        <button class="tool-card photo-card" data-go="foto"><span class="tool-ic cam"><svg viewBox="0 0 24 24"><path d="M9 4 7.5 6H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-3.5L15 4z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="12" cy="13" r="4" fill="none" stroke="currentColor" stroke-width="2"/></svg></span><b>Colori da una foto</b><small>Estrai e interpreta una palette</small></button>
       </div>
       <h2 class="section mt">Le mie palette</h2>
       <div class="row gap">
@@ -428,7 +428,8 @@
       <p>Hai guadagnato</p>
       <b>+ 50 XP</b>
     </div>
-    <button class="btn-primary lf-btn" data-go="lezioni">Torna alle lezioni</button>
+    <button class="btn-primary lf-btn" data-lf-quiz>Fai il quiz</button>
+    <button class="btn-link lf-back" data-go="lezioni">Torna alle lezioni</button>
   </section>
 
   <section class="screen" id="evento">
@@ -639,7 +640,7 @@
     <div class="scroll">
       <button class="back" data-back><img data-a="right-arrow.png" alt="Indietro"></button>
       <h1 class="page-title">Laboratorio</h1>
-      <p class="subtitle">Trascina sulla ruota per scegliere la tinta, poi regola saturazione e luminosità.</p>
+      <p class="subtitle">Tocca o trascina sulla ruota: il giro sceglie la tinta, la distanza dal centro la saturazione. La luminosità si regola qui sotto.</p>
       <div class="wheel-wrap">
         <div class="wheel" data-wheel>
           <div class="wheel-hole"><span class="lab-preview" data-lab-preview></span></div>
@@ -679,18 +680,41 @@
     <div class="scroll">
       <button class="back" data-back><img data-a="right-arrow.png" alt="Indietro"></button>
       <h1 class="page-title">Colori da una foto</h1>
-      <p class="subtitle">Scatta o scegli una foto: CHROMA ne estrae i colori principali e li interpreta. La foto resta sul tuo telefono.</p>
-      <label class="btn-primary av-upload">📷 Scegli o scatta una foto<input type="file" accept="image/*" data-photo hidden></label>
-      <div class="photo-box" data-photo-box hidden>
-        <img data-photo-img alt="La tua foto">
-        <div class="chips-sel small" data-pcvd>
-          <button data-v="none" class="on">Normale</button><button data-v="protan">Protanopia</button><button data-v="deutan">Deuteranopia</button><button data-v="tritan">Tritanopia</button>
+      <div class="ph-hero">
+        <div class="ph-art"><i style="background:#ff7a00"></i><i style="background:#1f5fe0"></i><i style="background:#ffd000"></i><i style="background:#8a2be2"></i><i style="background:#2fa84f"></i></div>
+        <p>Scatta o scegli una foto: CHROMA ne estrae i colori principali, li misura e prova a interpretarli. La foto resta sul tuo dispositivo.</p>
+      </div>
+      <div class="ph-actions">
+        <label class="ph-btn main"><svg viewBox="0 0 24 24"><path d="M9 4 7.5 6H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-3.5L15 4z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="12" cy="13" r="4" fill="none" stroke="currentColor" stroke-width="2"/></svg><span>Scatta una foto</span><input type="file" accept="image/*" capture="environment" data-photo hidden></label>
+        <label class="ph-btn"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="9" cy="10" r="2" fill="currentColor"/><path d="m4 18 5-5 3 3 3-3 5 5" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg><span>Dalla galleria</span><input type="file" accept="image/*" data-photo hidden></label>
+      </div>
+      <div class="ph-intro" data-photo-intro>
+        <h2 class="section mt">Prova con un esempio</h2>
+        <div class="ph-samples">
+          <button data-sample="lezione-arancione.png"><img data-a="lezione-arancione.png" alt="Arance"></button>
+          <button data-sample="lezione-blu.png"><img data-a="lezione-blu.png" alt="Esempio blu"></button>
+          <button data-sample="lezione-viola.png"><img data-a="lezione-viola.png" alt="Esempio viola"></button>
         </div>
-        <div class="photo-bar" data-photo-bar></div>
+        <h2 class="section mt">Come funziona</h2>
+        <ol class="ph-steps">
+          <li><b>Riduce la foto</b><span>L'immagine viene ridotta a pochi pixel per lavorare velocemente.</span></li>
+          <li><b>Raggruppa i colori</b><span>Un algoritmo (k-means) unisce i pixel simili in 5 colori principali.</span></li>
+          <li><b>Li interpreta</b><span>Misura temperatura, saturazione e luce e li collega ai significati delle lezioni.</span></li>
+        </ol>
+      </div>
+      <div class="photo-box" data-photo-box hidden>
+        <div class="ph-frame"><img data-photo-img alt="La tua foto"><div class="photo-bar" data-photo-bar></div></div>
+        <div class="chips-sel small" data-pcvd>
+          <button data-v="none" class="on">Vista normale</button><button data-v="protan">Protanopia</button><button data-v="deutan">Deuteranopia</button><button data-v="tritan">Tritanopia</button>
+        </div>
+        <h2 class="section mt">La palette</h2>
         <div class="photo-list" data-photo-list></div>
+        <h2 class="section mt">Le misure</h2>
+        <div class="ph-stats" data-photo-stats></div>
         <div class="card cream photo-read"><h3>Interpretazione</h3><p data-photo-read></p></div>
         <p class="pe-hint">È un'interpretazione algoritmica: collega i colori ai significati studiati nelle lezioni, ma il senso di un'immagine dipende sempre dal contesto.</p>
         <button class="btn-primary m-btn" data-photo-save>Salva come palette</button>
+        <button class="btn-link ph-again" data-photo-again>Analizza un'altra foto</button>
       </div>
       <svg width="0" height="0" style="position:absolute" aria-hidden="true">
         <filter id="cvd-protan"><feColorMatrix type="matrix" values="0.567 0.433 0 0 0 0.558 0.442 0 0 0 0 0.242 0.758 0 0 0 0 0 1 0"/></filter>
