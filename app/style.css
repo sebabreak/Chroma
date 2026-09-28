@@ -996,3 +996,31 @@ body { align-items: stretch; justify-content: center; }
 @media (prefers-reduced-motion: reduce) {
   :root[data-secret] *, .secret-card i, .secret-lock .sl-glow, .sp-ring::before, .sp-dots i, .secret-pop h2 { animation: none !important; }
 }
+
+.lk { display: inline-block; width: 12px; height: 12px; margin-right: 4px; vertical-align: -2px; object-fit: contain; }
+.tl-dot .lk { width: 18px; height: 18px; margin: 0; }
+.secret-lock .lk { width: 16px; height: 16px; margin-right: 6px; vertical-align: -2px; }
+.emo { display: inline-block; height: 22px; width: auto; vertical-align: -5px; margin-left: 2px; }
+.sw.locked i::after { content: ""; background: url(assets/lucchetto.png) center / 18px no-repeat; }
+.md-swatch.dim::after { content: ""; background: url(assets/lucchetto.png) center / 34px no-repeat; }
+.av-opt.locked small::before { content: ""; display: inline-block; width: 10px; height: 10px; margin-right: 3px; vertical-align: -1px; background: url(assets/lucchetto.png) center / contain no-repeat; }
+.badge-art { position: relative; }
+.badge-art .bimg, .m-badge .bimg { width: 100%; height: 100%; object-fit: contain; display: block; filter: drop-shadow(0 3px 4px rgba(0,0,0,.2)); }
+.m-badge .bimg { width: 120px; height: 120px; }
+.badge-art.off .bimg { filter: grayscale(1) brightness(1.15) opacity(.45); }
+.badge-art.off::after { content: ""; position: absolute; inset: 0; background: url(assets/lucchetto.png) center 42% / 38% no-repeat; }
+.av-img { display: grid; place-items: center; width: 100%; height: 100%; }
+.avatar-pic .av-img img { width: 68%; height: 68%; object-fit: contain; }
+.avatar-pic .av-img.full img { width: 100%; height: 100%; object-fit: cover; }
+.av-chroma img { transform: none; }
+.tool-ic img { width: 40px; height: 40px; display: block; }
+.lab-card .tool-ic { background: transparent; box-shadow: none; }
+.mi { display: block; width: 28px; height: 28px; background: currentColor; -webkit-mask: var(--m) center / contain no-repeat; mask: var(--m) center / contain no-repeat; }
+.tool-ic.cam .mi { width: 26px; height: 26px; }
+.lu-confetti { position: absolute; inset: 0; border-radius: inherit; background: url(assets/coriandoli.png) center / 260px repeat; opacity: .35; pointer-events: none; animation: confetti 6s linear infinite; }
+.lu-confetti.sp { opacity: .22; }
+@keyframes confetti { from { background-position: 0 0; } to { background-position: 0 260px; } }
+.levelup > *:not(.lu-confetti):not(.lu-burst) { position: relative; }
+.lu-horn { width: 44px; height: 44px; margin: -10px auto 4px; display: block; animation: pop .5s .15s both cubic-bezier(.2,1.4,.4,1); }
+@media (prefers-reduced-motion: reduce) { .lu-confetti { animation: none; } }
+.mi.inl { display: inline-block; width: 20px; height: 20px; margin-right: 8px; vertical-align: -4px; }
