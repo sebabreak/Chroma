@@ -372,8 +372,41 @@ $$("[data-install-x]").onclick = () => { try { localStorage.setItem("chroma-inst
 showInstallBar();
 
 if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
-  navigator.serviceWorker.register("sw.js").catch(() => {});
+  let hadController = !!navigator.serviceWorker.controller, reloading = false;
+  navigator.serviceWorker.register("sw.js", { updateViaCache: "none" }).then(reg => {
+    const check = () => reg.update().catch(() => {});
+    check();
+    document.addEventListener("visibilitychange", () => { if (!document.hidden) check(); });
+    addEventListener("focus", check);
+    setInterval(check, 15 * 60 * 1000);
+  }).catch(() => {});
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    if (!hadController) { hadController = true; return; }
+    if (reloading) return;
+    const doReload = () => { reloading = true; save(); try { sessionStorage.setItem("chroma-updated", "1"); } catch {} location.reload(); };
+    if (["quiz", "paledit", "onb3"].includes(current)) {
+      sheet("È disponibile una nuova versione di CHROMA", [["Aggiorna ora", doReload]]);
+    } else doReload();
+  });
 }
+async function forceUpdate() {
+  toast("Aggiornamento in corso…");
+  save();
+  try {
+    const regs = await navigator.serviceWorker?.getRegistrations?.() || [];
+    await Promise.all(regs.map(r => r.unregister()));
+    const keys = await caches?.keys?.() || [];
+    await Promise.all(keys.map(k => caches.delete(k)));
+  } catch {}
+  location.reload();
+}
+$$("[data-force-update]").onclick = () => confirmBox("Aggiornare l'app?", "Scarico l'ultima versione di CHROMA. I tuoi progressi restano salvati.", forceUpdate);
+const showVersion = () => (window.caches ? caches.keys() : Promise.resolve([])).then(k => {
+  const v = k.filter(x => x.startsWith("chroma-v")).sort().pop();
+  $$("[data-version]").textContent = `CHROMA ${v ? v.replace("chroma-", "") : "v1"} · Tesi magistrale`;
+}).catch(() => {});
+showVersion(); setTimeout(showVersion, 3000);
+try { if (sessionStorage.getItem("chroma-updated")) { sessionStorage.removeItem("chroma-updated"); setTimeout(() => toast("CHROMA aggiornata all'ultima versione ✨"), 2600); } } catch {}
 
 if (!Array.isArray(S.owned)) S.owned = [...DEF.owned];
 S.owned = [...new Set(["perla", "ardesia", ...S.owned.map(id => OLD_COLORS[id] || id)].filter(id => COLOR_BY[id]))];
