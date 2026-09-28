@@ -317,7 +317,7 @@ function startGame(g) {
     const right = b.dataset.c === cur.ok;
     b.classList.add(right ? "right" : "wrong");
     q(`[data-c="${cur.ok}"]`, scr).classList.add("right");
-    q("[data-g-feedback]", scr).textContent = right ? "Esatto! 🎉" : "Non proprio: quello giusto è evidenziato.";
+    q("[data-g-feedback]", scr).innerHTML = right ? 'Esatto! <img class="emo" src="assets/trombetta.png" alt="">' : "Non proprio: quello giusto è evidenziato.";
     done(right);
   };
   const tapOrder = b => {
@@ -327,7 +327,7 @@ function startGame(g) {
     if (taps.length < cur.opts.length) return;
     const right = taps.every((c, i) => c === cur.order[i]);
     q("[data-g-opts]", scr).querySelectorAll(".g-opt").forEach(x => { x.classList.add(x.dataset.c === cur.order[+x.dataset.n - 1] ? "right" : "wrong"); });
-    q("[data-g-feedback]", scr).textContent = right ? "Ordine perfetto! 🎉" : "Quasi: l'ordine giusto è " + cur.order.map(c => cur.opts.indexOf(c) + 1).join(" → ") + " (posizioni da sinistra).";
+    q("[data-g-feedback]", scr).innerHTML = right ? 'Ordine perfetto! <img class="emo" src="assets/trombetta.png" alt="">' : "Quasi: l'ordine giusto è " + cur.order.map(c => cur.opts.indexOf(c) + 1).join(" → ") + " (posizioni da sinistra).";
     done(right);
   };
   next.onclick = () => {
@@ -390,7 +390,7 @@ function paintSecret() {
 function renderSecrets() {
   const box = q("[data-secrets]"); if (!box) return;
   if (!secretsOpen()) {
-    box.innerHTML = `<button class="secret-lock" data-secret-locked><span class="sl-glow"></span><b>🔒 Colori segreti</b><small>Raggiungi il livello ${MAX_LEVEL} completando tutto CHROMA per sbloccare 4 colorazioni animate. Completamento: ${Math.round(completion() * 100)}%</small></button>`;
+    box.innerHTML = `<button class="secret-lock" data-secret-locked><span class="sl-glow"></span><b><img class="lk" src="assets/lucchetto.png" alt="">Colori segreti</b><small>Raggiungi il livello ${MAX_LEVEL} completando tutto CHROMA per sbloccare 4 colorazioni animate. Completamento: ${Math.round(completion() * 100)}%</small></button>`;
     return;
   }
   box.innerHTML = `<div class="section-row"><h2 class="section">Colori segreti ✨</h2></div><div class="secret-grid">${SECRETS.map(x =>
