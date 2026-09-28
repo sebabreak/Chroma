@@ -225,7 +225,22 @@ function render() {
   document.querySelectorAll("[data-bind]").forEach(el => el.textContent = vals[el.dataset.bind]);
   document.querySelectorAll("[data-bind-width=xp]").forEach(el => el.style.width = (S.xp / 10) + "%");
   document.querySelectorAll("[data-bind-width=mission]").forEach(el => el.style.width = (lessonsDone / 3 * 100) + "%");
-  document.querySelectorAll(".lesson").forEach(el => el.classList.toggle("done", S.done.includes(el.dataset.id)));
+  document.querySelectorAll(".lesson").forEach(el => {
+    const quizList = el.closest('[data-lessons="quiz"], [data-combo-quiz]');
+    if (!quizList) { el.classList.toggle("done", S.done.includes(el.dataset.id)); return; }
+    el.classList.remove("done");
+    let st = el.querySelector(".qstat");
+    if (!st) { st = document.createElement("span"); st.className = "qstat"; el.appendChild(st); }
+    const col = COLOR_BY[EV[el.dataset.id]], best = (S.best || {})[el.dataset.id];
+    if (S.redeemed.includes(el.dataset.id)) { st.className = "qstat ok"; st.innerHTML = `<i style="background:${col.h}"></i>✓ Completato`; }
+    else if (best === 3) { st.className = "qstat todo"; st.innerHTML = `<i style="background:${col.h}"></i>Colore da riscattare`; }
+    else if (best) { st.className = "qstat part"; st.textContent = `Record ${best}/3`; }
+    else { st.className = "qstat"; st.textContent = ""; }
+  });
+  const doneIn = ids => ids.filter(id => S.redeemed.includes(id)).length;
+  const qc = document.querySelector("[data-qprog-colors]"), qm = document.querySelector("[data-qprog-combo]");
+  if (qc) qc.textContent = `${doneIn(LESSONS.map(l => l.id))} / ${LESSONS.length} completati`;
+  if (qm) qm.textContent = `${doneIn(COMBOS.map(c => c.id))} / ${COMBOS.length} completati`;
   renderMissions(); renderBadges(); renderColors();
 }
 
@@ -319,6 +334,7 @@ function openLesson(id) {
 
 function openQuiz(id) {
   const l = LESSONS.find(x => x.id === id) || COMBOS.find(x => x.id === id);
+  if ((S.best || {})[id] === 3 && !S.redeemed.includes(id)) return showEvent(l, 3, true);
   const scr = document.getElementById("quiz");
   const $ = s => scr.querySelector(s);
   let n = 0, score = 0;
@@ -338,8 +354,8 @@ function openQuiz(id) {
       b.className = "answer";
       b.innerHTML = `<span class="dot"></span>${txt}`;
       b.onclick = () => {
-        if (box.dataset.locked) return;
-        box.dataset.locked = 1;
+        if (box.dataset.answered) return;
+        box.dataset.answered = 1;
         const right = k === item.ok;
         if (right) score++;
         b.classList.add(right ? "right" : "wrong");
@@ -349,12 +365,13 @@ function openQuiz(id) {
       };
       box.appendChild(b);
     });
-    delete box.dataset.locked;
+    delete box.dataset.answered;
   }
   $("[data-quiz-next]").onclick = () => { n++; n < l.quiz.length ? show() : finish(); };
 
   function finish() {
     S.quizzes++; S.m.quiz++;
+    S.best = S.best || {}; S.best[l.id] = Math.max(S.best[l.id] || 0, score);
     showEvent(l, score);
   }
 
@@ -368,21 +385,20 @@ const EV = {
   "Complementari": "turchese", "Analoghi": "lime", "Triade": "magenta",
   "Split complementari": "corallo", "Rettangolo": "oliva", "Quadrato": "petrolio"
 };
-function showEvent(l, score) {
+function showEvent(l, score, replay) {
   const tot = l.quiz.length, perfect = score === tot;
   const colr = COLOR_BY[EV[l.id]] || COLOR_BY.blu, name = colr.n, col = colr.h;
-  const xp = perfect ? 100 : score * 30;
-  addXP(xp);
+  const xp = replay ? 0 : perfect ? 100 : score * 30;
+  if (xp) addXP(xp);
   const scr = document.getElementById("evento"), $ = q => scr.querySelector(q);
   scr.style.setProperty("--ev", col);
   scr.style.setProperty("--ev-on", onColor(col));
   const lightEv = lum(col) > .42;
   scr.classList.toggle("light-ev", lightEv);
   scr.style.setProperty("--ev-link", lightEv ? mix(col, "#000000", .55) : col);
-  $("[data-ev-name]").textContent = name;
   $("[data-ev-score]").textContent = `${score} / ${tot}`;
   $("[data-ev-acc]").textContent = Math.round(score / tot * 100) + " %";
-  $("[data-ev-xp]").textContent = "+ " + xp + " XP";
+  $("[data-ev-xp]").textContent = replay ? "XP già ottenuti" : "+ " + xp + " XP";
   $("[data-ev-bname]").textContent = name;
   $("[data-ev-name]").textContent = l.title;
   $("[data-ev-badge]").hidden = !perfect;
@@ -465,7 +481,8 @@ const isDark = () => document.documentElement.dataset.dark === "dark";
 function applyTheme(id) {
   S.theme = id && COLOR_BY[id] ? id : null; save();
   const root = document.documentElement.style;
-  const props = ["--purple-btn", "--sky-dark", "--sky-light", "--mission", "--blue-card", "--bg", "--on-accent", "--on-dark", "--on-light", "--on-blue", "--theme-dot"];
+  const props = ["--purple-btn", "--sky-dark", "--sky-light", "--mission", "--blue-card", "--bg", "--on-accent", "--on-dark", "--on-light", "--on-blue", "--theme-dot",
+    "--brown", "--darkbrown", "--teal", "--quiz-card", "--yellow", "--yellow-top", "--quiz-purple", "--on-quiz-purple"];
   if (!S.theme) { props.forEach(p => root.removeProperty(p)); renderColors(); return; }
   const h = COLOR_BY[S.theme].h;
   const dark = lum(h) > .42 ? mix(h, "#000000", .25) : h;
@@ -474,7 +491,10 @@ function applyTheme(id) {
     "--purple-btn": dark, "--sky-dark": dark, "--sky-light": light, "--mission": dark,
     "--blue-card": mix(h, "#000000", .08), "--bg": mix(h, isDark() ? "#141417" : "#f2f2f2", isDark() ? .88 : .9),
     "--on-accent": onColor(dark), "--on-dark": onColor(dark), "--on-light": onColor(light),
-    "--on-blue": onColor(mix(h, "#000000", .08)), "--theme-dot": dark
+    "--on-blue": onColor(mix(h, "#000000", .08)), "--theme-dot": dark,
+    "--brown": mix(h, "#000000", .3), "--darkbrown": mix(h, "#000000", .5), "--teal": mix(h, "#000000", .42),
+    "--quiz-card": mix(h, "#ffffff", .68), "--yellow": mix(h, "#ffffff", .62), "--yellow-top": mix(h, "#ffffff", .45),
+    "--quiz-purple": mix(h, "#000000", .15), "--on-quiz-purple": onColor(mix(h, "#000000", .15))
   };
   Object.entries(set).forEach(([k, v]) => root.setProperty(k, v));
   renderColors();
@@ -500,14 +520,14 @@ function renderColors() {
   }
   const own = document.querySelector("[data-owned]");
   if (!own) return;
-  own.innerHTML = ""; document.querySelector("[data-locked]").innerHTML = "";
+  own.innerHTML = ""; document.querySelector("[data-locked-grid]").innerHTML = "";
   byHue(COLORS.map(c => c.id)).map(id => COLOR_BY[id]).forEach(c => {
     const has = S.owned.includes(c.id);
     const el = document.createElement(has ? "button" : "div");
     el.className = "sw" + (has ? "" : " locked") + (S.theme === c.id ? " cur" : "");
     el.innerHTML = `<i style="background:${c.h}"></i><span>${c.n}</span>${has ? "" : `<small>${c.hint}</small>`}`;
     if (has) el.onclick = () => { applyTheme(S.theme === c.id ? null : c.id); };
-    document.querySelector(has ? "[data-owned]" : "[data-locked]").appendChild(el);
+    document.querySelector(has ? "[data-owned]" : "[data-locked-grid]").appendChild(el);
   });
   document.querySelector("[data-owned-n]").textContent = `${S.owned.length} / ${COLORS.length}`;
   document.querySelector("[data-theme-name]").textContent = S.theme ? COLOR_BY[S.theme].n : "Tema originale";
