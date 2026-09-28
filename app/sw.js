@@ -1,4 +1,4 @@
-const VERSION = "chroma-v9";
+const VERSION = "chroma-v10";
 const FILES = [
   "./",
   "index.html",
@@ -52,21 +52,24 @@ const FILES = [
 ];
 
 self.addEventListener("install", e => {
-  e.waitUntil(caches.open(VERSION).then(c => c.addAll(FILES)).then(() => self.skipWaiting()));
+  e.waitUntil(caches.open(VERSION).then(c => c.addAll(FILES.map(f => new Request(f, { cache: "reload" })))).then(() => self.skipWaiting()));
 });
 self.addEventListener("activate", e => {
   e.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k => k !== VERSION).map(k => caches.delete(k))))
     .then(() => self.clients.claim()));
 });
+self.addEventListener("message", e => { if (e.data === "skip") self.skipWaiting(); });
 
 self.addEventListener("fetch", e => {
   if (e.request.method !== "GET") return;
+  const url = new URL(e.request.url);
+  const same = url.origin === location.origin;
+  const net = same ? fetch(url.href, { cache: "no-cache", credentials: "same-origin" }) : fetch(e.request);
   e.respondWith(
-    fetch(e.request).then(r => {
-      if (r.ok && new URL(e.request.url).origin === location.origin) {
-        const copy = r.clone(); caches.open(VERSION).then(c => c.put(e.request, copy));
-      }
+    net.then(r => {
+      if (r.ok && same) { const copy = r.clone(); caches.open(VERSION).then(c => c.put(e.request, copy)); }
       return r;
-    }).catch(() => caches.match(e.request, { ignoreSearch: true }))
+    }).catch(() => caches.match(e.request, { ignoreSearch: true })
+      .then(r => r || (e.request.mode === "navigate" ? caches.match("./index.html") : undefined)))
   );
 });
