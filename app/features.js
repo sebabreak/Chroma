@@ -9,7 +9,7 @@ $$("[data-onboarded]").addEventListener("click", () => {
 let tick = 0;
 setInterval(() => {
   if (document.hidden || !S.onboarded) return;
-  S.time++;
+  S.time++; day().time++;
   if (++tick % 15 === 0) { save(); render(); }
 }, 1000);
 addEventListener("visibilitychange", () => { if (document.hidden) save(); });
@@ -217,7 +217,7 @@ function renderTimeline() {
     li.className = (got ? "got" : "locked") + (got && levelTitle(l) === shownTitle() ? " shown" : "") + (l === S.level + 1 ? " next" : "");
     li.innerHTML = `<span class="tl-dot" style="--c:${levelColor(l)}">${got ? l : "🔒"}</span>
       <div><b>${got || l === S.level + 1 ? levelTitle(l) : "???"}</b>
-      <small>${got ? "Livello " + l + " · " + fmt(t?.d) : l === S.level + 1 ? `Prossimo · mancano ${1000 - S.xp} XP` : "Livello " + l}</small></div>
+      <small>${got ? "Livello " + l + " · " + fmt(t?.d) : l === S.level + 1 ? `Prossimo · mancano ${xpNeed(S.level) - S.xp} XP` : "Livello " + l}</small></div>
       ${got && levelTitle(l) === shownTitle() ? '<em>In mostra</em>' : ""}`;
     if (got) li.onclick = () => { S.shownTitle = l === S.level ? null : l; save(); render(); toast("Ora mostri: " + levelTitle(l)); };
     ol.appendChild(li);
@@ -255,7 +255,7 @@ function avatarHTML(a) {
 function renderAvatars() {
   document.querySelectorAll("[data-avatar]").forEach(el => el.innerHTML = avatarHTML());
   const ring = $$(".avatar-ring");
-  if (ring) ring.style.setProperty("--p", (S.xp / 10) + "%");
+  if (ring) ring.style.setProperty("--p", (S.xp / xpNeed(S.level) * 100) + "%");
   const g = $$("[data-av-grid]"); if (!g) return;
   g.innerHTML = "";
   AVATARS.forEach(p => {
@@ -305,18 +305,24 @@ const SIM = {
   xp: () => { addXP(100); return "+100 XP"; },
   level: () => { S.level++; onLevelUp(); save(); render(); return ""; },
   time: () => { S.time += 3600; save(); render(); return "+1 ora di studio"; },
-  day: () => { S.streak++; S.m.days++; save(); render(); return "Streak: " + S.streak + " giorni"; },
+  day: () => { S.streak++; S.bestStreak = Math.max(S.bestStreak, S.streak); save(); render(); return "Streak: " + S.streak + " giorni"; },
   lessons: () => {
     let n = 0;
-    LESSONS.forEach(l => { if (!S.done.includes(l.id)) { S.done.push(l.id); S.lessonsTotal++; S.m.lessons++; n++; } });
+    LESSONS.forEach(l => { if (!S.done.includes(l.id)) { S.done.push(l.id); S.lessonsTotal++; n++; } }); day().lessons++;
     addXP(n * 50); return n ? `${n} lezioni completate (+${n * 50} XP)` : "Lezioni già tutte completate";
   },
-  quiz: () => { S.quizzes += 5; S.m.quiz += 5; save(); render(); return "+5 quiz completati"; },
+  quiz: () => { S.quizzes += 5; day().quiz += 5; day().perfect++; save(); render(); return "+5 quiz completati"; },
   missions: () => {
-    S.m.lessons = Math.max(S.m.lessons, 3); S.m.quiz = Math.max(S.m.quiz, 5); S.m.days = Math.max(S.m.days, 5);
-    COLORS.slice(0, 10).forEach(c => { if (!S.owned.includes(c.id)) S.owned.push(c.id); });
-    S.claimed = []; save(); render(); return "Missioni pronte da riscattare!";
+    LESSONS.forEach(l => { if (!S.done.includes(l.id)) { S.done.push(l.id); S.lessonsTotal++; } });
+    [...LESSONS, ...COMBOS].forEach(l => { S.best[l.id] = 3; });
+    S.combosRead = COMBOS.map(c => c.id);
+    if (!S.myPalettes.length) S.myPalettes.push({ id: "demo", n: "Palette demo", c: ["perla", "ardesia"] });
+    [...LESSONS, ...COMBOS].forEach(l => { const c = EV[l.id]; if (!S.redeemed.includes(l.id)) S.redeemed.push(l.id); if (!S.owned.includes(c)) S.owned.push(c); });
+    S.streak = S.bestStreak = 14;
+    Object.assign(day(), { lessons: 1, quiz: 2, perfect: 1, time: 300 });
+    save(); renderPalettes(); render(); return "Tutte le missioni sono pronte da riscattare!";
   },
+
   colors: () => { S.owned = COLORS.map(c => c.id); save(); render(); return "Tutti i " + COLORS.length + " colori sbloccati"; },
   badges: () => {
     S.badges = ["Badge dello studente", "Badge dello studioso", "Badge sociale"];
@@ -327,7 +333,7 @@ const SIM = {
     Object.assign(S, {
       level: 12, xp: 450, xpTotal: 12450, time: 30 * 3600 + 25 * 60, streak: 21, quizzes: 42, lessonsTotal: 24,
       missionsDone: 25, done: LESSONS.map(l => l.id), badges: ["Badge dello studente", "Badge dello studioso", "Badge sociale"],
-      m: { lessons: 2, quiz: 4, days: 5, colors: 0 }, claimed: [], onboarded: true, name: S.name || "Luca", shownTitle: null
+      bestStreak: 21, claimed: ["p1", "p2", "p3", "p4", "s1", "s2"], onboarded: true, name: S.name || "Luca", shownTitle: null
     });
     fillTitles();
     COLORS.slice(0, 22).forEach(c => { if (!S.owned.includes(c.id)) S.owned.push(c.id); });
