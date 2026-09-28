@@ -1,4 +1,4 @@
-const VERSION = "chroma-v16";
+const VERSION = "chroma-v17";
 const FILES = [
   "./",
   "index.html",
