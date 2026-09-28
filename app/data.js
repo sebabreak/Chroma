@@ -2,55 +2,55 @@ const LESSONS = [
   {
     id: "blu", title: "Il significato del blu", img: "lezione-blu.png",
     body: [
-      "Il blu è uno dei colori più apprezzati e utilizzati nel design. È associato al cielo e all'acqua e trasmette sensazioni di calma, fiducia e stabilità.",
-      "Nella psicologia del colore viene spesso utilizzato da aziende tecnologiche e istituzioni perché comunica professionalità e affidabilità.",
-      "Le tonalità più chiare evocano tranquillità e serenità, mentre quelle più scure trasmettono autorevolezza ed eleganza."
+      "Il blu è uno dei colori più apprezzati: in molti sondaggi internazionali risulta il preferito. È associato al cielo e all'acqua e, nella cultura occidentale, viene collegato a calma, fiducia e stabilità.",
+      "Per questo è molto usato da banche, aziende tecnologiche e istituzioni, che vogliono comunicare professionalità e affidabilità.",
+      "Le tonalità più chiare tendono a evocare tranquillità e serenità, mentre quelle più scure vengono associate ad autorevolezza ed eleganza."
     ],
-    fact: "Molti social network e aziende tecnologiche utilizzano il blu nel proprio logo per trasmettere fiducia e sicurezza agli utenti.",
+    fact: "Molti social network e aziende tecnologiche hanno un logo blu: è un colore che il pubblico associa facilmente a fiducia e sicurezza.",
     quiz: [
-      { q: "Quali sensazioni trasmette principalmente il blu?", a: ["A) Calma e fiducia", "B) Rabbia e urgenza", "C) Fame ed energia"], ok: 0 },
-      { q: "Perché molte aziende tecnologiche usano il blu?", a: ["A) Perché è economico da stampare", "B) Perché comunica affidabilità", "C) Perché attira l'attenzione sui saldi"], ok: 1 },
-      { q: "Cosa trasmettono le tonalità scure del blu?", a: ["A) Allegria e gioco", "B) Pericolo", "C) Autorevolezza ed eleganza"], ok: 2 }
+      { q: "A quali sensazioni viene associato più spesso il blu?", a: ["A) Calma e fiducia", "B) Rabbia e urgenza", "C) Fame ed energia"], ok: 0 },
+      { q: "Perché molte aziende tecnologiche usano il blu?", a: ["A) Perché è economico da stampare", "B) Perché viene associato all'affidabilità", "C) Perché attira l'attenzione sui saldi"], ok: 1 },
+      { q: "A cosa vengono associate le tonalità scure del blu?", a: ["A) Allegria e gioco", "B) Pericolo", "C) Autorevolezza ed eleganza"], ok: 2 }
     ]
   },
   {
     id: "arancione", title: "Il significato dell’arancione", img: "lezione-arancione.jpg",
     body: [
-      "L'arancione nasce dall'unione di rosso e giallo e ne eredita l'energia e la luminosità. È un colore caldo, vivace e socievole.",
-      "Nella psicologia del colore è legato all'entusiasmo, alla creatività e all'ottimismo: invita all'azione senza l'aggressività del rosso.",
-      "Nel design viene usato per pulsanti e inviti all'azione, perché cattura lo sguardo e comunica accessibilità e divertimento."
+      "L'arancione si ottiene mescolando rosso e giallo e sulla ruota cromatica si trova tra questi due colori. È un colore caldo e molto luminoso.",
+      "Nella psicologia del colore viene associato all'entusiasmo, alla creatività e all'ottimismo: richiama l'attenzione in modo meno aggressivo del rosso.",
+      "Nel design viene usato spesso per pulsanti e inviti all'azione, perché cattura lo sguardo e comunica un tono amichevole e informale."
     ],
-    fact: "L'arancione prende il nome dal frutto: prima che l'arancia arrivasse in Europa, questo colore veniva chiamato semplicemente “giallo-rosso”.",
+    fact: "Il nome del colore viene da quello del frutto. In inglese antico, prima che l'arancia fosse conosciuta, questa tinta si chiamava geoluhread, cioè “giallo-rosso”.",
     quiz: [
       { q: "Da quali colori nasce l'arancione?", a: ["A) Rosso e Giallo", "B) Blu e Giallo", "C) Rosso e Blu"], ok: 0 },
-      { q: "Quale emozione è associata all'arancione?", a: ["A) Tristezza", "B) Entusiasmo", "C) Freddezza"], ok: 1 },
+      { q: "Quale emozione viene associata all'arancione?", a: ["A) Tristezza", "B) Entusiasmo", "C) Freddezza"], ok: 1 },
       { q: "Dove viene usato spesso l'arancione nel design?", a: ["A) Negli sfondi dei documenti legali", "B) Nei testi lunghi", "C) Nei pulsanti di invito all'azione"], ok: 2 }
     ]
   },
   {
     id: "viola", title: "Il significato del viola", img: "lezione-viola.png",
     body: [
-      "Il viola unisce la stabilità del blu all'energia del rosso. È un colore raro in natura e per questo è stato a lungo considerato prezioso.",
-      "Nella psicologia del colore è associato alla creatività, alla spiritualità e al mistero, ma anche al lusso e alla regalità.",
-      "Le tonalità chiare come il lilla risultano delicate e romantiche, mentre quelle profonde comunicano ricchezza e ambizione."
+      "Il viola si ottiene mescolando rosso e blu. Nell'antichità le tinture viola erano rarissime e costose, e per questo è stato a lungo considerato un colore prezioso.",
+      "Nella cultura occidentale viene associato alla creatività, alla spiritualità e al mistero, ma anche al lusso e alla regalità.",
+      "Le tonalità chiare come il lilla vengono percepite come delicate e romantiche, mentre quelle profonde richiamano ricchezza e ambizione."
     ],
-    fact: "Nell'antica Roma la porpora era così costosa da produrre che solo l'imperatore poteva indossare una toga interamente viola.",
+    fact: "Nell'antica Roma la porpora di Tiro si ricavava da migliaia di molluschi ed era costosissima: la toga interamente purpurea era riservata ai generali durante il trionfo e, più tardi, agli imperatori.",
     quiz: [
       { q: "Da quali colori nasce il viola?", a: ["A) Giallo e Blu", "B) Rosso e Blu", "C) Verde e Rosso"], ok: 1 },
       { q: "A cosa è storicamente associato il viola?", a: ["A) Alla regalità e al lusso", "B) Al lavoro nei campi", "C) Alla segnaletica stradale"], ok: 0 },
-      { q: "Cosa comunicano le tonalità chiare come il lilla?", a: ["A) Pericolo", "B) Aggressività", "C) Delicatezza e romanticismo"], ok: 2 }
+      { q: "Come vengono percepite spesso le tonalità chiare come il lilla?", a: ["A) Pericolo", "B) Aggressività", "C) Delicatezza e romanticismo"], ok: 2 }
     ]
   },
   {
     id: "rosso", title: "Il significato del rosso", img: "lezione-rosso.jpg",
     body: [
-      "Il rosso è il colore con la lunghezza d'onda più lunga tra quelli visibili ed è il primo che l'occhio nota. È legato al fuoco, al sangue e alla passione.",
-      "Nella psicologia del colore trasmette energia, urgenza e desiderio: aumenta l'attenzione e può perfino far percepire il tempo come più veloce.",
-      "Nel design si usa con misura, per avvisi, saldi e pulsanti importanti, perché se abusato può risultare aggressivo."
+      "Il rosso è il colore visibile con la lunghezza d'onda più lunga ed è tra quelli che attirano più rapidamente lo sguardo. È legato al fuoco, al sangue e alla passione.",
+      "Nella cultura occidentale viene associato a energia, urgenza e desiderio, ed è il colore più usato per segnalare pericoli e divieti.",
+      "Nel design si usa con misura, per avvisi, saldi e pulsanti importanti, perché in grandi quantità può risultare aggressivo."
     ],
-    fact: "Molte catene di fast food usano il rosso nel logo perché stimola l'appetito e invita a decidere in fretta.",
+    fact: "Molte catene di fast food hanno il rosso nel logo: è un colore che si nota subito e che viene spesso associato al cibo e all'energia.",
     quiz: [
-      { q: "Qual è una sensazione tipica del rosso?", a: ["A) Energia e urgenza", "B) Calma e riposo", "C) Freddezza"], ok: 0 },
+      { q: "Quali sensazioni vengono associate al rosso?", a: ["A) Energia e urgenza", "B) Calma e riposo", "C) Freddezza"], ok: 0 },
       { q: "Perché il rosso va usato con misura nel design?", a: ["A) Perché è poco visibile", "B) Perché può risultare aggressivo", "C) Perché non si stampa bene"], ok: 1 },
       { q: "Dove si usa spesso il rosso?", a: ["A) Negli sfondi dei testi lunghi", "B) Nelle app per dormire", "C) In avvisi, saldi e pulsanti importanti"], ok: 2 }
     ]
@@ -58,57 +58,57 @@ const LESSONS = [
   {
     id: "giallo", title: "Il significato del giallo", img: "lezione-giallo.jpg",
     body: [
-      "Il giallo è il colore più luminoso dello spettro: richiama il sole, la luce e l'estate e cattura lo sguardo più di ogni altro.",
-      "È associato all'ottimismo, alla creatività e alla curiosità, ma in grandi quantità può affaticare la vista e creare ansia.",
-      "Abbinato al nero crea il contrasto più leggibile a distanza: per questo è usato nella segnaletica e negli avvisi di pericolo."
+      "Tra i colori puri, il giallo è quello che appare più luminoso: richiama il sole, la luce e l'estate e cattura facilmente lo sguardo.",
+      "Viene associato all'ottimismo, alla creatività e alla curiosità; usato su grandi superfici, però, può risultare abbagliante e stancare la vista.",
+      "Abbinato al nero crea un contrasto molto forte, leggibile anche a distanza: per questo è usato nella segnaletica e negli avvisi di pericolo."
     ],
-    fact: "I taxi di New York sono gialli perché il giallo è il colore che si nota più facilmente anche nel traffico.",
+    fact: "Dal 1967 i taxi autorizzati di New York devono essere gialli: un colore che si riconosce subito, anche nel traffico.",
     quiz: [
-      { q: "A cosa è associato il giallo?", a: ["A) Al lutto", "B) All'ottimismo e alla luce", "C) Al silenzio"], ok: 1 },
+      { q: "A cosa viene associato il giallo?", a: ["A) Al lutto", "B) All'ottimismo e alla luce", "C) Al silenzio"], ok: 1 },
       { q: "Con quale colore il giallo è più leggibile a distanza?", a: ["A) Con il nero", "B) Con il bianco", "C) Con l'arancione"], ok: 0 },
-      { q: "Cosa può provocare troppo giallo?", a: ["A) Sonno", "B) Fame", "C) Affaticamento e ansia"], ok: 2 }
+      { q: "Cosa può succedere usando troppo giallo?", a: ["A) Il testo diventa più leggibile", "B) Scompare il contrasto con il nero", "C) Può abbagliare e stancare la vista"], ok: 2 }
     ]
   },
   {
     id: "verde", title: "Il significato del verde", img: "lezione-verde.jpg",
     body: [
-      "Il verde è il colore della natura, della crescita e del rinnovamento. L'occhio umano distingue più sfumature di verde che di qualsiasi altro colore.",
-      "Trasmette equilibrio, salute e tranquillità: è un colore riposante che aiuta la concentrazione.",
+      "Il verde è il colore della natura, della crescita e del rinnovamento. L'occhio umano è particolarmente sensibile alla luce verde-gialla, che percepisce come molto luminosa.",
+      "Viene associato a equilibrio, salute e tranquillità ed è considerato un colore riposante.",
       "Nel design indica spesso qualcosa di positivo o permesso, come un'operazione riuscita o un semaforo che dà il via libera."
     ],
-    fact: "Le luci di emergenza delle uscite di sicurezza sono verdi perché il verde è associato alla sicurezza e al “via libera”.",
+    fact: "In Europa i cartelli delle uscite di emergenza sono verdi, perché il verde indica sicurezza e “via libera”. Negli Stati Uniti, invece, le scritte EXIT sono spesso rosse.",
     quiz: [
-      { q: "Quale concetto esprime il verde?", a: ["A) Pericolo", "B) Lusso", "C) Natura e crescita"], ok: 2 },
+      { q: "Quale concetto viene associato al verde?", a: ["A) Pericolo", "B) Lusso", "C) Natura e crescita"], ok: 2 },
       { q: "Cosa indica il verde nelle interfacce?", a: ["A) Un'operazione riuscita", "B) Un errore grave", "C) Un contenuto vietato"], ok: 0 },
-      { q: "Che effetto ha il verde sulla mente?", a: ["A) Agitazione", "B) Equilibrio e riposo", "C) Fame"], ok: 1 }
+      { q: "Che effetto viene attribuito al verde?", a: ["A) Agitazione", "B) Equilibrio e riposo", "C) Fame"], ok: 1 }
     ]
   },
   {
     id: "bianco", title: "Il significato del bianco", img: "lezione-bianco.jpg",
     body: [
-      "Il bianco contiene tutti i colori della luce. Nella cultura occidentale rappresenta purezza, pulizia e nuovi inizi.",
+      "La luce bianca contiene tutti i colori dello spettro visibile, come mostra un prisma. Nella cultura occidentale il bianco rappresenta purezza, pulizia e nuovi inizi.",
       "Nel design è fondamentale come spazio vuoto: dà respiro ai contenuti e comunica ordine, semplicità ed eleganza.",
-      "Il suo significato cambia con la cultura: in molti paesi asiatici il bianco è il colore del lutto."
+      "Il suo significato cambia con la cultura: in diversi paesi asiatici, come Cina, Giappone e India, il bianco è tradizionalmente il colore del lutto."
     ],
     fact: "Molti marchi di tecnologia usano grandi spazi bianchi nei negozi e nelle confezioni per comunicare semplicità e qualità.",
     quiz: [
-      { q: "Cosa contiene la luce bianca?", a: ["A) Nessun colore", "B) Tutti i colori", "C) Solo il blu"], ok: 1 },
+      { q: "Cosa contiene la luce bianca?", a: ["A) Nessun colore", "B) Tutti i colori dello spettro visibile", "C) Solo il blu"], ok: 1 },
       { q: "A cosa serve il bianco nel design?", a: ["A) A dare respiro ai contenuti", "B) A nascondere il testo", "C) Ad aumentare il caos"], ok: 0 },
-      { q: "In molti paesi asiatici il bianco rappresenta…", a: ["A) La festa", "B) La ricchezza", "C) Il lutto"], ok: 2 }
+      { q: "In diversi paesi asiatici il bianco rappresenta tradizionalmente…", a: ["A) La festa", "B) La ricchezza", "C) Il lutto"], ok: 2 }
     ]
   },
   {
     id: "nero", title: "Il significato del nero", img: "lezione-nero.jpg",
     body: [
-      "Il nero è l'assenza di luce. Trasmette forza, eleganza e mistero, ma anche serietà e, in alcune culture, lutto.",
-      "Nella moda e nel lusso è il colore della raffinatezza: fa sembrare gli oggetti più preziosi e senza tempo.",
-      "Nel design dà contrasto e peso: un testo nero su fondo chiaro è la combinazione più leggibile in assoluto."
+      "Il nero corrisponde all'assenza di luce. Viene associato a forza, eleganza e mistero, ma anche a serietà e, in molte culture occidentali, al lutto.",
+      "Nella moda e nel lusso è il colore della raffinatezza: fa apparire gli oggetti più preziosi e senza tempo.",
+      "Nel design dà contrasto e peso: il testo nero su fondo bianco ha il contrasto massimo possibile (21:1) ed è tra le combinazioni più leggibili."
     ],
-    fact: "Coco Chanel rese celebre il “piccolo abito nero”, trasformando un colore del lutto in un simbolo di eleganza.",
+    fact: "Nel 1926 la rivista Vogue presentò il “piccolo abito nero” di Coco Chanel come un capo adatto a tutte le donne: un colore legato al lutto diventò un simbolo di eleganza.",
     quiz: [
       { q: "Il nero è…", a: ["A) L'assenza di luce", "B) La somma di tutti i colori della luce", "C) Un colore caldo"], ok: 0 },
-      { q: "In quale settore il nero comunica raffinatezza?", a: ["A) Nei giochi per bambini", "B) Nella moda e nel lusso", "C) Nella segnaletica stradale"], ok: 1 },
-      { q: "Qual è la combinazione più leggibile?", a: ["A) Giallo su bianco", "B) Blu su viola", "C) Testo nero su fondo chiaro"], ok: 2 }
+      { q: "In quale settore il nero viene associato alla raffinatezza?", a: ["A) Nei giochi per bambini", "B) Nella moda e nel lusso", "C) Nella segnaletica stradale"], ok: 1 },
+      { q: "Quale di queste combinazioni è la più leggibile?", a: ["A) Giallo su bianco", "B) Blu su viola", "C) Testo nero su fondo bianco"], ok: 2 }
     ]
   },
   { id: "rgb", track: "digitale", title: "RGB: i colori della luce", grad: "linear-gradient(135deg,#ff2d2d,#2dff6a 50%,#2d6bff)",
@@ -117,7 +117,7 @@ const LESSONS = [
       "È un modello additivo: più luce aggiungi, più il colore si schiarisce. Rosso e verde danno il giallo, verde e blu il ciano, rosso e blu il magenta; tutte e tre al massimo danno il bianco.",
       "Ogni canale va da 0 a 255: rgb(255, 0, 0) è il rosso puro, rgb(0, 0, 0) il nero e rgb(255, 255, 255) il bianco. In tutto si ottengono più di 16 milioni di colori."
     ],
-    fact: "Se guardi uno schermo con una lente d'ingrandimento vedi davvero i puntini rossi, verdi e blu che, da lontano, l'occhio mescola in un unico colore.",
+    fact: "Se guardi uno schermo con una lente d'ingrandimento vedi i piccoli punti rossi, verdi e blu che, da lontano, l'occhio fonde in un unico colore.",
     quiz: [
       { q: "Che cosa significa RGB?", a: ["A) Rosso, Giallo, Blu", "B) Red, Green, Blue: rosso, verde, blu", "C) Rosa, Grigio, Bianco"], ok: 1 },
       { q: "Cosa ottieni sommando luce rossa e luce verde?", a: ["A) Giallo", "B) Marrone", "C) Viola"], ok: 0 },
@@ -137,11 +137,11 @@ const LESSONS = [
     ] },
   { id: "hsl", track: "digitale", title: "Tinta, saturazione e luminosità", grad: "linear-gradient(90deg,#ff3030,#ffd000,#30d060,#30b0ff,#8040ff,#ff30a0)",
     body: [
-      "Il modello HSL descrive i colori come li pensiamo noi. La tinta (Hue) è la posizione sulla ruota cromatica, da 0° a 360°: il rosso è a 0°, il verde a 120°, il blu a 240°.",
+      "Il modello HSL descrive i colori in un modo vicino a come li descriviamo a parole. La tinta (Hue) è la posizione sulla ruota cromatica, da 0° a 360°: il rosso è a 0°, il verde a 120°, il blu a 240°.",
       "La saturazione dice quanto il colore è intenso: al 100% è vivo, allo 0% diventa grigio. La luminosità va dal nero (0%) al bianco (100%), con il colore pieno al 50%.",
       "HSL è comodo per creare palette: tenendo ferma la tinta e cambiando saturazione e luminosità ottieni tante sfumature armoniche dello stesso colore."
     ],
-    fact: "Le combinazioni che hai studiato si calcolano sulla tinta: il complementare di un colore è sempre a 180° di distanza, una triade a 120°.",
+    fact: "Le armonie si calcolano sulla tinta: il complementare è a 180°, una triade a 120°. Attenzione: sulla ruota digitale (RGB e HSL) il complementare del blu è il giallo, mentre sulla ruota tradizionale dei pittori (rosso, giallo, blu), usata nelle lezioni sulle combinazioni, è l'arancione.",
     quiz: [
       { q: "Cosa indica la tinta (Hue)?", a: ["A) La posizione del colore sulla ruota", "B) Quanto il colore è chiaro", "C) Quanto costa stamparlo"], ok: 0 },
       { q: "Un colore con saturazione 0% appare…", a: ["A) Più vivo", "B) Grigio", "C) Fluorescente"], ok: 1 },
@@ -150,8 +150,8 @@ const LESSONS = [
   { id: "cmyk", track: "digitale", title: "RGB e CMYK: schermo e stampa", grad: "linear-gradient(135deg,#00b7eb,#ff2fa0 50%,#ffe600)",
     body: [
       "Le stampanti non usano la luce ma gli inchiostri: ciano (Cyan), magenta, giallo (Yellow) e nero (Key). È il modello CMYK.",
-      "È un modello sottrattivo: ogni inchiostro assorbe una parte della luce, quindi più inchiostro aggiungi, più il colore si scurisce. Il nero si aggiunge a parte per avere neri profondi e risparmiare inchiostro.",
-      "Alcuni colori molto accesi dello schermo non si possono stampare: per questo un colore può apparire più spento su carta che sul monitor. Chi progetta per la stampa lavora in CMYK fin dall'inizio."
+      "È un modello sottrattivo: ogni inchiostro assorbe una parte della luce, quindi più inchiostro aggiungi, più il colore si scurisce. Il nero si aggiunge a parte perché mescolando ciano, magenta e giallo si ottiene un marrone scuro, non un nero pieno.",
+      "Alcuni colori molto accesi dello schermo non si possono stampare: per questo un colore può apparire più spento su carta che sul monitor, e chi progetta per la stampa controlla i colori in CMYK già durante il lavoro."
     ],
     fact: "La K di CMYK viene da Key plate, la lastra “chiave” che nella stampa tipografica portava i dettagli in nero.",
     quiz: [
@@ -163,7 +163,7 @@ const LESSONS = [
     body: [
       "Un testo è leggibile quando c'è abbastanza differenza di luminosità tra testo e sfondo. Questa differenza si misura con il rapporto di contrasto, da 1:1 (nessuna differenza) a 21:1 (nero su bianco).",
       "Le linee guida internazionali WCAG chiedono almeno 4,5:1 per il testo normale e 3:1 per i testi grandi e le icone: è il livello AA. Il livello AAA chiede 7:1.",
-      "Circa l'8% degli uomini ha una forma di daltonismo: per questo non bisogna affidare un'informazione solo al colore, ma aggiungere anche testo, icone o forme."
+      "Circa l'8% degli uomini e lo 0,5% delle donne di origine europea ha una forma di daltonismo: per questo non bisogna affidare un'informazione solo al colore, ma aggiungere anche testo, icone o forme."
     ],
     fact: "Anche CHROMA controlla il contrasto: quando scegli un tema, l'app corregge da sola i colori perché testi e pulsanti restino leggibili.",
     quiz: [
@@ -175,8 +175,8 @@ const LESSONS = [
 
 const COMBOS = [
   { id: "Complementari", title: "Complementari", img: "complementari.png",
-    intro: "I colori complementari sono posizionati uno di fronte all'altro nella ruota cromatica. Creano il massimo contrasto possibile e attirano immediatamente l'attenzione.",
-    how: "La combinazione utilizza due colori opposti, come blu e arancione oppure rosso e verde.",
+    intro: "I colori complementari sono posizionati uno di fronte all'altro nella ruota cromatica. Creano il contrasto di tinta più forte e attirano subito l'attenzione.",
+    how: "La combinazione utilizza due colori opposti. Sulla ruota tradizionale dei pittori (rosso, giallo, blu) le coppie sono blu e arancione, rosso e verde, giallo e viola.",
     when: "Ideale per evidenziare elementi importanti, creare energia visiva e ottenere composizioni dinamiche. Esempi: Blu + Arancione, Rosso + Verde, Viola + Giallo.",
     extra: ["Questa combinazione è molto utilizzata nel cinema, nella pubblicità e nel design per evidenziare elementi importanti. Alcuni esempi famosi sono il blu con l'arancione oppure il rosso con il verde.",
             "I colori complementari possono essere usati per creare immagini energiche e dinamiche, ma devono essere bilanciati per evitare un effetto troppo aggressivo."],
@@ -187,23 +187,23 @@ const COMBOS = [
   { id: "Analoghi", title: "Analoghi", img: "analoghi.png",
     intro: "I colori analoghi sono colori vicini tra loro sulla ruota cromatica. Generano armonia e continuità visiva.",
     how: "Si scelgono generalmente tre colori adiacenti che condividono caratteristiche simili.",
-    when: "Perfetta per creare ambienti rilassanti, design equilibrati e palette naturali. Esempi: Blu + Azzurro + Verde, Rosso + Arancione + Giallo.",
+    when: "Perfetta per creare ambienti rilassanti, design equilibrati e palette naturali. Esempi: Blu + Blu-verde + Verde, Rosso + Rosso-arancio + Arancione.",
     extra: ["Questa combinazione è molto utilizzata per paesaggi, interfacce rilassanti e composizioni che devono trasmettere equilibrio.",
             "Poiché il contrasto è limitato, i colori analoghi aiutano a creare una sensazione di continuità e fluidità visiva."],
     quiz: [
       { q: "Come sono disposti i colori analoghi?", a: ["A) Vicini tra loro sulla ruota", "B) Opposti tra loro", "C) Ai vertici di un quadrato"], ok: 0 },
-      { q: "Quale palette è analoga?", a: ["A) Rosso + Verde", "B) Blu + Azzurro + Verde", "C) Giallo + Viola"], ok: 1 },
-      { q: "Che effetto trasmettono i colori analoghi?", a: ["A) Tensione e conflitto", "B) Massimo contrasto", "C) Armonia e continuità"], ok: 2 } ] },
+      { q: "Quale palette è analoga?", a: ["A) Rosso + Verde", "B) Blu + Blu-verde + Verde", "C) Giallo + Viola"], ok: 1 },
+      { q: "Che effetto producono di solito i colori analoghi?", a: ["A) Tensione e conflitto", "B) Massimo contrasto", "C) Armonia e continuità"], ok: 2 } ] },
   { id: "Triade", title: "Triade", img: "triade.png",
     intro: "La combinazione triadica utilizza tre colori equidistanti sulla ruota cromatica.",
-    how: "I colori formano un triangolo perfetto e mantengono un buon equilibrio tra contrasto e armonia.",
+    how: "I colori formano un triangolo equilatero e mantengono un buon equilibrio tra contrasto e armonia.",
     when: "Ottima per progetti creativi, illustrazioni e interfacce vivaci ma bilanciate. Esempi: Rosso + Giallo + Blu.",
     extra: ["Questo schema crea palette vivaci e bilanciate, mantenendo un buon equilibrio tra contrasto e armonia.",
             "Molti loghi e illustrazioni utilizzano combinazioni triadiche per ottenere design accattivanti senza risultare disordinati."],
     quiz: [
       { q: "Quanti colori usa una triade?", a: ["A) Due", "B) Tre", "C) Quattro"], ok: 1 },
       { q: "Che forma disegnano i colori di una triade sulla ruota?", a: ["A) Un triangolo", "B) Un quadrato", "C) Una linea"], ok: 0 },
-      { q: "Quale di queste è una triade?", a: ["A) Blu + Azzurro + Verde", "B) Rosso + Verde", "C) Rosso + Giallo + Blu"], ok: 2 } ] },
+      { q: "Quale di queste è una triade?", a: ["A) Blu + Blu-verde + Verde", "B) Rosso + Verde", "C) Rosso + Giallo + Blu"], ok: 2 } ] },
   { id: "Split complementari", title: "Split complementari", img: "split-complementari.png",
     intro: "Questa combinazione parte da un colore principale e utilizza i due colori adiacenti al suo complementare.",
     how: "Offre un contrasto elevato ma meno aggressivo rispetto ai complementari diretti.",
@@ -227,7 +227,7 @@ const COMBOS = [
   { id: "Quadrato", title: "Quadrato", img: "quadrato.png",
     intro: "La combinazione quadrata utilizza quattro colori equidistanti tra loro sulla ruota cromatica.",
     how: "I colori formano un quadrato e distribuiscono uniformemente il contrasto.",
-    when: "Ideale per creare design energici, moderni e molto colorati. Esempi: Rosso, Giallo, Verde e Blu.",
+    when: "Ideale per creare design energici, moderni e molto colorati. Esempio sulla ruota tradizionale: Giallo, Rosso-arancio, Viola e Blu-verde.",
     extra: ["Produce palette molto vivaci e dinamiche grazie alla distribuzione uniforme dei colori.",
             "È uno schema ideale per progetti creativi, illustrazioni e design che vogliono trasmettere energia e movimento."],
     quiz: [
@@ -308,8 +308,8 @@ const LEVEL_TITLES = ["Apprendista", "Curioso del colore", "Esploratore del colo
   "Visionario cromatico", "Signore delle tonalità", "Guru del colore", "Mago dello spettro", "Oracolo dei colori", "Leggenda cromatica"];
 
 const MISSIONS = [
-  { id: "p1", type: "percorso", title: "Primi passi", desc: "Completa la tua prima lezione di psicologia del colore.", target: 1, v: () => S.done.length, xp: 50, color: "rosa", go: "lezioni", cta: "Vai alle lezioni" },
-  { id: "p2", type: "percorso", title: "A metà strada", desc: "Completa 4 lezioni del percorso guidato.", target: 4, v: () => S.done.length, xp: 150, color: "terracotta", go: "lezioni", cta: "Vai alle lezioni" },
+  { id: "p1", type: "percorso", title: "Primi passi", desc: "Completa la tua prima lezione.", target: 1, v: () => S.done.length, xp: 50, color: "rosa", go: "lezioni", cta: "Vai alle lezioni" },
+  { id: "p2", type: "percorso", title: "A metà strada", desc: "Completa 4 lezioni.", target: 4, v: () => S.done.length, xp: 150, color: "terracotta", go: "lezioni", cta: "Vai alle lezioni" },
   { id: "p3", type: "percorso", title: "Studente dei colori", desc: "Completa tutte le 8 lezioni di psicologia del colore.", target: 8, v: () => PSY().filter(l => S.done.includes(l.id)).length, xp: 300, color: "carminio", badge: "Badge dello studente", go: "lezioni", cta: "Vai alle lezioni" },
   { id: "p4", type: "percorso", title: "Primo 3 su 3", desc: "Rispondi correttamente a tutte le domande di un quiz.", target: 1, v: () => perfectIn(Object.keys(S.best)), xp: 100, color: "azzurro", go: "quizhub", cta: "Vai ai quiz" },
   { id: "p5", type: "percorso", title: "Esperto di psicologia", desc: "Fai 3 su 3 in tutti gli 8 quiz sui colori.", target: 8, v: () => perfectIn(PSY().map(l => l.id)), xp: 400, color: "prugna", badge: "Badge dello studioso", go: "quizcat", cta: "Vai ai quiz" },
@@ -332,9 +332,9 @@ const MISSIONS = [
 ];
 
 const BADGES = [
-  { n: "Color Explorer", d: "Sblocca 10 colori", img: "badge-color-explorer.png", to: "colori", got: () => S.owned.length >= 10 },
-  { n: "Badge dello studente", d: "Completa tutte le lezioni", img: "badge-studente.png", got: () => S.badges.includes("Badge dello studente") },
-  { n: "Badge dello studioso", d: "3/3 in tutti i quiz sui colori", img: "badge-studioso.png", got: () => S.badges.includes("Badge dello studioso") },
+  { n: "Color Explorer", d: "Raccogli 10 colori", img: "badge-color-explorer.png", to: "colori", got: () => S.owned.length >= 10 },
+  { n: "Badge dello studente", d: "Completa le 8 lezioni di psicologia del colore", img: "badge-studente.png", got: () => S.badges.includes("Badge dello studente") },
+  { n: "Badge dello studioso", d: "3/3 in tutti gli 8 quiz di psicologia del colore", img: "badge-studioso.png", got: () => S.badges.includes("Badge dello studioso") },
   { n: "Badge sociale", d: "3 giorni di fila", img: "badge-sociale.png", got: () => S.badges.includes("Badge sociale") },
   { n: "Maestro del colore", d: "Raggiungi il livello 10", img: "badge-maestro.png", to: "titoli", got: () => S.level >= 10 },
   { n: "Badge digitale", d: "Completa le lezioni sul digitale", img: "badge-digitale.png", got: () => S.badges.includes("Badge digitale") },
@@ -359,16 +359,16 @@ const AVATARS = [
 
 const PALETTES = [
   { n: "Colori caldi", c: ["#d62828", "#ef4a23", "#f77f00", "#fcbf49", "#ffd23f", "#e85d75"],
-    t: "I colori caldi comprendono principalmente le tonalità di rosso, arancione e giallo. Sono associati al sole, al fuoco e all'energia, e trasmettono sensazioni di vitalità, entusiasmo e dinamismo.",
-    e: ["Passione", "Rabbia", "Calore", "Negatività", "Energia"] },
+    t: "I colori caldi comprendono principalmente le tonalità di rosso, arancione e giallo. Richiamano il sole e il fuoco e vengono associati a vitalità, entusiasmo e dinamismo.",
+    e: ["Passione", "Energia", "Calore", "Entusiasmo", "Urgenza"] },
   { n: "Colori freddi", c: ["#1d3557", "#2a6fdb", "#48cae4", "#2a9d8f", "#52b788", "#7b2cbf"],
-    t: "I colori freddi comprendono principalmente le tonalità di blu, verde e viola. Sono associati a elementi naturali come l'acqua, il cielo e la vegetazione, e trasmettono sensazioni di calma, equilibrio e serenità.",
+    t: "I colori freddi comprendono principalmente le tonalità di blu, verde e viola. Richiamano l'acqua, il cielo e la vegetazione e vengono associati a calma, equilibrio e serenità.",
     e: ["Calma", "Stabilità", "Fiducia", "Serenità", "Relax"] },
   { n: "Mezzitoni", c: ["#a3968b", "#8d9f87", "#9b8aa6", "#b5a48a", "#7f9aa8", "#c09a92"],
-    t: "I mezzitoni sono colori ottenuti dalla combinazione equilibrata tra tonalità calde e fredde, oppure dall'aggiunta di grigio a un colore puro. Risultano generalmente meno intensi e più morbidi rispetto ai colori saturi, creando un effetto visivo armonioso ed equilibrato.",
+    t: "Qui con “mezzitoni” intendiamo colori smorzati: tinte a cui è stato aggiunto del grigio, meno sature e più morbide dei colori puri. Accostati tra loro creano un effetto armonioso ed equilibrato.",
     e: ["Equilibrio", "Stabilità", "Armonia", "Relax"] }
 ];
-const PAL_FACT = "Nel film “The Grand Budapest Hotel” viene usata la psicologia dei colori, con l’interpolazione dei colori caldi e dei colori freddi.";
+const PAL_FACT = "Nel film “Grand Budapest Hotel” (2014) di Wes Anderson ogni epoca ha la sua palette: rosa e pastelli per gli anni Trenta, toni più spenti e freddi per gli anni Sessanta.";
 
 const SECRETS = [
   { id: "arcobaleno", n: "Arcobaleno", d: "Tutto lo spettro in movimento", base: "#7b2cbf", on: "#fff", g: "linear-gradient(90deg,#c81d25,#d9480f,#a07800,#2b8a3e,#0b7285,#1c4fd8,#7b2cbf,#c81d25)" },
@@ -385,9 +385,9 @@ const CVD = {
 
 const CVD_NOTE = {
   none: "",
-  protan: "Protanopia: i rossi appaiono scuri e si confondono con i verdi. Riguarda circa 1 uomo su 100.",
-  deutan: "Deuteranopia: verdi e rossi si confondono. È la forma più comune, circa 5 uomini su 100.",
-  tritan: "Tritanopia: blu e gialli si confondono. È rara, meno di 1 persona su 10.000."
+  protan: "Protanopia: i rossi appaiono più scuri e si confondono con i verdi. Riguarda circa 1 uomo su 100. La simulazione è un'approssimazione.",
+  deutan: "Deuteranopia: verdi e rossi si confondono. Le difficoltà rosso-verde sono la forma più comune: contando le forme lievi riguardano circa 6 uomini su 100. La simulazione è un'approssimazione.",
+  tritan: "Tritanopia: blu e gialli si confondono. È molto rara e riguarda allo stesso modo uomini e donne. La simulazione è un'approssimazione."
 };
 
 const HARM = {
