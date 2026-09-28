@@ -320,7 +320,7 @@ const SIM = {
     if (!S.myPalettes.length) S.myPalettes.push({ id: "demo", n: "Palette demo", c: ["perla", "ardesia"] });
     Object.assign(S, { games: { guess: 5, order: 5, comp: 5 }, labSaved: true, photoDone: true });
     [...LESSONS, ...COMBOS].forEach(l => { const c = EV[l.id]; if (!S.redeemed.includes(l.id)) S.redeemed.push(l.id); if (!S.owned.includes(c)) S.owned.push(c); });
-    S.streak = S.bestStreak = 14;
+    S.streak = S.bestStreak = 4;
     Object.assign(day(), { lessons: 1, quiz: 2, perfect: 1, time: 300 });
     save(); renderPalettes(); render(); return "Tutte le missioni sono pronte da riscattare!";
   },
