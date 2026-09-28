@@ -199,32 +199,41 @@ function openCombo(id) {
   const p1 = $("[data-combo-p1]"), p2 = $("[data-combo-p2]"), btn = $("[data-combo-next]");
   p1.hidden = false; p2.hidden = true; btn.textContent = "avanti";
   btn.onclick = () => {
-    if (p2.hidden) { p1.hidden = true; p2.hidden = false; btn.textContent = "Quiz"; scr.querySelector(".scroll").scrollTo(0, 0); }
+    if (p2.hidden) { p1.hidden = true; p2.hidden = false; btn.textContent = "Quiz"; scr.querySelector(".scroll").scrollTo(0, 0);
+      if (!S.combosRead.includes(c.id)) { S.combosRead.push(c.id); save(); render(); } }
     else openQuiz(c.id);
   };
   go("combo");
 }
 
 const DEF = { xp: 0, level: 1, xpTotal: 0, streak: 1, quizzes: 0, lessonsTotal: 0, done: [], onboarded: false,
-  m: { lessons: 0, quiz: 0, days: 1, colors: 0 }, claimed: [], redeemed: [], lastDay: null, badges: [],
+  claimed: [], redeemed: [], lastDay: null, badges: [], best: {}, combosRead: [], bestStreak: 1,
+  day: { d: "", lessons: 0, quiz: 0, perfect: 0, time: 0, claimed: [] },
   owned: ["perla", "ardesia"], theme: null,
   name: "", time: 0, missionsDone: 0, myPalettes: [], dark: "auto" };
 let S;
 try { S = Object.assign({}, DEF, JSON.parse(localStorage.getItem("chroma") || "{}")); } catch { S = { ...DEF }; }
 if (!Array.isArray(S.badges)) S.badges = [];
 (S.claimed || []).forEach(id => { const b = { lessons: "Badge dello studente", quiz: "Badge dello studioso", days: "Badge sociale" }[id]; if (b && !S.badges.includes(b)) S.badges.push(b); });
+S.claimed = (S.claimed || []).filter(id => /^[ps]\d/.test(id));
+delete S.m;
+S.best = S.best || {}; S.combosRead = S.combosRead || []; S.bestStreak = Math.max(S.bestStreak || 1, S.streak || 1);
+if (S.xp >= 200 + 50 * (S.level - 1)) S.xp = 200 + 50 * (S.level - 1) - 1;
+function dayKey() { return new Date().toDateString(); }
+function day() {
+  if (!S.day || S.day.d !== dayKey()) S.day = { d: dayKey(), lessons: 0, quiz: 0, perfect: 0, time: 0, claimed: [] };
+  return S.day;
+}
 const save = () => { try { localStorage.setItem("chroma", JSON.stringify(S)); } catch {} };
 
 function render() {
-  const lessonsDone = Math.min(3, S.m.lessons);
   const t = Math.floor(S.time / 60);
-  const vals = { ...S, lessonsDone, xpTotal: S.xpTotal.toLocaleString("it-IT"),
-    greet: S.name || "Benvenuto", name: S.name || "Ospite", levelTitle: shownTitle(), levelNext: levelTitle(S.level + 1), xpLeft: 1000 - S.xp, titlesN: S.level,
+  const vals = { ...S, xpTotal: S.xpTotal.toLocaleString("it-IT"),
+    greet: S.name || "Benvenuto", name: S.name || "Ospite", levelTitle: shownTitle(), levelNext: levelTitle(S.level + 1), xpLeft: xpNeed(S.level) - S.xp, xpNeed: xpNeed(S.level), titlesN: S.level,
     timeStr: t >= 60 ? `${Math.floor(t / 60)} h ${t % 60} min` : `${t} min`,
     quests: S.quizzes + S.lessonsTotal, ownedN: S.owned.length, totalColors: COLORS.length };
   document.querySelectorAll("[data-bind]").forEach(el => el.textContent = vals[el.dataset.bind]);
-  document.querySelectorAll("[data-bind-width=xp]").forEach(el => el.style.width = (S.xp / 10) + "%");
-  document.querySelectorAll("[data-bind-width=mission]").forEach(el => el.style.width = (lessonsDone / 3 * 100) + "%");
+  document.querySelectorAll("[data-bind-width=xp]").forEach(el => el.style.width = (S.xp / xpNeed(S.level) * 100) + "%");
   document.querySelectorAll(".lesson").forEach(el => {
     const quizList = el.closest('[data-lessons="quiz"], [data-combo-quiz]');
     if (!quizList) { el.classList.toggle("done", S.done.includes(el.dataset.id)); return; }
@@ -250,9 +259,10 @@ const LEVEL_TITLES = ["Apprendista", "Curioso del colore", "Esploratore del colo
   "Visionario cromatico", "Signore delle tonalità", "Guru del colore", "Mago dello spettro", "Oracolo dei colori", "Leggenda cromatica"];
 const ROMAN = n => [[10, "X"], [9, "IX"], [5, "V"], [4, "IV"], [1, "I"]].reduce((r, [v, s]) => { while (n >= v) { r += s; n -= v; } return r; }, "");
 function levelTitle(l) { return l <= 20 ? LEVEL_TITLES[Math.max(1, l) - 1] : "Leggenda cromatica " + ROMAN(l - 19); }
+function xpNeed(l) { return 200 + 50 * (l - 1); }
 function addXP(n) {
   S.xp += n; S.xpTotal += n;
-  while (S.xp >= 1000) { S.xp -= 1000; S.level++; onLevelUp(); }
+  while (S.xp >= xpNeed(S.level)) { S.xp -= xpNeed(S.level); S.level++; onLevelUp(); }
   save(); render();
 }
 
@@ -321,7 +331,8 @@ function openLesson(id) {
   scr.querySelector("[data-lesson-fact]").textContent = l.fact;
   scr.querySelector("[data-lesson-next]").onclick = () => {
     const first = !S.done.includes(id);
-    if (first) { S.done.push(id); S.lessonsTotal++; S.m.lessons++; addXP(50); }
+    day().lessons++;
+    if (first) { S.done.push(id); S.lessonsTotal++; addXP(50); } else save();
     const lf = document.getElementById("lezfine");
     lf.querySelector("h2").textContent = first ? "Lezione completata!" : "Lezione ripassata!";
     lf.querySelector("p").textContent = first ? "Hai guadagnato" : "Gli XP di questa lezione li hai già ottenuti";
@@ -338,6 +349,7 @@ function openQuiz(id) {
   const scr = document.getElementById("quiz");
   const $ = s => scr.querySelector(s);
   let n = 0, score = 0;
+  paintWith(scr, (COLOR_BY[EV[id]] || COLOR_BY.blu).h);
   $("[data-quiz-title]").textContent = l.title;
 
   function show() {
@@ -370,9 +382,12 @@ function openQuiz(id) {
   $("[data-quiz-next]").onclick = () => { n++; n < l.quiz.length ? show() : finish(); };
 
   function finish() {
-    S.quizzes++; S.m.quiz++;
-    S.best = S.best || {}; S.best[l.id] = Math.max(S.best[l.id] || 0, score);
-    showEvent(l, score);
+    S.quizzes++;
+    const d = day(); d.quiz++; if (score === l.quiz.length) d.perfect++;
+    const prev = S.best[l.id] || 0;
+    const xp = score === l.quiz.length && prev < score ? 100 : score > prev ? (score - prev) * 30 : score * 10;
+    S.best[l.id] = Math.max(prev, score);
+    showEvent(l, score, false, xp);
   }
 
   $("[data-quiz-next]").textContent = "avanti";
@@ -385,10 +400,10 @@ const EV = {
   "Complementari": "turchese", "Analoghi": "lime", "Triade": "magenta",
   "Split complementari": "corallo", "Rettangolo": "oliva", "Quadrato": "petrolio"
 };
-function showEvent(l, score, replay) {
+function showEvent(l, score, replay, gained) {
   const tot = l.quiz.length, perfect = score === tot;
   const colr = COLOR_BY[EV[l.id]] || COLOR_BY.blu, name = colr.n, col = colr.h;
-  const xp = replay ? 0 : perfect ? 100 : score * 30;
+  const xp = replay ? 0 : gained ?? (perfect ? 100 : score * 30);
   if (xp) addXP(xp);
   const scr = document.getElementById("evento"), $ = q => scr.querySelector(q);
   scr.style.setProperty("--ev", col);
@@ -396,6 +411,7 @@ function showEvent(l, score, replay) {
   const lightEv = lum(col) > .42;
   scr.classList.toggle("light-ev", lightEv);
   scr.style.setProperty("--ev-link", lightEv ? mix(col, "#000000", .55) : col);
+  paintWith(scr, col);
   $("[data-ev-score]").textContent = `${score} / ${tot}`;
   $("[data-ev-acc]").textContent = Math.round(score / tot * 100) + " %";
   $("[data-ev-xp]").textContent = replay ? "XP già ottenuti" : "+ " + xp + " XP";
@@ -475,29 +491,48 @@ const hex2rgb = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
 const rgb2hex = a => "#" + a.map(v => Math.round(Math.max(0, Math.min(255, v))).toString(16).padStart(2, "0")).join("");
 const mix = (a, b, t) => rgb2hex(hex2rgb(a).map((v, i) => v + (hex2rgb(b)[i] - v) * t));
 const lum = h => { const [r, g, b] = hex2rgb(h).map(v => { v /= 255; return v <= .03928 ? v / 12.92 : ((v + .055) / 1.055) ** 2.4; }); return .2126 * r + .7152 * g + .0722 * b; };
-const onColor = h => lum(h) > .42 ? "#111" : "#fff";
-
+const contrast = (a, b) => { const x = lum(a), y = lum(b); return (Math.max(x, y) + .05) / (Math.min(x, y) + .05); };
+const onColor = h => contrast(h, "#ffffff") >= contrast(h, "#111111") ? "#fff" : "#111";
+function ensure(c, against, min, toward) {
+  let out = c;
+  for (let i = 1; i <= 20 && contrast(out, against) < min; i++) out = mix(c, toward, i * .05);
+  return out;
+}
+function tokens(h, dark) {
+  const base = dark ? "#141417" : "#f2f2f2";
+  const bg = mix(h, base, dark ? .88 : .9);
+  const accent = ensure(h, bg, 3, dark ? "#ffffff" : "#000000");
+  const soft = ensure(mix(h, dark ? base : "#ffffff", dark ? .5 : .55), bg, 1.35, dark ? "#ffffff" : "#000000");
+  const card = ensure(mix(h, "#000000", .08), "#ffffff", 3, "#000000");
+  const pageMid = ensure(mix(h, "#000000", .28), "#ffffff", 4.5, "#000000");
+  const pageDeep = ensure(mix(h, "#000000", .48), "#ffffff", 5.5, "#000000");
+  const pageAlt = ensure(mix(h, "#000000", .4), "#ffffff", 5, "#000000");
+  const tint = ensure(mix(h, "#ffffff", .7), "#111111", 9, "#ffffff");
+  const tint2 = ensure(mix(h, "#ffffff", .62), "#111111", 8, "#ffffff");
+  const tint3 = ensure(mix(h, "#ffffff", .45), "#111111", 6, "#ffffff");
+  const strong = ensure(mix(h, "#000000", .12), "#ffffff", 4.5, "#000000");
+  return {
+    "--bg": bg, "--purple-btn": accent, "--sky-dark": accent, "--mission": accent, "--theme-dot": accent, "--link": ensure(accent, bg, 4.5, dark ? "#ffffff" : "#000000"),
+    "--on-accent": onColor(accent), "--on-dark": onColor(accent),
+    "--sky-light": soft, "--on-light": onColor(soft),
+    "--blue-card": card, "--on-blue": onColor(card),
+    "--brown": pageMid, "--darkbrown": pageDeep, "--teal": pageAlt,
+    "--quiz-card": tint, "--yellow": tint2, "--yellow-top": tint3,
+    "--quiz-purple": strong, "--on-quiz-purple": "#fff"
+  };
+}
+const THEME_PROPS = Object.keys(tokens("#888888", false));
 const isDark = () => document.documentElement.dataset.dark === "dark";
 function applyTheme(id) {
   S.theme = id && COLOR_BY[id] ? id : null; save();
   const root = document.documentElement.style;
-  const props = ["--purple-btn", "--sky-dark", "--sky-light", "--mission", "--blue-card", "--bg", "--on-accent", "--on-dark", "--on-light", "--on-blue", "--theme-dot",
-    "--brown", "--darkbrown", "--teal", "--quiz-card", "--yellow", "--yellow-top", "--quiz-purple", "--on-quiz-purple"];
-  if (!S.theme) { props.forEach(p => root.removeProperty(p)); renderColors(); return; }
-  const h = COLOR_BY[S.theme].h;
-  const dark = lum(h) > .42 ? mix(h, "#000000", .25) : h;
-  const light = mix(h, "#ffffff", .55);
-  const set = {
-    "--purple-btn": dark, "--sky-dark": dark, "--sky-light": light, "--mission": dark,
-    "--blue-card": mix(h, "#000000", .08), "--bg": mix(h, isDark() ? "#141417" : "#f2f2f2", isDark() ? .88 : .9),
-    "--on-accent": onColor(dark), "--on-dark": onColor(dark), "--on-light": onColor(light),
-    "--on-blue": onColor(mix(h, "#000000", .08)), "--theme-dot": dark,
-    "--brown": mix(h, "#000000", .3), "--darkbrown": mix(h, "#000000", .5), "--teal": mix(h, "#000000", .42),
-    "--quiz-card": mix(h, "#ffffff", .68), "--yellow": mix(h, "#ffffff", .62), "--yellow-top": mix(h, "#ffffff", .45),
-    "--quiz-purple": mix(h, "#000000", .15), "--on-quiz-purple": onColor(mix(h, "#000000", .15))
-  };
-  Object.entries(set).forEach(([k, v]) => root.setProperty(k, v));
+  if (!S.theme) { THEME_PROPS.forEach(p => root.removeProperty(p)); renderColors(); return; }
+  Object.entries(tokens(COLOR_BY[S.theme].h, isDark())).forEach(([k, v]) => root.setProperty(k, v));
   renderColors();
+}
+function paintWith(el, hex) {
+  const t = tokens(hex, false);
+  ["--darkbrown", "--brown", "--quiz-card", "--purple-btn", "--on-accent"].forEach(k => el.style.setProperty(k, t[k]));
 }
 function unlockColor(id) {
   if (!S.owned.includes(id)) S.owned.push(id);
@@ -551,74 +586,97 @@ document.querySelector("[data-theme-reset]").onclick = () => { applyTheme(null);
   });
 })();
 
+const perfectIn = ids => ids.filter(id => S.best[id] === 3).length;
 const MISSIONS = [
-  { id: "lessons", title: "Completa 3 lezioni", target: 3, xp: 100, badge: "Badge dello studente", go: "lezioni", cta: "Vai alle lezioni",
-    desc: "Completa 3 lezioni di qualsiasi argomento per ottenere nuovi badge e XP per poter sbloccare nuovi colori." },
-  { id: "quiz", title: "Rispondi a 5 quiz", target: 5, xp: 50, badge: "Badge dello studioso", go: "quizhub", cta: "Vai ai quiz",
-    desc: "Completa 5 quiz sui colori o sulle combinazioni per mettere alla prova quello che hai imparato e guadagnare XP." },
-  { id: "days", title: "Accedi 5 giorni di fila", target: 5, xp: 150, badge: "Badge sociale", go: "home", cta: "Torna domani!",
-    desc: "Apri CHROMA per 5 giorni consecutivi: ogni giorno di fila fa crescere la tua streak e ti avvicina al badge." },
-  { id: "colors", title: "Colleziona 10 colori", target: 10, xp: 200, badge: null, go: "quizhub", cta: "Sblocca colori",
-    desc: "Ottieni un punteggio perfetto nei quiz e riscatta i colori: arrivato a 10 colori collezionati ricevi la ricompensa." }
+  { id: "p1", type: "percorso", title: "Primi passi", desc: "Completa la tua prima lezione di psicologia del colore.", target: 1, v: () => S.done.length, xp: 50, color: "rosa", go: "lezioni", cta: "Vai alle lezioni" },
+  { id: "p2", type: "percorso", title: "A metà strada", desc: "Completa 4 lezioni del percorso guidato.", target: 4, v: () => S.done.length, xp: 150, color: "terracotta", go: "lezioni", cta: "Vai alle lezioni" },
+  { id: "p3", type: "percorso", title: "Studente dei colori", desc: "Completa tutte le 8 lezioni del percorso guidato.", target: 8, v: () => S.done.length, xp: 300, color: "carminio", badge: "Badge dello studente", go: "lezioni", cta: "Vai alle lezioni" },
+  { id: "p4", type: "percorso", title: "Primo 3 su 3", desc: "Rispondi correttamente a tutte le domande di un quiz.", target: 1, v: () => perfectIn(Object.keys(S.best)), xp: 100, color: "azzurro", go: "quizhub", cta: "Vai ai quiz" },
+  { id: "p5", type: "percorso", title: "Esperto di psicologia", desc: "Fai 3 su 3 in tutti gli 8 quiz sui colori.", target: 8, v: () => perfectIn(LESSONS.map(l => l.id)), xp: 400, color: "prugna", badge: "Badge dello studioso", go: "quizcat", cta: "Vai ai quiz" },
+  { id: "p6", type: "percorso", title: "Teorico delle armonie", desc: "Leggi la teoria di tutte le 6 combinazioni di colori, fino alla seconda pagina.", target: 6, v: () => S.combosRead.length, xp: 200, color: "salvia", go: "explore", cta: "Vai alle combinazioni" },
+  { id: "p7", type: "percorso", title: "Armonia perfetta", desc: "Fai 3 su 3 in tutti i 6 quiz sulle combinazioni.", target: 6, v: () => perfectIn(COMBOS.map(c => c.id)), xp: 400, color: "bosco", go: "quizcomb", cta: "Vai ai quiz" },
+  { id: "p8", type: "percorso", title: "Creativo", desc: "Crea la tua prima palette personale con i colori sbloccati.", target: 1, v: () => S.myPalettes.length, xp: 100, color: "menta", go: "palette", cta: "Vai alle palette" },
+  { id: "p9", type: "percorso", title: "Grande collezione", desc: "Sblocca 15 colori tra quiz e missioni.", target: 15, v: () => S.owned.length, xp: 300, color: "marrone", go: "colori", cta: "I tuoi colori" },
+  { id: "s1", type: "serie", title: "3 giorni di fila", desc: "Apri CHROMA per 3 giorni consecutivi. Colore speciale!", target: 3, v: () => S.bestStreak, xp: 100, color: "oro", go: "home", cta: "Torna domani" },
+  { id: "s2", type: "serie", title: "Una settimana di colore", desc: "Apri CHROMA per 7 giorni consecutivi. Colore speciale!", target: 7, v: () => S.bestStreak, xp: 200, color: "lavanda", badge: "Badge sociale", go: "home", cta: "Torna domani" },
+  { id: "s3", type: "serie", title: "Due settimane di colore", desc: "Apri CHROMA per 14 giorni consecutivi. Colore speciale!", target: 14, v: () => S.bestStreak, xp: 400, color: "notte", go: "home", cta: "Torna domani" },
+  { id: "d1", type: "giornaliera", title: "Completa o ripassa 1 lezione", desc: "Oggi completa una lezione nuova o ripassane una già fatta.", target: 1, v: () => day().lessons, xp: 40, go: "lezioni", cta: "Vai alle lezioni" },
+  { id: "d2", type: "giornaliera", title: "Rispondi a 2 quiz", desc: "Oggi completa due quiz qualsiasi, anche già fatti.", target: 2, v: () => day().quiz, xp: 60, go: "quizhub", cta: "Vai ai quiz" },
+  { id: "d3", type: "giornaliera", title: "Fai un quiz perfetto", desc: "Oggi rispondi correttamente a tutte le domande di un quiz.", target: 1, v: () => day().perfect, xp: 80, go: "quizhub", cta: "Vai ai quiz" },
+  { id: "d4", type: "giornaliera", title: "Studia 5 minuti", desc: "Resta nell'app a studiare almeno 5 minuti oggi.", target: 5, v: () => Math.floor(day().time / 60), xp: 50, go: "lezioni", cta: "Studia ora" }
 ];
-const prog = m => Math.min(m.target, m.id === "colors" ? S.owned.length : (S.m[m.id] || 0));
+MISSIONS.forEach(m => { if (m.color) COLOR_BY[m.color].hint = (m.type === "serie" ? "Serie: " : "Missione: ") + m.title; });
+const prog = m => Math.min(m.target, m.v());
+const isClaimed = m => m.type === "giornaliera" ? day().claimed.includes(m.id) : S.claimed.includes(m.id);
+const isReady = m => prog(m) >= m.target && !isClaimed(m);
 
+function missionItem(m) {
+  const p = prog(m), claimed = isClaimed(m), ready = isReady(m), c = m.color && COLOR_BY[m.color];
+  const b = document.createElement("button");
+  b.className = "m-item" + (ready ? " ready" : "") + (claimed ? " claimed" : "");
+  b.innerHTML = `<div class="top"><span>${m.title}</span><b>+ ${m.xp} XP</b></div>
+    <div class="m-sub">${c ? `<i style="background:${c.h}"></i>${c.n}` : m.badge ? "" : "Solo XP"}${m.badge ? ` · ${m.badge}` : ""}<em>${p} / ${m.target}</em></div>
+    <div class="mbar"><i style="width:${p / m.target * 100}%"></i></div>
+    ${ready ? '<div class="tag">Completata! Tocca per riscattare</div>' : claimed ? '<div class="tag">Riscattata ✓</div>' : ""}`;
+  b.onclick = () => openMission(m.id);
+  return b;
+}
 function renderMissions() {
-  const list = document.querySelector("[data-missions]"), rw = document.querySelector("[data-rewards]");
-  if (!list) return;
-  list.innerHTML = ""; rw.innerHTML = "";
-  MISSIONS.forEach(m => {
-    const p = prog(m), claimed = S.claimed.includes(m.id), ready = p >= m.target && !claimed;
-    const item = () => {
-      const b = document.createElement("button");
-      b.className = "m-item" + (ready ? " ready" : "") + (claimed ? " claimed" : "");
-      b.innerHTML = `<div class="top"><span>${m.title}</span><b>+ ${m.xp} XP</b></div>
-        <div class="mbar"><i style="width:${p / m.target * 100}%"></i></div>
-        ${ready ? '<div class="tag">Completata! Tocca per riscattare</div>' : claimed ? '<div class="tag">Riscattata ✓</div>' : ""}`;
-      b.onclick = () => openMission(m.id);
-      return b;
-    };
-    list.appendChild(item());
-    if (m.badge) {
-      const wrap = document.createElement("div");
-      wrap.appendChild(item());
-      const bd = document.createElement("div");
-      bd.className = "rw-badge";
-      const hasB = S.badges.includes(m.badge);
-      const bdef = BADGES.find(x => x.n === m.badge);
-      bd.innerHTML = `<div class="rw-tile${hasB ? " got" : ""}">${hasB ? badgeArt(bdef.icon, bdef.c) : '<img alt="">'}</div><span>${m.badge}<small>${hasB ? "Ottenuto" : `${p} / ${m.target}`}</small></span>`;
-      if (!hasB) setImg(bd.querySelector("img"), "badge-bloccato.svg");
-      wrap.appendChild(bd);
-      rw.appendChild(wrap);
-    }
+  const pane = t => document.querySelector(`[data-missions="${t}"]`);
+  if (!pane("percorso")) return;
+  ["percorso", "giornaliera", "serie"].forEach(t => {
+    const el = pane(t); el.innerHTML = "";
+    MISSIONS.filter(m => m.type === t).sort((a, b) => isClaimed(a) - isClaimed(b)).forEach(m => el.appendChild(missionItem(m)));
   });
+  const daily = MISSIONS.filter(m => m.type === "giornaliera");
+  const doneToday = daily.filter(isClaimed).length, readyAll = MISSIONS.filter(isReady).length;
+  const ch = document.querySelector("[data-ch-sub]");
+  if (ch) ch.textContent = doneToday === daily.length ? "Hai completato le missioni di oggi! 🎉" : `Missioni di oggi: ${doneToday} / ${daily.length} completate`;
+  const badge = document.querySelector("[data-m-ready]");
+  if (badge) { badge.textContent = readyAll; badge.hidden = !readyAll; }
+  const next = MISSIONS.find(m => m.type === "percorso" && !isClaimed(m));
+  const am = document.querySelector("[data-am]");
+  if (am) {
+    am.hidden = !next;
+    if (next) {
+      am.onclick = () => openMission(next.id);
+      document.querySelector("[data-am-title]").textContent = next.title + (isReady(next) ? " ✓" : "");
+      document.querySelector("[data-am-n]").textContent = `${prog(next)} / ${next.target}`;
+      document.querySelector("[data-am-xp]").textContent = `+ ${next.xp} XP`;
+      document.querySelector("[data-am-bar]").style.width = (prog(next) / next.target * 100) + "%";
+    }
+  }
 }
 function openMission(id) {
   const m = MISSIONS.find(x => x.id === id), scr = document.getElementById("missione"), $ = q => scr.querySelector(q);
-  const p = prog(m), claimed = S.claimed.includes(id), ready = p >= m.target && !claimed;
+  const p = prog(m), claimed = isClaimed(m), ready = isReady(m), c = m.color && COLOR_BY[m.color];
+  $("[data-md-kind]").textContent = { percorso: "Missione del percorso", giornaliera: "Missione giornaliera", serie: "Missione speciale" }[m.type];
   $("[data-md-title]").textContent = m.title;
   $("[data-md-desc]").textContent = m.desc;
   $("[data-md-n]").textContent = `${p} / ${m.target}`;
   $("[data-md-bar]").style.width = (p / m.target * 100) + "%";
   $("[data-md-xp]").textContent = `+ ${m.xp} XP`;
+  $("[data-md-extra]").innerHTML = c ? `<i style="background:${c.h}"></i>${c.n}` : m.badge ? "" : "Solo XP";
+  if (m.badge) $("[data-md-extra]").innerHTML += (c ? " · " : "") + m.badge;
+  const pic = $("[data-md-pic]"), bdef = m.badge && BADGES.find(x => x.n === m.badge);
+  pic.innerHTML = c ? `<span class="md-swatch${claimed ? "" : " dim"}" style="background:${c.h}"></span>` : bdef ? badgeArt(bdef.icon, bdef.c) : `<span class="md-xp">XP</span>`;
   const btn = $("[data-md-btn]");
-  btn.disabled = claimed || (m.id === "days" && !ready);
+  btn.disabled = claimed || (m.type === "serie" && !ready);
   btn.textContent = claimed ? "Già riscattata" : ready ? "Riscatta reward" : m.cta;
   btn.onclick = () => {
-    if (ready) {
-      S.claimed.push(id); S.missionsDone++;
-      if (m.badge && !S.badges.includes(m.badge)) S.badges.push(m.badge);
-      const pool = COLORS.filter(c => c.src === "reward" && !S.owned.includes(c.id));
-      const won = pool.length ? pool[Math.floor(Math.random() * pool.length)] : null;
-      if (won) unlockColor(won.id);
-      const rc = document.querySelector("[data-ro-color]");
-      rc.textContent = won ? "+ " + won.n : "+ colore casuale";
-      rc.style.setProperty("--won", won ? won.h : "transparent");
-      addXP(m.xp);
-      document.querySelector("[data-ro-xp]").textContent = `+ ${m.xp} XP`;
-      document.querySelector("[data-ro-badge]").textContent = m.badge ? `+ ${m.badge}` : "";
-      go("rewardok");
-    } else go(m.go);
+    if (!ready) return go(m.go);
+    if (m.type === "giornaliera") day().claimed.push(id); else S.claimed.push(id);
+    S.missionsDone++;
+    if (m.badge && !S.badges.includes(m.badge)) S.badges.push(m.badge);
+    if (c) unlockColor(c.id);
+    const rc = document.querySelector("[data-ro-color]");
+    rc.textContent = c ? "+ " + c.n : "";
+    rc.hidden = !c;
+    rc.style.setProperty("--won", c ? c.h : "transparent");
+    addXP(m.xp);
+    document.querySelector("[data-ro-xp]").textContent = `+ ${m.xp} XP`;
+    document.querySelector("[data-ro-badge]").textContent = m.badge ? `+ ${m.badge}` : "";
+    go("rewardok");
   };
   go("missione");
 }
@@ -631,9 +689,9 @@ document.addEventListener("click", e => {
 
 const BADGES = [
   { n: "Color Explorer", d: "Sblocca 10 colori", icon: "palette", c: "#2e9fc0", got: () => S.owned.length >= 10 },
-  { n: "Badge dello studente", d: "Completa 3 lezioni", icon: "book", c: "#e07a2c", got: () => S.badges.includes("Badge dello studente") },
-  { n: "Badge dello studioso", d: "Rispondi a 5 quiz", icon: "check", c: "#6b3fb8", got: () => S.badges.includes("Badge dello studioso") },
-  { n: "Badge sociale", d: "Accedi 5 giorni di fila", icon: "flame", c: "#d0112b", got: () => S.badges.includes("Badge sociale") },
+  { n: "Badge dello studente", d: "Completa tutte le lezioni", icon: "book", c: "#e07a2c", got: () => S.badges.includes("Badge dello studente") },
+  { n: "Badge dello studioso", d: "3/3 in tutti i quiz sui colori", icon: "check", c: "#6b3fb8", got: () => S.badges.includes("Badge dello studioso") },
+  { n: "Badge sociale", d: "7 giorni di fila", icon: "flame", c: "#d0112b", got: () => S.badges.includes("Badge sociale") },
   { n: "Maestro del colore", d: "Raggiungi il livello 10", icon: "crown", c: "#c9960f", got: () => S.level >= 10 },
   { n: "Collezionista", d: "Sblocca tutti i colori", icon: "gem", c: "#1f9d55", got: () => S.owned.length >= COLORS.length }
 ];
@@ -706,16 +764,13 @@ function openPalette(k) {
 }
 
 (() => {
-  const today = new Date().toDateString();
-  if (S.lastDay === today) return;
+  const t = dayKey();
+  if (S.lastDay === t) return;
   const y = new Date(Date.now() - 864e5).toDateString();
-  if (S.lastDay === y) { S.m.days++; S.streak++; }
-  else if (S.lastDay) { S.m.days = 1; S.streak = 1; }
-  if (S.lastDay) {
-    S.m.lessons = 0; S.m.quiz = 0;
-    S.claimed = S.claimed.filter(x => x !== "lessons" && x !== "quiz");
-  }
-  S.lastDay = today; save();
+  if (S.lastDay === y) S.streak++;
+  else if (S.lastDay) S.streak = 1;
+  S.bestStreak = Math.max(S.bestStreak || 1, S.streak);
+  S.lastDay = t; day(); save();
 })();
 
 function filterBadges(btn) {
