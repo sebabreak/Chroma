@@ -514,6 +514,7 @@
       <button class="back" data-back><img data-a="right-arrow.png" alt="Indietro"></button>
       <h1 class="page-title">I tuoi colori</h1>
       <p class="subtitle">Tocca un colore sbloccato per usarlo come tema di tutta l'app.</p>
+      <div class="secrets" data-secrets></div>
       <div class="card theme-preview" data-theme-preview>
         <div><b data-theme-name>Tema originale</b><span>Tema attivo</span></div>
         <button class="btn-primary sm" data-theme-reset>Ripristina</button>
@@ -580,6 +581,7 @@
         <button data-sim="missions">Completa le missioni</button>
         <button data-sim="colors">Sblocca tutti i colori</button>
         <button data-sim="badges">Sblocca tutti i badge</button>
+        <button data-sim="secret" class="wide">✨ Sblocca i colori segreti</button>
         <button data-sim="expert" class="wide">⭐ Simula utente esperto</button>
         <button data-sim="fresh" class="wide danger">↺ Nuovo utente (azzera tutto)</button>
       </div>
@@ -615,6 +617,18 @@
       <ol class="timeline" data-timeline></ol>
     </div>
   </section>
+
+  <div class="sheet-bg center secret-bg" data-secret-pop hidden>
+    <div class="secret-pop">
+      <div class="sp-dots" data-sp-dots></div>
+      <div class="sp-ring"><img data-a="chroma-faccia.png" alt=""></div>
+      <p>Hai completato CHROMA</p>
+      <h2>Colori segreti sbloccati!</h2>
+      <span>4 colorazioni animate, riservate a chi ha finito tutto il percorso.</span>
+      <button class="btn-primary" data-sp-go>Scoprili</button>
+      <button class="btn-link" data-sp-close>Più tardi</button>
+    </div>
+  </div>
 
   <div class="sheet-bg center" data-levelup hidden>
     <div class="levelup">
