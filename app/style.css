@@ -704,3 +704,19 @@ body { align-items: stretch; justify-content: center; }
 }
 .challenge { height: auto; padding-bottom: 12px; }
 .challenge .glass-btn { position: static; display: block; width: auto; min-width: 150px; margin: 8px 0 0 auto; }
+
+.teal, .teal .scroll { background: var(--teal, #1f7a8c); }
+.cat-combo { background: var(--teal, #1f7a8c); }
+.purple { background: var(--quiz-purple); color: var(--on-quiz-purple, #fff); }
+.quiz-card { transition: background-color .4s; }
+.qstat { position: absolute; right: 36px; top: 9px; display: inline-flex; align-items: center; gap: 5px; font: 600 10px/14px var(--roboto);
+  padding: 3px 8px; border-radius: 10px; }
+.qstat:empty { display: none; }
+.qstat i { width: 10px; height: 10px; border-radius: 50%; box-shadow: 0 0 0 1px rgba(0,0,0,.15); }
+.qstat.ok { background: #e3f6dc; color: #2e7d32; }
+.qstat.todo { background: #fff3cd; color: #8a5a00; }
+.qstat.part { background: #eef0f3; color: #555; }
+.lesson .info { padding-right: 60px; }
+.cat-prog { display: inline-block; margin-top: 8px; font: 600 11px/16px var(--roboto); background: rgba(255,255,255,.22); padding: 2px 8px; border-radius: 8px; }
+[data-dark="dark"] .qstat.part { background: #2c2c33; color: #ccc; }
+.qstat { top: auto; bottom: 10px; right: 36px; }
