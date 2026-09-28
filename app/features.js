@@ -216,7 +216,7 @@ function renderTimeline() {
     const got = l <= S.level, t = S.titles.find(x => x.l === l);
     const li = document.createElement("li");
     li.className = (got ? "got" : "locked") + (got && levelTitle(l) === shownTitle() ? " shown" : "") + (l === S.level + 1 ? " next" : "");
-    li.innerHTML = `<span class="tl-dot" style="--c:${levelColor(l)}">${got ? l : "🔒"}</span>
+    li.innerHTML = `<span class="tl-dot" style="--c:${levelColor(l)}">${got ? l : '<img class="lk" src="assets/lucchetto.png" alt="">'}</span>
       <div><b>${got || l === S.level + 1 ? levelTitle(l) : "???"}</b>
       <small>${got ? "Livello " + l + " · " + fmt(t?.d) : l === S.level + 1 ? `Prossimo · mancano ${xpNeed(S.level) - S.xp} XP` : "Livello " + l}</small></div>
       ${got && levelTitle(l) === shownTitle() ? '<em>In mostra</em>' : ""}`;
@@ -237,6 +237,9 @@ const AV_ICONS = {
   crown: '<path d="M22 66l-4-32 18 14 14-22 14 22 18-14-4 32z" fill="#fff"/><rect x="22" y="70" width="56" height="8" rx="3" fill="#fff"/><circle cx="50" cy="56" r="4" fill="#d0112b"/>',
   rainbow: '<path d="M14 70a36 36 0 0 1 72 0" stroke="#e11d1d" stroke-width="7" fill="none"/><path d="M22 70a28 28 0 0 1 56 0" stroke="#ffbf00" stroke-width="7" fill="none"/><path d="M30 70a20 20 0 0 1 40 0" stroke="#00a86b" stroke-width="7" fill="none"/><path d="M38 70a12 12 0 0 1 24 0" stroke="#1434e0" stroke-width="7" fill="none"/>'
 };
+const AV_IMG = { palette: "avatar-tavolozza.png", brush: "avatar-pennello.png", prism: "avatar-prisma.png", moon: "avatar-luna.png",
+  leaf: "avatar-foglia.png", eye: "avatar-occhio.png", crown: "avatar-corona.png", rainbow: "avatar-arcobaleno.png" };
+const AV_FULL = ["prism"];
 const AVATARS = [
   { id: "default", lv: 1, n: "Classico" }, { id: "chroma", lv: 1, n: "Chroma" },
   { id: "palette", lv: 1, bg: "#7b2482", n: "Tavolozza" }, { id: "brush", lv: 1, bg: "#1f4fb8", n: "Pennello" },
@@ -249,8 +252,9 @@ function avatarHTML(a) {
   a = a || S.avatar || { type: "preset", id: "default" };
   if (a.type === "photo") return `<img src="${a.data}" alt="La tua foto">`;
   if (a.id === "default") return `<span class="av-default"><img src="assets/ic-profilo.png" alt=""></span>`;
-  if (a.id === "chroma") return `<span class="av-chroma"><img src="assets/chroma-faccia.png" alt=""></span>`;
+  if (a.id === "chroma") return `<span class="av-chroma"><img src="assets/avatar-chroma.png" alt=""></span>`;
   const p = AVATARS.find(x => x.id === a.id) || AVATARS[0];
+  if (AV_IMG[p.id]) return `<span class="av-img${AV_FULL.includes(p.id) ? " full" : ""}" style="background:${p.bg}"><img src="assets/${AV_IMG[p.id]}" alt=""></span>`;
   return `<svg viewBox="0 0 100 100"><rect width="100" height="100" fill="${p.bg}"/>${AV_ICONS[p.id] || ""}</svg>`;
 }
 function renderAvatars() {
