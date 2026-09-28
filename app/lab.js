@@ -87,10 +87,12 @@ function drawLab() {
     el.style.background = hex; el.style.color = fg;
     el.querySelector("small").textContent = `${r.toFixed(1)}:1 · ${r >= 7 ? "AAA ✓" : r >= 4.5 ? "AA ✓" : r >= 3 ? "Solo testi grandi" : "Poco leggibile ✗"}`;
   });
-  const marks = q("[data-wheel-marks]");
+  const wheel = q("[data-wheel]"), L = LAB.l;
+  wheel.style.background = `radial-gradient(circle closest-side, hsl(0 0% ${L}%) 40%, hsl(0 0% ${L}% / 0) 100%), conic-gradient(${Array.from({ length: 13 }, (_, i) => `hsl(${i * 30} 100% ${L}%)`).join(",")})`;
+  const marks = q("[data-wheel-marks]"), rr = 20 + 30 * LAB.s / 100;
   marks.innerHTML = [0, ...HARM[LAB.harm]].map((d, i) => {
     const a = (LAB.h + d) * Math.PI / 180;
-    return `<i class="${i ? "" : "main"}" style="left:${50 + 42.5 * Math.sin(a)}%;top:${50 - 42.5 * Math.cos(a)}%;background:${simulate(labHex(LAB.h + d), LAB.cvd)}"></i>`;
+    return `<i class="${i ? "" : "main"}" style="left:${50 + rr * Math.sin(a)}%;top:${50 - rr * Math.cos(a)}%;background:${simulate(labHex(LAB.h + d), LAB.cvd)}"></i>`;
   }).join("");
   q("[data-harm-row]").innerHTML = labColors().map(c => {
     const sc = simulate(c, LAB.cvd);
@@ -107,12 +109,14 @@ function openLab(hex) {
   const pick = e => {
     const r = wheel.getBoundingClientRect(), p = e.touches ? e.touches[0] : e;
     const dx = p.clientX - r.left - r.width / 2, dy = p.clientY - r.top - r.height / 2;
-    if (Math.hypot(dx, dy) < r.width * .22) return;
+    const d = Math.hypot(dx, dy) / r.width;
+    if (e.type === "pointerdown" && d < .2) return false;
     LAB.h = Math.round((Math.atan2(dx, -dy) * 180 / Math.PI + 360) % 360);
+    LAB.s = Math.round(Math.max(0, Math.min(1, (d - .2) / .3)) * 100);
     drawLab();
   };
   let drag = false;
-  wheel.addEventListener("pointerdown", e => { drag = true; wheel.setPointerCapture(e.pointerId); pick(e); });
+  wheel.addEventListener("pointerdown", e => { if (pick(e) === false) return; drag = true; wheel.setPointerCapture(e.pointerId); });
   wheel.addEventListener("pointermove", e => { if (drag) pick(e); });
   wheel.addEventListener("pointerup", () => drag = false);
   wheel.addEventListener("pointercancel", () => drag = false);
@@ -166,7 +170,7 @@ function kmeans(px, k) {
   }
   return cent.map((c, i) => ({ hex: toHex(c), share: cnt[i] / px.length })).filter(c => c.share > .01).sort((a, b) => b.share - a.share);
 }
-function readPhoto(cols) {
+function photoStats(cols) {
   let warm = 0, cool = 0, neutral = 0, sat = 0, lig = 0;
   cols.forEach(({ hex, share }) => {
     const [h, s, l] = rgb2hsl(...fromHex(hex));
@@ -174,50 +178,77 @@ function readPhoto(cols) {
     if (s < 15 || l < 8 || l > 94) neutral += share;
     else if (h < 70 || h >= 300) warm += share;
     else if (h >= 150 && h < 300) cool += share;
-    else neutral += share * .5, warm += share * .25, cool += share * .25;
+    else { neutral += share * .5; warm += share * .25; cool += share * .25; }
   });
+  const lums = cols.map(c => lum(c.hex)), light = cols[lums.indexOf(Math.max(...lums))].hex, dark = cols[lums.indexOf(Math.min(...lums))].hex;
+  const hues = cols.filter(c => { const [, s, l] = rgb2hsl(...fromHex(c.hex)); return s >= 20 && l > 10 && l < 92; }).map(c => rgb2hsl(...fromHex(c.hex))[0]);
+  let spread = 0;
+  hues.forEach(a => hues.forEach(b => { const d = Math.abs(a - b) % 360; spread = Math.max(spread, Math.min(d, 360 - d)); }));
+  const harm = hues.length < 2 ? ["Neutra", "Pochi colori saturi: domina la luce più della tinta."]
+    : spread <= 40 ? ["Monocromatica / analoga", "Le tinte sono vicine sulla ruota: l'insieme è coerente e armonioso."]
+    : spread >= 150 ? ["Con contrasto complementare", "Ci sono tinte quasi opposte sulla ruota: l'immagine ha forte contrasto e vivacità."]
+    : ["Varia", "Le tinte sono distribuite sulla ruota senza uno schema preciso."];
+  return { warm, cool, neutral, sat, lig, light, dark, ratio: contrast(light, dark), harm };
+}
+function readPhoto(cols, st) {
   const pct = v => Math.round(v * 100) + "%";
-  const main = cols[0], nm = nearest(main.hex), emo = FAM_EMO[familyOf(nm.id)];
-  const parts = [];
-  if (warm > cool && warm > neutral) parts.push(`Prevalgono i colori caldi (${pct(warm)}): l'immagine comunica energia, calore e vicinanza.`);
-  else if (cool > warm && cool > neutral) parts.push(`Prevalgono i colori freddi (${pct(cool)}): l'immagine trasmette calma, distanza e riflessione.`);
-  else parts.push(`Prevalgono i toni neutri (${pct(neutral)}): l'immagine risulta sobria ed equilibrata, e i pochi colori accesi attirano l'attenzione.`);
-  parts.push(sat > 55 ? "I colori sono molto saturi: l'effetto è vivace e dinamico." : sat > 30 ? "La saturazione è media: l'insieme è armonioso senza essere aggressivo." : "I colori sono tenui: l'atmosfera è delicata, quasi da mezzitoni.");
-  parts.push(lig > 62 ? "L'immagine è luminosa e leggera." : lig > 38 ? "La luminosità è equilibrata." : "L'immagine è scura e raccolta, con un tono più intenso o misterioso.");
+  const nm = nearest(cols[0].hex), emo = FAM_EMO[familyOf(nm.id)], parts = [];
+  if (st.warm > st.cool && st.warm > st.neutral) parts.push(`Prevalgono i colori caldi (${pct(st.warm)}): l'immagine comunica energia, calore e vicinanza.`);
+  else if (st.cool > st.warm && st.cool > st.neutral) parts.push(`Prevalgono i colori freddi (${pct(st.cool)}): l'immagine trasmette calma, distanza e riflessione.`);
+  else parts.push(`Prevalgono i toni neutri (${pct(st.neutral)}): l'immagine risulta sobria ed equilibrata, e i pochi colori accesi attirano l'attenzione.`);
+  parts.push(st.sat > 55 ? "I colori sono molto saturi: l'effetto è vivace e dinamico." : st.sat > 30 ? "La saturazione è media: l'insieme è armonioso senza essere aggressivo." : "I colori sono tenui: l'atmosfera è delicata, quasi da mezzitoni.");
+  parts.push(st.lig > 62 ? "L'immagine è luminosa e leggera." : st.lig > 38 ? "La luminosità è equilibrata." : "L'immagine è scura e raccolta, con un tono più intenso o misterioso.");
   parts.push(`Il colore principale è vicino al tono “${nm.n}” e richiama ${emo.join(", ")}.`);
   return parts.join(" ");
 }
+function meter(label, value, txt, bg) {
+  return `<div class="ph-stat"><div class="ph-sh"><span>${label}</span><b>${txt}</b></div><div class="ph-track" style="background:${bg}"><i style="left:${Math.max(0, Math.min(100, value))}%"></i></div></div>`;
+}
 function drawPhoto() {
-  const v = PHOTO.cvd;
+  const v = PHOTO.cvd, st = PHOTO.st;
   q("[data-photo-img]").style.filter = v === "none" ? "" : `url(#cvd-${v})`;
   q("[data-photo-bar]").innerHTML = PHOTO.cols.map(c => `<i style="flex:${c.share};background:${simulate(c.hex, v)}"></i>`).join("");
-  q("[data-photo-list]").innerHTML = PHOTO.cols.map(c => {
+  q("[data-photo-list]").innerHTML = PHOTO.cols.map((c, k) => {
     const nm = nearest(c.hex), sc = simulate(c.hex, v);
-    return `<button class="pc" data-labhex="${c.hex}"><i style="background:${sc}"></i><span><b>${c.hex}</b><small>${Math.round(c.share * 100)}% · somiglia a ${nm.n} · ${FAM_EMO[familyOf(nm.id)].slice(0, 2).join(", ")}</small></span><em>›</em></button>`;
+    return `<button class="pc" data-labhex="${c.hex}"><i style="background:${sc}"></i><span><b>${nm.n}${k ? "" : " · principale"}</b><small>${c.hex} · ${FAM_EMO[familyOf(nm.id)].slice(0, 2).join(", ")}</small><u style="width:${Math.max(4, Math.round(c.share * 100))}%;background:${sc}"></u></span><em>${Math.round(c.share * 100)}%</em></button>`;
   }).join("");
+  const t = Math.round((st.warm - st.cool + 1) * 50);
+  const tr = st.ratio;
+  q("[data-photo-stats]").innerHTML =
+    meter("Temperatura", 100 - t, st.warm > st.cool + .1 ? "Calda" : st.cool > st.warm + .1 ? "Fredda" : "Equilibrata", "linear-gradient(90deg,#ff7a00,#f2d9b5 50%,#1f5fe0)") +
+    meter("Saturazione", st.sat, Math.round(st.sat) + "%", "linear-gradient(90deg,#9a9a9a,#e3242b)") +
+    meter("Luminosità", st.lig, Math.round(st.lig) + "%", "linear-gradient(90deg,#111,#888 50%,#fff)") +
+    `<div class="ph-stat ph-row"><div class="ph-ct" style="background:${simulate(st.dark, v)};color:${simulate(st.light, v)}">Aa</div><div><div class="ph-sh"><span>Contrasto interno</span><b>${tr.toFixed(1)}:1</b></div><small>${tr >= 7 ? "Molto forte: luci e ombre ben separate." : tr >= 4.5 ? "Buono: la foto ha una chiara gerarchia di luce." : tr >= 2.5 ? "Medio: toni abbastanza ravvicinati." : "Basso: immagine piatta e morbida."}</small></div></div>` +
+    `<div class="ph-stat ph-row"><div class="ph-harm">${PHOTO.cols.map(c => `<i style="background:${simulate(c.hex, v)}"></i>`).join("")}</div><div><div class="ph-sh"><span>Armonia</span><b>${st.harm[0]}</b></div><small>${st.harm[1]}</small></div></div>`;
+}
+function analyze(src, done) {
+  const img = new Image();
+  img.onload = () => {
+    const c = document.createElement("canvas"), n = 140, k = Math.min(1, n / Math.max(img.width, img.height));
+    c.width = Math.max(1, Math.round(img.width * k)); c.height = Math.max(1, Math.round(img.height * k));
+    const ctx = c.getContext("2d", { willReadFrequently: true }); ctx.drawImage(img, 0, 0, c.width, c.height);
+    const d = ctx.getImageData(0, 0, c.width, c.height).data, px = [];
+    for (let i = 0; i < d.length; i += 4) if (d[i + 3] > 128) px.push([d[i], d[i + 1], d[i + 2]]);
+    if (!px.length) return toast("Immagine non valida");
+    PHOTO.cols = kmeans(px, 5); PHOTO.st = photoStats(PHOTO.cols);
+    q("[data-photo-img]").src = src;
+    q("[data-photo-box]").hidden = false; q("[data-photo-intro]").hidden = true;
+    q("[data-photo-read]").textContent = readPhoto(PHOTO.cols, PHOTO.st);
+    drawPhoto();
+    if (!S.photoDone) { S.photoDone = true; addXP(0); }
+    q("#foto .scroll").scrollTo({ top: q("[data-photo-box]").offsetTop - 70, behavior: "smooth" });
+    if (done) done();
+  };
+  img.onerror = () => toast("Non riesco a leggere questa immagine");
+  img.src = src;
 }
 (() => {
-  q("[data-photo]").addEventListener("change", e => {
+  document.querySelectorAll("[data-photo]").forEach(inp => inp.addEventListener("change", e => {
     const file = e.target.files[0]; if (!file) return;
-    const url = URL.createObjectURL(file), img = new Image();
-    img.onload = () => {
-      const c = document.createElement("canvas"), n = 140, k = Math.min(1, n / Math.max(img.width, img.height));
-      c.width = Math.max(1, Math.round(img.width * k)); c.height = Math.max(1, Math.round(img.height * k));
-      const ctx = c.getContext("2d", { willReadFrequently: true }); ctx.drawImage(img, 0, 0, c.width, c.height);
-      const d = ctx.getImageData(0, 0, c.width, c.height).data, px = [];
-      for (let i = 0; i < d.length; i += 4) if (d[i + 3] > 128) px.push([d[i], d[i + 1], d[i + 2]]);
-      if (!px.length) return toast("Immagine non valida");
-      PHOTO.cols = kmeans(px, 5);
-      q("[data-photo-img]").src = url;
-      q("[data-photo-box]").hidden = false;
-      q("[data-photo-read]").textContent = readPhoto(PHOTO.cols);
-      drawPhoto();
-      if (!S.photoDone) { S.photoDone = true; addXP(0); }
-      e.target.value = "";
-    };
-    img.onerror = () => toast("Non riesco a leggere questa immagine");
-    img.src = url;
-  });
+    analyze(URL.createObjectURL(file), () => e.target.value = "");
+  }));
+  document.querySelectorAll("[data-sample]").forEach(b => b.onclick = () => analyze("assets/" + b.dataset.sample));
+  q("[data-photo-again]").onclick = () => { q("[data-photo-box]").hidden = true; q("[data-photo-intro]").hidden = false; q("#foto .scroll").scrollTo({ top: 0, behavior: "smooth" }); };
   q("[data-pcvd]").addEventListener("click", e => {
     const b = e.target.closest("button"); if (!b) return;
     q("[data-pcvd]").querySelectorAll("button").forEach(x => x.classList.toggle("on", x === b));
