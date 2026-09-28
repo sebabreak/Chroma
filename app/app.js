@@ -469,7 +469,7 @@ function openLesson(id) {
 }
 
 const isCombo = id => COMBOS.some(c => c.id === id);
-const quizOpen = id => isCombo(id) ? S.combosRead.includes(id) : S.done.includes(id);
+const quizOpen = id => (S.best || {})[id] != null || (isCombo(id) ? S.combosRead.includes(id) : S.done.includes(id));
 function openTheory(id) { isCombo(id) ? openCombo(id) : openLesson(id); }
 function openQuiz(id) {
   const l = LESSONS.find(x => x.id === id) || COMBOS.find(x => x.id === id);
