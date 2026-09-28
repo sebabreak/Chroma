@@ -1,7 +1,7 @@
 {
   "name": "CHROMA",
   "short_name": "CHROMA",
-  "description": "L'app che ti insegna il vero significato dei colori. Learn. Unlock. Use.",
+  "description": "L'app che ti insegna i significati dei colori. Learn. Unlock. Use.",
   "lang": "it",
   "start_url": "./index.html",
   "scope": "./",
