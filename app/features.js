@@ -32,10 +32,11 @@ function renderPalettes() {
     ["Apri", () => openPalette(k)],
     ["Crea una palette simile", () => openEditor(null, p.n + " (mia)")]
   ])));
-  S.myPalettes.forEach(p => add(p.n, p.c.map(id => COLOR_BY[id]?.h || "#ccc"), () => openMyPalette(p.id), () => sheet(p.n, [
+  S.myPalettes.forEach(p => add(p.n, p.c.map(id => colorOf(id)?.h || "#ccc"), () => openMyPalette(p.id), () => sheet(p.n, [
     ["Apri", () => openMyPalette(p.id)],
     ["Modifica", () => openEditor(p.id)],
-    ["Usa il primo colore come tema", () => { applyTheme(p.c[0]); toast("Tema “" + COLOR_BY[p.c[0]].n + "” applicato"); }],
+    COLOR_BY[p.c[0]] ? ["Usa il primo colore come tema", () => { applyTheme(p.c[0]); toast("Tema “" + COLOR_BY[p.c[0]].n + "” applicato"); }]
+      : ["Apri nel Laboratorio", () => openLab(p.c[0])],
     ["Elimina", () => confirmBox("Eliminare la palette?", `“${p.n}” verrà cancellata.`, () => {
       S.myPalettes = S.myPalettes.filter(x => x.id !== p.id); save(); renderPalettes(); toast("Palette eliminata");
     }), "danger"]
@@ -53,18 +54,18 @@ openPalette = k => {
 
 function openMyPalette(id) {
   const p = S.myPalettes.find(x => x.id === id), scr = $$("#palettedet");
-  const cols = p.c.map(c => COLOR_BY[c]).filter(Boolean);
+  const cols = p.c.map(colorOf).filter(Boolean), own = cols.some(c => COLOR_BY[c.id]);
   $$("[data-pal-title]", scr).textContent = p.n;
   const dots = $$("[data-pal-dots]", scr);
   dots.innerHTML = "";
   cols.forEach(c => {
     const i = document.createElement("button");
-    i.className = "pal-dot-btn"; i.style.background = c.h; i.title = "Usa " + c.n + " come tema";
-    i.onclick = () => { applyTheme(c.id); toast("Tema “" + c.n + "” applicato"); };
+    i.className = "pal-dot-btn"; i.style.background = c.h; i.title = COLOR_BY[c.id] ? "Usa " + c.n + " come tema" : "Apri " + c.n + " nel Laboratorio";
+    i.onclick = () => COLOR_BY[c.id] ? (applyTheme(c.id), toast("Tema “" + c.n + "” applicato")) : openLab(c.h);
     dots.appendChild(i);
   });
   $$(".pal-card h3", scr).textContent = "La tua palette";
-  $$("[data-pal-text]", scr).textContent = `Creata da te con ${cols.length} colori sbloccati. Tocca un colore qui sopra per usarlo come tema dell'app.`;
+  $$("[data-pal-text]", scr).textContent = own ? `Creata da te con ${cols.length} colori. Tocca un colore sbloccato qui sopra per usarlo come tema dell'app, o un codice per aprirlo nel Laboratorio.` : `Creata da te con ${cols.length} colori. Tocca un colore qui sopra per aprirlo nel Laboratorio e scoprirne i codici.`;
   $$(".pal-emo-h", scr).textContent = "Colori";
   $$("[data-pal-emo]", scr).innerHTML = cols.map(c => `<span style="background:${c.h};color:${onColor(c.h)}">${c.n}</span>`).join("");
   scr.querySelectorAll(".pal-card")[1].hidden = true;
@@ -83,12 +84,12 @@ function openEditor(id, suggestedName = "") {
 }
 function drawEditor() {
   $$("[data-pe-preview]").innerHTML = Array.from({ length: 6 }, (_, i) =>
-    `<i style="background:${picked[i] ? COLOR_BY[picked[i]].h : "transparent"}" class="${picked[i] ? "" : "empty"}"></i>`).join("");
+    `<i style="background:${picked[i] ? colorOf(picked[i]).h : "transparent"}" class="${picked[i] ? "" : "empty"}"></i>`).join("");
   $$("[data-pe-count]").textContent = `${picked.length} / 6`;
   const g = $$("[data-pe-grid]");
   g.innerHTML = "";
-  byHue(S.owned).forEach(id => {
-    const c = COLOR_BY[id], b = document.createElement("button");
+  [...picked.filter(id => !COLOR_BY[id]), ...byHue(S.owned)].forEach(id => {
+    const c = colorOf(id), b = document.createElement("button");
     b.className = "sw" + (picked.includes(id) ? " cur" : "");
     b.innerHTML = `<i style="background:${c.h}"></i><span>${c.n}</span>`;
     b.onclick = () => {
@@ -206,10 +207,10 @@ $$("[data-title-pick]").onclick = () => {
 function renderTimeline() {
   const ol = $$("[data-timeline]"); if (!ol) return;
   fillTitles();
-  const max = Math.max(20, S.level + 1);
+  const max = MAX_LEVEL;
   const fmt = d => d ? new Date(d).toLocaleDateString("it-IT", { day: "numeric", month: "short", year: "numeric" }) : "prima del registro";
   ol.innerHTML = "";
-  const order = [S.level + 1, ...Array.from({ length: S.level }, (_, i) => S.level - i),
+  const order = [...(S.level < max ? [S.level + 1] : []), ...Array.from({ length: S.level }, (_, i) => S.level - i),
     ...Array.from({ length: Math.max(0, max - S.level - 1) }, (_, i) => S.level + 2 + i)];
   for (const l of order) {
     const got = l <= S.level, t = S.titles.find(x => x.l === l);
@@ -255,7 +256,7 @@ function avatarHTML(a) {
 function renderAvatars() {
   document.querySelectorAll("[data-avatar]").forEach(el => el.innerHTML = avatarHTML());
   const ring = $$(".avatar-ring");
-  if (ring) ring.style.setProperty("--p", (S.xp / xpNeed(S.level) * 100) + "%");
+  if (ring) ring.style.setProperty("--p", Math.min(100, S.xp / xpNeed(S.level) * 100) + "%");
   const g = $$("[data-av-grid]"); if (!g) return;
   g.innerHTML = "";
   AVATARS.forEach(p => {
@@ -303,7 +304,7 @@ $$("[data-demo]").onclick = e => { if (e.target.matches("[data-demo]")) e.target
 
 const SIM = {
   xp: () => { addXP(100); return "+100 XP"; },
-  level: () => { S.level++; onLevelUp(); save(); render(); return ""; },
+  level: () => { if (S.level >= MAX_LEVEL - 1 && !allComplete()) return "Il livello " + MAX_LEVEL + " si sblocca solo completando tutto"; S.level++; onLevelUp(); save(); render(); return ""; },
   time: () => { S.time += 3600; save(); render(); return "+1 ora di studio"; },
   day: () => { S.streak++; S.bestStreak = Math.max(S.bestStreak, S.streak); save(); render(); return "Streak: " + S.streak + " giorni"; },
   lessons: () => {
@@ -317,6 +318,7 @@ const SIM = {
     [...LESSONS, ...COMBOS].forEach(l => { S.best[l.id] = 3; });
     S.combosRead = COMBOS.map(c => c.id);
     if (!S.myPalettes.length) S.myPalettes.push({ id: "demo", n: "Palette demo", c: ["perla", "ardesia"] });
+    Object.assign(S, { games: { guess: 5, order: 5, comp: 5 }, labSaved: true, photoDone: true });
     [...LESSONS, ...COMBOS].forEach(l => { const c = EV[l.id]; if (!S.redeemed.includes(l.id)) S.redeemed.push(l.id); if (!S.owned.includes(c)) S.owned.push(c); });
     S.streak = S.bestStreak = 14;
     Object.assign(day(), { lessons: 1, quiz: 2, perfect: 1, time: 300 });
@@ -333,7 +335,8 @@ const SIM = {
     Object.assign(S, {
       level: 12, xp: 450, xpTotal: 12450, time: 30 * 3600 + 25 * 60, streak: 21, quizzes: 42, lessonsTotal: 24,
       missionsDone: 25, done: LESSONS.map(l => l.id), badges: ["Badge dello studente", "Badge dello studioso", "Badge sociale"],
-      bestStreak: 21, claimed: ["p1", "p2", "p3", "p4", "s1", "s2"], onboarded: true, name: S.name || "Luca", shownTitle: null
+      bestStreak: 21, claimed: ["p1", "p2", "p3", "p4", "s1", "s2"], onboarded: true, name: S.name || "Luca", shownTitle: null,
+      games: { guess: 4, order: 3, comp: 5 }, labSaved: true, photoDone: true
     });
     fillTitles();
     COLORS.slice(0, 22).forEach(c => { if (!S.owned.includes(c.id)) S.owned.push(c.id); });
@@ -411,8 +414,16 @@ try { if (sessionStorage.getItem("chroma-updated")) { sessionStorage.removeItem(
 if (!Array.isArray(S.owned)) S.owned = [...DEF.owned];
 S.owned = [...new Set(["perla", "ardesia", ...S.owned.map(id => OLD_COLORS[id] || id)].filter(id => COLOR_BY[id]))];
 if (S.theme) S.theme = COLOR_BY[OLD_COLORS[S.theme] || S.theme] ? (OLD_COLORS[S.theme] || S.theme) : null;
-(S.myPalettes || []).forEach(p => p.c = [...new Set(p.c.map(id => OLD_COLORS[id] || id).filter(id => COLOR_BY[id]))]);
+(S.myPalettes || []).forEach(p => p.c = [...new Set(p.c.map(id => OLD_COLORS[id] || id).filter(id => COLOR_BY[id] || /^#[0-9a-f]{6}$/i.test(id)))]);
+if (!S.games || typeof S.games !== "object") S.games = {};
 if (!Array.isArray(S.myPalettes)) S.myPalettes = [];
+if (S.curveV !== 3) {
+  let lv = 1, xp = S.xpTotal || 0;
+  while (lv < MAX_LEVEL && xp >= xpNeed(lv)) { if (lv === MAX_LEVEL - 1 && !allComplete()) { xp = xpNeed(lv); break; } xp -= xpNeed(lv); lv++; }
+  S.level = lv; S.xp = lv >= MAX_LEVEL ? xpNeed(MAX_LEVEL) : xp; S.curveV = 3;
+  if (Array.isArray(S.titles)) S.titles = S.titles.filter(t => t.l <= S.level);
+  if (S.shownTitle > S.level) S.shownTitle = null;
+}
 fillTitles();
 S.redeemed.forEach(q => { const c = EV[q]; if (c && !S.owned.includes(c)) S.owned.push(c); });
 applyDark();
