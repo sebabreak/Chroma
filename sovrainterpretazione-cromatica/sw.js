@@ -18,7 +18,7 @@
 //  sola quando il telefono è online), ma pulisce la cache vecchia invece
 //  di lasciarla lì a occupare spazio inutilmente.
 // ══════════════════════════════════════════════════════════════════
-const CACHE_NAME = 'sovrainterpretazione-v13'; // v13: confronto uomo/macchina, registro salvato nel browser, riepilogo (tasto S), didascalia sul ritratto
+const CACHE_NAME = 'sovrainterpretazione-v16'; // v16: mazzo di 25 carte (capitoli e autori) con 10 colori
 
 const ASSETS = [
   './',
@@ -29,6 +29,7 @@ const ASSETS = [
   './icons/icon-192.png',
   './icons/icon-512.png',
   './qr-telefono.png',
+  './chroma.png',
 ];
 
 // all'installazione, scarica e mette in cache tutti i file dell'interfaccia
