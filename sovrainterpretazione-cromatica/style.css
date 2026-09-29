@@ -91,12 +91,26 @@ video { display: none; }
   transform: translate(-50%, -50%);
   width: 180px;
   height: 180px;
-  border-radius: 50%;
-  background-color: black;
-  transition: background-color 0.2s ease, border-radius 0.35s ease-in-out;
-  box-shadow: 0 0 40px rgba(255,255,255,0.2);
   z-index: 6;
   pointer-events: none;
+}
+/* aura: i colori della palette rilevata, sfocati dietro al personaggio.
+   Forma e luce cambiano col battito (script.js, sezione 9) */
+#coreAura {
+  position: absolute;
+  inset: -14%;
+  border-radius: 50%;
+  filter: blur(14px);
+  opacity: 0.9;
+  transition: border-radius 0.35s ease-in-out;
+}
+#coreChar {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  filter: drop-shadow(0 6px 18px rgba(0,0,0,0.55));
 }
 
 /* ── RIQUADRO COLORE DOMINANTE ──────────────────────────────────── */
@@ -757,6 +771,30 @@ video { display: none; }
   color: #fff;
   margin-top: 0.6rem;
 }
+
+#pageReactionTitle {
+  font-family: 'Courier New', monospace;
+  font-size: 11px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.55);
+}
+#pageReactionCanvas {
+  width: min(260px, 60vw, 34vh);
+  height: min(260px, 60vw, 34vh);
+  margin: 1rem auto 0.4rem;
+  border-radius: 50%;
+  display: block;
+}
+#pageReactionAi {
+  margin-top: 1rem;
+  font-family: 'Courier New', monospace;
+  font-size: 12px;
+  line-height: 1.6;
+  letter-spacing: 0.04em;
+  color: rgba(255,255,255,0.7);
+}
+#pageReactionAi:empty { display: none; }
 
 /* ── SCANLINES ───────────────────────────────────────────────────── */
 /* leggerissime righe orizzontali sopra tutto, effetto "schermo vecchio" */
@@ -1452,3 +1490,7 @@ body {
     top: calc(142px + env(safe-area-inset-top, 0px));
   }
 }
+
+/* popup carte/pagine: sempre sopra a tutti i controlli (GIUDICA, webcam, QR) */
+#pageReactionBackdrop { z-index: 1000; }
+#pageReaction { z-index: 1001; }
