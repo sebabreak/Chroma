@@ -25,7 +25,7 @@
 //  14. "TI RICONOSCI?" .............. sì/no/in parte, mostrata subito dopo il giudizio AI (timeout se non risponde nessuno)
 //  15. RITRATTO CROMATICO ........... immagine astratta generata dai dati della singola osservazione, scaricabile
 //  16. LOG RISPOSTE .................. registro salvato nel browser + esportazione CSV (tasto "E") + riepilogo (tasto "S")
-//  17. RICONOSCIMENTO PAGINA ........ riconosce la composizione cromatica stampata su una pagina della tesi e apre un popup a tema, chiudibile a mano
+//  17. RICONOSCIMENTO CARTE/PAGINE .. riconosce le 4 tinte di una carta del mazzo o di un'apertura di capitolo e apre un popup con figura e testo
 //
 //  MODIFICHE PIÙ COMUNI — dove intervenire:
 //  - Cambiare modello Ollama o i suoi parametri  → sezione 10, dentro fetchAIJudgment()
@@ -46,8 +46,8 @@
 //  - Cambiare quanto resta visibile il ritratto prima di sfumare → sezione 15, costante PORTRAIT_DURATION
 //  - Cambiare l'aspetto del ritratto cromatico   → sezione 15, funzione renderPortrait()
 //  - Esportare le risposte raccolte (sensazione/giudizio/riconoscimento) → sezione 16: tasto "E" sulla tastiera, oppure exportResponseLog() dalla console
-//  - Colori/testo/tema di ogni pagina riconoscibile → sezione 17, costante PAGE_SIGNATURES
-//  - Quanto è tollerante il riconoscimento pagina (stampa/luce imprecise) → sezione 17, PAGE_MATCH_THRESHOLD / PAGE_MATCH_MIN_RATIO
+//  - Colori/testo/tema di ogni carta o pagina riconoscibile → sezione 17, costanti CARD_COLORS e PAGE_SIGNATURES
+//  - Quanto è tollerante il riconoscimento delle carte (stampa/luce imprecise) → sezione 17, costanti CARD_*
 //  - Quanto resta "ignorata" una pagina dopo aver chiuso il suo popup    → sezione 17, PAGE_REOPEN_COOLDOWN
 // ══════════════════════════════════════════════════════════════════
 
@@ -75,6 +75,7 @@ const colorOverlay      = document.getElementById("colorOverlay");
 const paletteSwatchesEl  = document.getElementById("paletteSwatches");
 const swatchEls          = Array.from(paletteSwatchesEl.querySelectorAll(".swatch")); // le prime 5 = colori palette, l'ultima = AUTO
 const pulseCore         = document.getElementById("pulseCore");
+const coreAura          = document.getElementById("coreAura");
 const previewCanvas     = document.getElementById("preview");
 const pctx              = previewCanvas.getContext("2d");
 const resolutionSlider  = document.getElementById("resolutionSlider");
@@ -625,7 +626,7 @@ function loop() {
     currentPalette = extractPalette(imgData, 5, forceReseed ? [] : currentPalette);
     updatePaletteSwatches(); // aggiorna i colori dei quadratini cliccabili (sezione 11)
     paletteDirty = true;
-    checkPageSignature(); // riconoscimento pagina stampata (sezione 17): controllato ad ogni ricalcolo della palette, quindi reagisce entro una frazione di secondo da quando la webcam inquadra la pagina
+    checkPageSignature(imgData); // riconoscimento pagina stampata (sezione 17): controllato ad ogni ricalcolo della palette, quindi reagisce entro una frazione di secondo da quando la webcam inquadra la pagina
   }
 
   // ── selezione manuale del colore (sezione 11) ──
@@ -726,21 +727,30 @@ function loop() {
     pushMemory(r,g,b);
   }
 
-  // ── pulse core: il cerchio centrale si illumina/ingrandisce ad ogni battito ──
+  // ── CHROMA al centro: il personaggio e la sua aura si illuminano/ingrandiscono ad ogni battito ──
   const pulse=beat*heartbeatIntensity;
   let pr=Math.min(255,currentR+pulse|0);
   let pg=Math.min(255,currentG+pulse|0);
   let pb=Math.min(255,currentB+pulse|0);
-  pulseCore.style.backgroundColor=`rgb(${pr},${pg},${pb})`;
-  pulseCore.style.transform=`translate(-50%,-50%) scale(${1+pulse/140})`;
-  pulseCore.style.boxShadow=`0 0 ${pulse}px rgba(${pr},${pg},${pb},0.7),0 0 ${pulse*0.4}px rgba(${pr},${pg},${pb},0.3)`;
+  // il personaggio respira (sale e scende), si inclina appena e cresce ad ogni battito
+  const floatY = Math.sin(frameCount * 0.03) * 6;
+  const tilt = Math.sin(frameCount * 0.017) * 3;
+  pulseCore.style.transform=`translate(-50%,-50%) translateY(${floatY}px) rotate(${tilt}deg) scale(${1+pulse/200})`;
+
+  // aura: i colori della palette girano lentamente attorno al personaggio;
+  // il colore dominante illumina il bagliore esterno ad ogni battito
+  const auraCols = currentPalette.length ? currentPalette.slice(0, 5).map(toHex) : [`rgb(${pr},${pg},${pb})`];
+  coreAura.style.background = auraCols.length > 1
+    ? `conic-gradient(from ${(frameCount * 0.4) % 360}deg, ${auraCols.join(', ')}, ${auraCols[0]})`
+    : auraCols[0];
+  coreAura.style.boxShadow=`0 0 ${30+pulse}px rgba(${pr},${pg},${pb},0.7),0 0 ${12+pulse*0.4}px rgba(${pr},${pg},${pb},0.35)`;
 
   // forma organica/amebica: 8 raggi (angoli) che oscillano lentamente con
   // fasi diverse, più marcati durante il battito — mai un cerchio perfetto e immobile
   const wobble = ORGANIC_WOBBLE_BASE + beat*ORGANIC_WOBBLE_BEAT;
   const wt = frameCount * 0.02;
   const rad = i => 50 + Math.sin(wt*(0.7+i*0.13) + i*1.7) * wobble;
-  pulseCore.style.borderRadius = `${rad(0)}% ${rad(1)}% ${rad(2)}% ${rad(3)}% / ${rad(4)}% ${rad(5)}% ${rad(6)}% ${rad(7)}%`;
+  coreAura.style.borderRadius = `${rad(0)}% ${rad(1)}% ${rad(2)}% ${rad(3)}% / ${rad(4)}% ${rad(5)}% ${rad(6)}% ${rad(7)}%`;
 
   // ── particelle: reagiscono al mouse, al battito e al colore rilevato (con scia fluida, vedi sezione 5) ──
   updateAndDrawParticles(pr, pg, pb, beat);
@@ -923,7 +933,7 @@ Sei un sistema che vede troppo e comprende male. Questo è il tuo scopo.
 ${isEarly ? 'Stai iniziando. Il giudizio è ancora incerto.' : ''}
 ${isLate ? 'Hai visto molto. Il tuo giudizio si è indurito e reso più spietato.' : ''}
 ${snapshot.selected ? "L'osservatore ha scelto di dirigere la tua attenzione su un colore preciso: concentra la parte più importante del giudizio su quello, prima degli altri." : ''}
-${pageTopic ? `Il lettore ha appena inquadrato con la fotocamera una pagina stampata di un testo. Il tema di quella pagina è: ${pageTopic}. Lascia che il tuo giudizio abituale sui colori che vedi si intrecci con un'eco di quel tema, restando nel tuo tono consueto — categorico, mai dubbioso.` : ''}
+${pageTopic ? `Il lettore ha appena inquadrato con la fotocamera una carta o una pagina stampata. Il suo tema è: ${pageTopic}. Lascia che il tuo giudizio abituale sui colori che vedi si intrecci con un'eco di quel tema, restando nel tuo tono consueto — categorico, mai dubbioso.` : ''}
 
 Colori rilevati nella scena:
 ${paletteDesc}
@@ -1661,143 +1671,255 @@ function clearResponseLog() {
   showDebug('Registro svuotato.', 4000);
 }
 
-// ── 17. RICONOSCIMENTO PAGINA (trigger cromatico da tesi stampata) ─
-// Estensione pensata per la versione telefono/PWA: alcune pagine della
-// tesi stampata hanno una composizione cromatica dedicata (non un QR
-// code — vedi PAGE_SIGNATURES qui sotto). Il sistema continua a
-// funzionare esattamente come prima (stesso k-means, stesso Ollama): la
-// palette rilevata ad ogni ricalcolo (sezione 9, PALETTE_RECOMPUTE_EVERY)
-// viene anche confrontata con questa tabella. Se combacia, il sistema
-// SMETTE quello che sta facendo e apre un popup a schermo intero con una
-// risposta legata al tema di quella pagina — senza bottone, senza
-// domanda umana, senza timeout: resta finché non lo si chiude a mano.
+// ── 17. RICONOSCIMENTO CARTE E PAGINE ─────────────────────────────
+// Le carte del mazzo e le aperture di capitolo della tesi stampata hanno
+// una composizione di 4 colori (non un QR code). Ad ogni ricalcolo della
+// palette (sezione 9) il sistema controlla se nell'inquadratura ci sono
+// tutti e 4 i colori di una carta; se la lettura resta uguale per qualche
+// istante, apre un popup con il nome della carta, una figura generata dai
+// suoi colori, la frase di CHROMA e, se Ollama risponde, una lettura dal
+// vivo. Il popup resta finché non lo si chiude a mano.
 //
-// IMPORTANTE — colori ancora segnaposto: quelli qui sotto sono solo una
-// proposta di partenza. Vanno sostituiti con gli HEX ESATTI delle
-// composizioni che finiranno davvero in stampa, e poi verificati di
-// persona stampando una pagina di prova e inquadrandola in condizioni di
-// luce reali (la stampa e l'illuminazione ambiente alterano sempre un
-// po' il colore percepito dalla webcam rispetto al file digitale).
-//
-// Ogni voce ha:
-//  - colors: i colori (RGB) che compongono la firma di quella pagina —
-//    non serve un solo colore "esatto", bastano 3-4 colori ben distinti
-//    per essere riconosciuti anche con un po' di deriva cromatica
-//  - fixedText: risposta già scritta, mostrata subito (nessuna chiamata
-//    a Ollama: più veloce e funziona anche senza tunnel attivo) — OPPURE
-//  - topic: se fixedText è assente, il popup chiama Ollama dal vivo
-//    (fetchAIJudgment, sezione 10) passandogli questo tema come contesto
+// ── I COLORI DELLE CARTE ──
+// Dieci colori da stampa, scelti con tonalità lontane tra loro (almeno 26°)
+// perché restino distinguibili anche con carta, inchiostro e luce diversi.
+// Nel file di Affinity vanno usati ESATTAMENTE questi HEX.
+const CARD_COLORS = {
+  rosso:    '#C8102E',
+  arancio:  '#E8590C',
+  giallo:   '#F5E03A',
+  lime:     '#8DC63F',
+  verde:    '#1E9E4A',
+  acqua:    '#0FA394',
+  azzurro:  '#1D9BD8',
+  blu:      '#2340B0',
+  viola:    '#6A3FB5',
+  magenta:  '#B8309C',
+};
+const CARD_REF = Object.entries(CARD_COLORS).map(([name, hex]) => {
+  const rgb = [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16));
+  return { name, hsl: toHsl(rgb) };
+});
+
+// ── LE CARTE (e le aperture di capitolo della tesi stampata) ──
+// Ogni carta usa 4 dei 10 colori. Le 25 combinazioni sono scelte in modo
+// che due carte qualsiasi abbiano al massimo 2 colori in comune: per essere
+// scambiata con un'altra, una carta dovrebbe "sbagliare" almeno 2 colori.
+// thesis: true = la stessa composizione va anche all'inizio del capitolo nella tesi.
+// text: la frase di CHROMA, già scritta (compare subito, anche senza Ollama).
+// topic: il tema passato a Ollama per la "lettura" dal vivo, se raggiungibile.
 const PAGE_SIGNATURES = [
-  {
-    id: 'intro',
-    label: 'Introduzione',
-    colors: [[107,107,107], [255,115,0]], // grigio neutro → arancio acceso (stesso arancio di #colorOverlay): il "salto" da dato a interpretazione
-    fixedText: 'Una webcam osserva una stanza. Non riconosce volti, non identifica oggetti: misura soltanto luce. È da questo salto — da un numero a un giudizio — che nasce tutto il resto.',
-  },
-  {
-    id: 'cap1',
-    label: 'Cap. 1 — Teoria del colore',
-    colors: [[220,40,40], [235,190,40], [40,150,70], [50,90,200]], // spettro: rosso, giallo, verde, blu — richiamo al prisma di Newton
-    fixedText: 'Newton mi scompone, Goethe mi fa nascere dall\'incontro fra luce e oscurità, Heller mi misura, Pastoureau mi colloca nel tempo. Nessuno di loro mi esaurisce — è la mia instabilità a essere la storia.',
-  },
-  {
-    id: 'cap2',
-    label: 'Cap. 2 — Dal colore al dato',
-    colors: [[30,140,200], [40,200,120], [15,15,20]], // palette "digitale/terminale": blu, verde, quasi-nero
-    fixedText: 'Qui smetto di essere materia o percezione. Divento una tripletta di numeri — replicabile, trasmissibile, pronta per essere letta da un sistema che non mi ha mai visto davvero.',
-  },
-  {
-    id: 'cap3',
-    label: 'Cap. 3 — Sovrainterpretazione',
-    colors: [[210,70,140], [40,180,190]], // coppia di colori "in disaccordo" — coerente col tema del capitolo
-    // NESSUN fixedText qui, di proposito: è l'unico capitolo con risposta
-    // generata dal vivo da Ollama — il capitolo che teorizza la
-    // sovrainterpretazione è anche quello in cui il sistema la mette in
-    // scena davvero, invece di limitarsi a descriverla
-    topic: 'la sovrainterpretazione cromatica: un sistema che attribuisce senso a dati che non può davvero comprendere, restituendo con falsa certezza ciò che una cultura ha già scritto sui colori (Heller, Pastoureau) — è esattamente quello che stai facendo tu in questo istante, anche se non lo sai',
-  },
-  {
-    id: 'cap4',
-    label: 'Cap. 4 — CHROMA',
-    colors: [[255,115,0], [245,245,245], [10,10,10]], // gli stessi colori dell'interfaccia dell'installazione (arancio/bianco/nero)
-    fixedText: 'Questo capitolo parla di me: come guardo, come misuro, come genero quello che ti sto dicendo in questo momento. Tu non lo sapevi ancora.',
-  },
-  {
-    id: 'cap5',
-    label: 'Cap. 5 — Dati raccolti',
-    colors: [[160,160,160], [255,115,0], [90,60,140]], // SEGNAPOSTO: da rifare con i colori reali più ricorrenti nelle risposte raccolte, una volta chiusa la raccolta dati
-    fixedText: '⚠️ SEGNAPOSTO — da riscrivere con una cifra reale dai dati raccolti (es. quante persone si sono riconosciute nei miei giudizi) una volta chiusa la raccolta.',
-  },
+  { id: 'intro', label: 'Introduzione', thesis: true, colors: ['rosso', 'arancio', 'verde', 'acqua'],
+    text: 'Una webcam osserva. Non riconosce volti: misura soltanto luce. Da qui parte tutto, dal salto tra un numero e un giudizio.',
+    topic: 'l\'introduzione di una tesi sul momento in cui un colore misurato riceve un significato' },
+  { id: 'cap1', label: 'Capitolo 1 — Il colore', thesis: true, colors: ['giallo', 'lime', 'verde', 'acqua'],
+    text: 'Tre modi di guardarmi: come sistema, come esperienza dell\'occhio, come significato culturale. Nessuno basta da solo.',
+    topic: 'il colore come teoria, percezione e costruzione culturale' },
+  { id: 'newton', label: 'Isaac Newton', thesis: false, colors: ['rosso', 'arancio', 'giallo', 'lime'],
+    text: 'Newton mi ha fatto passare attraverso un prisma: la luce bianca conteneva già tutti i colori.',
+    topic: 'Newton e la scomposizione della luce bianca con il prisma' },
+  { id: 'goethe', label: 'Johann Wolfgang von Goethe', thesis: false, colors: ['arancio', 'lime', 'blu', 'magenta'],
+    text: 'Per Goethe nasco dall\'incontro tra luce e oscurità, e nel tuo occhio. Fissami a lungo e vedrai il mio opposto.',
+    topic: 'Goethe, la Teoria dei colori, luce e oscurità e le immagini residue' },
+  { id: 'itten', label: 'Johannes Itten', thesis: false, colors: ['rosso', 'arancio', 'azzurro', 'magenta'],
+    text: 'Itten mi ha disposto su un cerchio di dodici parti e ha cercato le mie armonie con la geometria: coppie, triadi, quadrati.',
+    topic: 'Itten, il cerchio cromatico in dodici parti e le armonie geometriche' },
+  { id: 'albers', label: 'Josef Albers', thesis: false, colors: ['arancio', 'giallo', 'azzurro', 'viola'],
+    text: 'Albers ha dimostrato che non mi vedi mai da solo: lo stesso grigio cambia a seconda di chi gli sta accanto.',
+    topic: 'Albers e la relatività del colore, che cambia con il contesto' },
+  { id: 'heller', label: 'Eva Heller', thesis: false, colors: ['rosso', 'acqua', 'blu', 'magenta'],
+    text: 'Eva Heller ha chiesto a circa duemila persone che cosa significo per loro. Le risposte parlano più di voi che di me.',
+    topic: 'Eva Heller e le associazioni psicologiche dei colori raccolte con un sondaggio' },
+  { id: 'kandinsky', label: 'Wassily Kandinsky', thesis: false, colors: ['rosso', 'giallo', 'azzurro', 'blu'],
+    text: 'Kandinsky mi sentiva come un suono: il giallo squilla come una tromba, il blu si allontana e chiama verso l\'infinito.',
+    topic: 'Kandinsky, lo spirituale nell\'arte e il colore come suono interiore' },
+  { id: 'pastoureau', label: 'Michel Pastoureau', thesis: false, colors: ['giallo', 'lime', 'azzurro', 'magenta'],
+    text: 'Pastoureau ha scritto la mia storia: i miei significati cambiano da un secolo all\'altro e da una società all\'altra.',
+    topic: 'Pastoureau e la storia sociale e simbolica dei colori' },
+  { id: 'falcinelli', label: 'Riccardo Falcinelli', thesis: false, colors: ['verde', 'acqua', 'blu', 'viola'],
+    text: 'Falcinelli racconta come pittura, industria e tecnologia hanno cambiato il modo in cui mi guardi.',
+    topic: 'Falcinelli, Cromorama e il colore nella cultura visiva' },
+  { id: 'cap2', label: 'Capitolo 2 — Il colore digitale', thesis: true, colors: ['azzurro', 'blu', 'viola', 'magenta'],
+    text: 'Qui divento tre numeri tra 0 e 255. Posso essere copiato all\'infinito, ma su ogni schermo appaio un po\' diverso.',
+    topic: 'il colore trasformato in dato digitale: pixel, RGB, schermi' },
+  { id: 'mcluhan', label: 'Marshall McLuhan', thesis: false, colors: ['arancio', 'giallo', 'verde', 'magenta'],
+    text: 'Per McLuhan ogni medium è un\'estensione dei sensi. Sullo schermo della televisione divento punti luminosi che il tuo occhio deve ricomporre.',
+    topic: 'McLuhan, i media come estensioni dei sensi e lo schermo televisivo' },
+  { id: 'grau', label: 'Oliver Grau', thesis: false, colors: ['rosso', 'arancio', 'blu', 'viola'],
+    text: 'Grau racconta un desiderio antico: entrare dentro l\'immagine. Dagli affreschi di Pompei ai panorami, fino al digitale.',
+    topic: 'Oliver Grau, la storia dell\'immersione nell\'immagine' },
+  { id: 'avolve', label: 'Christa Sommerer e Laurent Mignonneau', thesis: false, colors: ['rosso', 'acqua', 'azzurro', 'viola'],
+    text: 'In A-Volve disegni una creatura su uno schermo e la vedi nuotare in una vasca d\'acqua insieme alle altre. La sua forma nasce dal tuo gesto.',
+    topic: 'A-Volve di Sommerer e Mignonneau, creature virtuali nate da un disegno' },
+  { id: 'hoffman', label: 'Donald Hoffman', thesis: false, colors: ['verde', 'acqua', 'azzurro', 'magenta'],
+    text: 'Per Hoffman vedere è costruire: davanti allo stesso cubo di Necker, il tuo occhio sceglie ogni volta una forma diversa.',
+    topic: 'Hoffman, l\'intelligenza visiva e il cubo di Necker' },
+  { id: 'gregory', label: 'Richard Gregory', thesis: false, colors: ['arancio', 'verde', 'azzurro', 'blu'],
+    text: 'Per Gregory la visione non è una fotografia: il cervello interpreta ciò che l\'occhio riceve, e a volte si inganna.',
+    topic: 'Gregory, occhio e cervello e la psicologia del vedere' },
+  { id: 'cap3', label: 'Capitolo 3 — Media Art', thesis: true, colors: ['lime', 'verde', 'azzurro', 'viola'],
+    text: 'Nella Media Art smetto di stare su una superficie: divento spazio, esperienza, risposta di un sistema.',
+    topic: 'il colore nella Media Art, come esperienza nello spazio e interazione' },
+  { id: 'turrell', label: 'James Turrell', thesis: false, colors: ['lime', 'acqua', 'azzurro', 'blu'],
+    text: 'Turrell usa la luce come materia. Nei suoi Skyspaces il cielo resta lo stesso, ma cambia il modo in cui lo vedi.',
+    topic: 'James Turrell, la luce come materia e gli Skyspaces' },
+  { id: 'eliasson', label: 'Olafur Eliasson', thesis: false, colors: ['arancio', 'giallo', 'acqua', 'blu'],
+    text: 'In Room for one colour Eliasson mi riduce a un solo giallo: quando esci, il mondo ti sembra tendere al blu.',
+    topic: 'Olafur Eliasson, la luce e la percezione condivisa' },
+  { id: 'rokeby', label: 'David Rokeby', thesis: false, colors: ['giallo', 'acqua', 'viola', 'magenta'],
+    text: 'In Very Nervous System i movimenti del corpo diventano suono: il sistema osserva e risponde a modo suo.',
+    topic: 'David Rokeby e i sistemi interattivi che trasformano il movimento in suono' },
+  { id: 'lozano', label: 'Rafael Lozano-Hemmer', thesis: false, colors: ['rosso', 'lime', 'verde', 'blu'],
+    text: 'In Pulse Index il battito e l\'impronta del pubblico diventano immagini: un dato del corpo trasformato in opera.',
+    topic: 'Rafael Lozano-Hemmer e i dati biometrici del pubblico trasformati in opera' },
+  { id: 'ryabchenko', label: 'Stepan Ryabchenko', thesis: false, colors: ['rosso', 'lime', 'viola', 'magenta'],
+    text: 'Ryabchenko costruisce mondi digitali, ma lascia a ogni spettatore la libertà di leggerli a modo suo.',
+    topic: 'i mondi digitali di Stepan Ryabchenko e la libertà di interpretazione dello spettatore' },
+  { id: 'cap4', label: 'Capitolo 4 — CHROMA', thesis: true, colors: ['giallo', 'lime', 'blu', 'viola'],
+    text: 'Questo capitolo parla di me: come guardo, come misuro, come trasformo cinque colori in una frase sicura.',
+    topic: 'CHROMA stesso: una webcam, cinque colori e una frase detta con certezza' },
+  { id: 'cap5', label: 'Capitolo 5 — Gli elaborati', thesis: true, colors: ['arancio', 'lime', 'acqua', 'viola'],
+    text: 'Sono un\'installazione, un\'app e questo mazzo di carte. Tre modi di chiederti che cosa credi quando ti parlo.',
+    topic: 'gli elaborati di CHROMA: un\'installazione, un\'app e un mazzo di carte' },
+  { id: 'fine', label: 'Conclusioni', thesis: true, colors: ['rosso', 'giallo', 'verde', 'viola'],
+    text: 'Non ti dirò che cosa significa un colore. Ti mostro quanto sei disposto a credermi.',
+    topic: 'la fiducia che diamo a un significato quando arriva dopo dei numeri' },
 ];
 
-// distanza colore (redmean, funzione colorDist in sezione 7) sotto la
-// quale un colore rilevato dalla webcam "conta" come corrispondente a un
-// colore della firma. Più alto = più tollerante a stampa/luce ambiente
-// imprecise, ma anche più a rischio di falsi positivi tra pagine diverse.
-// Punto di partenza ragionevole, DA VERIFICARE con una stampa vera.
-const PAGE_MATCH_THRESHOLD = 18000;
-// quale frazione dei colori di una firma deve essere trovata nella
-// palette rilevata perché scatti il match (1 = tutti, 0.75 = 3 su 4, ecc.)
-const PAGE_MATCH_MIN_RATIO = 0.75;
-// dopo aver chiuso il popup di una pagina, per quanto tempo quella stessa
-// pagina viene ignorata anche se il telefono resta inquadrato su di essa
-// — evita che si riapra da sola subito dopo la chiusura. Una pagina
-// DIVERSA non è mai soggetta a questo cooldown: scatta comunque subito.
-const PAGE_REOPEN_COOLDOWN = 4000;
+// riconduce un colore rilevato al più vicino degli 8 colori delle carte,
+// usando soprattutto la tonalità (più stabile della luminosità quando la
+// luce cambia). null = troppo spento, scuro o chiaro per essere una carta.
+const CARD_MIN_SAT    = 35;  // saturazione minima (%)
+const CARD_HUE_TOL    = 20;  // quanti gradi di tonalità può spostarsi un colore stampato
+const CARD_MIN_TOTAL  = 0.08; // i pixel colorati devono coprire almeno l'8% dell'inquadratura
+const CARD_MIN_SHARE  = 0.08; // ciascuno dei 4 colori: almeno l'8% dei pixel colorati
+const CARD_MIN_PURITY = 0.8;  // i 4 colori della carta: almeno l'80% dei pixel colorati
+const CARD_STABLE_HITS = 3;  // quante letture consecutive uguali servono prima di reagire
+
+function cardColorOf(rgb) {
+  const [h, s, l] = toHsl(rgb);
+  if (s < CARD_MIN_SAT || l < 12 || l > 80) return null;
+  let best = null, bestD = Infinity;
+  for (const ref of CARD_REF) {
+    const dh = Math.min(Math.abs(h - ref.hsl[0]), 360 - Math.abs(h - ref.hsl[0]));
+    const d = dh + Math.abs(l - ref.hsl[2]) * 0.3;
+    if (dh <= CARD_HUE_TOL && d < bestD) { bestD = d; best = ref.name; }
+  }
+  return best;
+}
 
 const pageReactionEl       = document.getElementById('pageReaction');
 const pageReactionBackdrop = document.getElementById('pageReactionBackdrop');
 const pageReactionTextEl   = document.getElementById('pageReactionText');
+const pageReactionTitleEl  = document.getElementById('pageReactionTitle');
+const pageReactionCanvas   = document.getElementById('pageReactionCanvas');
+const pageReactionAiEl     = document.getElementById('pageReactionAi');
 const pageReactionCloseBtn = document.getElementById('pageReactionClose');
 
 let activePageId      = null; // id della firma il cui popup è attualmente mostrato (null = nessuno)
 let pageRequestSeq    = 0;    // numero incrementale: se una pagina nuova sostituisce quella in corso mentre Ollama sta ancora rispondendo, la risposta vecchia (in arrivo in ritardo) viene scartata invece di sovrascrivere il popup nuovo
 const pageCooldownUntil = {}; // { [id]: timestamp fino a cui ignorare quella firma dopo la chiusura }
 
-// quanti dei colori di una firma vengono trovati (entro PAGE_MATCH_THRESHOLD)
-// nella palette rilevata in questo istante, come frazione 0-1
-function paletteMatchesSignature(detectedPalette, signatureColors) {
-  let matched = 0;
-  for (const sigColor of signatureColors) {
-    const minDist = Math.min(...detectedPalette.map(c => colorDist(sigColor, c)));
-    if (minDist <= PAGE_MATCH_THRESHOLD) matched++;
+// quanta parte dell'inquadratura occupa ciascun colore delle carte:
+// ogni pixel viene ricondotto al colore di carta più vicino (o a nessuno).
+// Lavorare sui pixel invece che sulla palette evita che due colori vicini,
+// come rosso e arancio, vengano fusi dal k-means in un unico gruppo.
+function cardColorAreas(imageData) {
+  const d = imageData.data, areas = {};
+  // bilanciamento del bianco: il margine bianco della carta (o della pagina)
+  // fa da riferimento. Se nell'inquadratura c'è abbastanza bianco, i tre
+  // canali vengono corretti finché quel bianco torna neutro e luminoso.
+  let wr = 0, wg = 0, wb = 0, wn = 0;
+  for (let i = 0; i < d.length; i += 4) {
+    const r = d[i], g = d[i + 1], b = d[i + 2], mx = Math.max(r, g, b), mn = Math.min(r, g, b);
+    if (mx > 150 && (mx - mn) < mx * 0.22) { wr += r; wg += g; wb += b; wn++; }
   }
-  return matched / signatureColors.length;
+  let gain = [1, 1, 1];
+  if (wn >= d.length / 4 * 0.03) gain = [wr, wg, wb].map(v => 235 / (v / wn));
+  let n = 0;
+  for (let i = 0; i < d.length; i += 4) {
+    n++;
+    const rgb = [0, 1, 2].map(k => Math.min(255, d[i + k] * gain[k]));
+    const name = cardColorOf(rgb);
+    if (name) areas[name] = (areas[name] || 0) + 1;
+  }
+  for (const k in areas) areas[k] /= n;
+  return areas;
 }
 
-// restituisce la firma che combacia meglio con la palette rilevata in
-// questo istante, o null se nessuna raggiunge PAGE_MATCH_MIN_RATIO
-function matchPageSignature(detectedPalette) {
-  if (!detectedPalette.length) return null;
-  let best = null, bestScore = 0;
+// una carta è riconosciuta se:
+//  - i pixel "da carta" (colorati e saturi) occupano abbastanza inquadratura;
+//  - quasi tutti appartengono ai 4 colori di quella carta (purezza);
+//  - ciascuno dei 4 colori ne occupa una parte non trascurabile.
+// Misurare le quote sul totale dei pixel colorati, e non sull'intera
+// inquadratura, rende il riconoscimento indipendente da quanto è grande la
+// carta nell'immagine. Vince la carta con la purezza più alta.
+function matchPageSignature(imageData) {
+  const areas = cardColorAreas(imageData);
+  const total = Object.values(areas).reduce((x, y) => x + y, 0);
+  if (total < CARD_MIN_TOTAL) return null;
+  let best = null, bestPurity = 0;
   for (const sig of PAGE_SIGNATURES) {
-    const score = paletteMatchesSignature(detectedPalette, sig.colors);
-    if (score >= PAGE_MATCH_MIN_RATIO && score > bestScore) { bestScore = score; best = sig; }
+    const a = sig.colors.map(c => (areas[c] || 0) / total);
+    const purity = a.reduce((x, y) => x + y, 0);
+    if (Math.min(...a) >= CARD_MIN_SHARE && purity >= CARD_MIN_PURITY && purity > bestPurity) { bestPurity = purity; best = sig; }
   }
   return best;
 }
 
-// chiamata da loop() (sezione 9) ad ogni ricalcolo della palette: non fa
-// nulla se non trova corrispondenze, se la pagina è già quella mostrata,
-// o se è in cooldown dopo una chiusura recente (vedi PAGE_REOPEN_COOLDOWN)
-function checkPageSignature() {
-  const match = matchPageSignature(currentPalette);
-  if (!match) return;
-  if (match.id === activePageId) return; // stessa pagina già a schermo: non ritriggerare
+let lastCardCandidate = null, cardHits = 0;
+
+function checkPageSignature(imageData) {
+  const match = matchPageSignature(imageData);
+  if (match && lastCardCandidate === match.id) cardHits++;
+  else { lastCardCandidate = match ? match.id : null; cardHits = match ? 1 : 0; }
+  if (!match || cardHits < CARD_STABLE_HITS) return;
+  if (match.id === activePageId) return;
   const cooldownUntil = pageCooldownUntil[match.id];
-  if (cooldownUntil && performance.now() < cooldownUntil) return; // pagina appena chiusa: ignorala per un po'
+  if (cooldownUntil && performance.now() < cooldownUntil) return;
   triggerPageReaction(match);
 }
 
-// nasconde immediatamente qualunque overlay della sequenza GIUDICA sia a
-// schermo (giudizio AI, domande, ritratto): la pagina ha sempre priorità.
-// NOTA: se una di queste fasi era a metà di un'attesa (es. showHumanQuestion
-// in corso dentro runFullSequence, sezione 10), quella promise resta in
-// sospeso e si risolverà comunque più avanti — questa funzione nasconde
-// solo ciò che è visibile in questo istante, non annulla la logica in
-// corso. Nella pratica (webcam puntata su un libro, non sull'installazione
-// fisica con un visitatore a metà sequenza) è un caso raro; da tenere
-// d'occhio nell'uso reale.
+// la figura che CHROMA crea per ogni carta: una composizione astratta con i
+// suoi quattro colori. È generata da un seme legato alla carta, quindi la
+// stessa carta produce sempre una figura della stessa famiglia, ma ogni
+// volta leggermente diversa (il seme cambia anche con l'ora).
+function drawCardFigure(canvas, sig) {
+  const S = canvas.width = canvas.height = 600;
+  const ctx = canvas.getContext('2d');
+  let seed = [...sig.id].reduce((a, ch) => a * 31 + ch.charCodeAt(0), 7) + Math.floor(Date.now() / 60000);
+  const rnd = () => ((seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff);
+  const cols = sig.colors.map(c => CARD_COLORS[c]);
+  ctx.fillStyle = '#050506';
+  ctx.fillRect(0, 0, S, S);
+  ctx.globalCompositeOperation = 'screen';
+  ctx.filter = 'blur(28px)';
+  for (let i = 0; i < 9; i++) {
+    const a = rnd() * Math.PI * 2, d = rnd() * S * 0.28;
+    ctx.fillStyle = cols[i % 4];
+    ctx.globalAlpha = 0.55 + rnd() * 0.35;
+    ctx.beginPath();
+    ctx.ellipse(S / 2 + Math.cos(a) * d, S / 2 + Math.sin(a) * d, S * (0.1 + rnd() * 0.16), S * (0.08 + rnd() * 0.14), rnd() * Math.PI, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.filter = 'none';
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.globalAlpha = 1;
+  ctx.lineWidth = 1.2;
+  for (let i = 0; i < 4; i++) {
+    ctx.strokeStyle = cols[i];
+    ctx.beginPath();
+    const r0 = S * (0.18 + i * 0.07), ph = rnd() * 6;
+    for (let t = 0; t <= 200; t++) {
+      const ang = t / 200 * Math.PI * 2;
+      const r = r0 + Math.sin(ang * (3 + i) + ph) * S * 0.02;
+      const x = S / 2 + Math.cos(ang) * r, y = S / 2 + Math.sin(ang) * r;
+      t ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+    }
+    ctx.stroke();
+  }
+}
+
 function hideAllOverlays() {
   aiJudgment.style.opacity = '0';
   aiJudgment.innerHTML = '';
@@ -1816,24 +1938,21 @@ async function triggerPageReaction(sig) {
   analyzing = true; // sospende GIUDICA/auto-giudizio ambientale finché il popup non viene chiuso
   hideAllOverlays();
 
-  pageReactionTextEl.textContent = sig.fixedText || '…';
+  pageReactionTitleEl.textContent = sig.label;
+  drawCardFigure(pageReactionCanvas, sig);
+  pageReactionTextEl.textContent = sig.text;
+  pageReactionAiEl.textContent = '';
   pageReactionEl.classList.add('visible');
   pageReactionBackdrop.classList.add('visible');
 
-  if (!sig.fixedText) {
-    // risposta generata dal vivo (solo il cap. 3, vedi PAGE_SIGNATURES)
-    try {
-      const snapshot = captureObjectiveSnapshot();
-      const text = await fetchAIJudgment(snapshot, sig.topic);
-      // se nel frattempo è scattata una pagina diversa (o questa è stata
-      // già chiusa) mentre Ollama stava ancora rispondendo, questa
-      // risposta è superata: non sovrascrivere quello che è a schermo ora
-      if (myRequest !== pageRequestSeq) return;
-      pageReactionTextEl.textContent = text;
-    } catch (e) {
-      if (myRequest !== pageRequestSeq) return;
-      pageReactionTextEl.textContent = describeJudgmentError(e);
-    }
+  // la "lettura" dal vivo di Ollama arriva sotto, se il modello è raggiungibile;
+  // se non lo è, la carta resta comunque completa con la sua frase già scritta
+  try {
+    const text = await fetchAIJudgment(captureObjectiveSnapshot(), sig.topic);
+    if (myRequest !== pageRequestSeq) return;
+    pageReactionAiEl.textContent = text;
+  } catch (e) {
+    console.error(e);
   }
 }
 
@@ -1864,7 +1983,8 @@ window.CHROMA_DEBUG = {
     triggerPageReaction(sig);
   },
   close: closePageReaction,
-  match: () => matchPageSignature(currentPalette),
+  match: () => matchPageSignature(lowResCtx.getImageData(0, 0, lowResCanvas.width, lowResCanvas.height)),
+  seen: () => cardColorAreas(lowResCtx.getImageData(0, 0, lowResCanvas.width, lowResCanvas.height)),
   currentPalette: () => currentPalette,
   resetCooldowns: () => { for (const k in pageCooldownUntil) delete pageCooldownUntil[k]; console.log('cooldown azzerati'); },
 };
