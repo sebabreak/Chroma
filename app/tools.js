@@ -350,7 +350,7 @@ function spectrum(ctx, x, y, w, h) {
   ctx.fillStyle = g; roundRect(ctx, x, y, w, h, h / 2); ctx.fill();
 }
 async function cardBase(w, h) {
-  await document.fonts.ready;
+  await Promise.all([400, 500, 600, 700].map(w => document.fonts.load(`${w} 20px Inter`, "Aa Бб")));
   const c = document.createElement("canvas"), ctx = c.getContext("2d");
   c.width = w; c.height = h;
   const bg = ctx.createLinearGradient(0, 0, 0, h);
