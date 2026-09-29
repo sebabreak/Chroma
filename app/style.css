@@ -1773,6 +1773,8 @@ button.sw:active i { transform: scale(.92); }
 .btn-link { font: 600 14px/20px var(--inter); color: var(--link); padding: 10px 14px; background: none; }
 .lf-back { position: relative; margin: 0 0 clamp(14px, 5vh, 50px); }
 .ph-again { display: block; margin: 8px auto 0; }
+.ph-sovra { margin-top: 18px; }
+.ph-sovra .btn-link { display: inline-block; margin-top: 8px; padding: 0; }
 .tool-ic.cam { background: var(--purple-btn); color: var(--on-accent, #fff); }
 
 .ph-hero {
