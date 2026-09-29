@@ -98,10 +98,10 @@ video { display: none; }
    Forma e luce cambiano col battito (script.js, sezione 9) */
 #coreAura {
   position: absolute;
-  inset: -14%;
+  inset: -16%;
   border-radius: 50%;
-  filter: blur(14px);
-  opacity: 0.9;
+  filter: blur(18px) saturate(1.2);
+  opacity: 0.85;
   transition: border-radius 0.35s ease-in-out;
 }
 #coreChar {
@@ -170,19 +170,19 @@ video { display: none; }
 
 /* ── ANTEPRIMA PIXELATA ─────────────────────────────────────────── */
 /* cliccabile: un clic su un punto lo seleziona come colore da seguire (script.js, sezione 11).
-   Solo "width" fissata: "height:auto" lascia che il riquadro segua il VERO
-   aspect ratio del canvas (script.js, updateLowResDimensions) — un valore
-   fisso qui causerebbe di nuovo la stessa distorsione che quella funzione
-   risolve lato campionamento, specialmente su telefono dove la webcam
-   raramente trasmette davvero in 4:3. */
+   Dimensione fissa + object-fit:cover: object-fit:cover ritaglia il
+   contenuto per riempire queste dimensioni senza mai stirarlo, qualunque
+   sia il vero aspect ratio della webcam (raramente davvero 4:3, specie
+   su telefono). Questa è solo la regola di base/fallback: sia sopra che
+   sotto i 1101px ci sono regole più specifiche qui sotto che la
+   sostituiscono con dimensioni pensate per quella fascia. */
 #preview {
   position: fixed;
   bottom: 100px;
   right: 20px;
-  width: auto;
-  height: auto;
-  max-width: 160px;
-  max-height: 120px;
+  width: 160px;
+  height: 120px;
+  object-fit: cover;
   border: 1px solid rgba(255, 115, 0, 0.5);
   border-radius: 4px;
   opacity: 0.6;
@@ -263,8 +263,9 @@ video { display: none; }
 #switchCamBtn { right: 130px; }
 
 /* GIUDICA: l'azione principale dell'installazione — deve essere
-   impossibile da non notare, quindi grande, centrata e sempre uguale
-   (non più un piccolo link agli angoli come cam/switch qui sopra) */
+   impossibile da non notare, quindi grande, centrata e sempre della
+   stessa dimensione (a differenza di cam/switch qui sopra, pensati
+   come controlli secondari discreti agli angoli) */
 #judgeBtn {
   position: fixed;
   bottom: calc(28px + env(safe-area-inset-bottom, 0px));
@@ -379,9 +380,18 @@ video { display: none; }
 #hudState { color: rgba(255,255,255,0.4); }
 
 /* ── QR TELEFONO ─────────────────────────────────────────────────── */
-/* stessa colonna di #hud (left:20px): scansionandolo si apre la stessa
-   app su GitHub Pages, installabile come PWA anche sul telefono */
+/* stessa colonna di #hud (left:20px): un clic lo ingrandisce al centro
+   (#qrModal qui sotto) invece di navigare via — comodo per mostrarlo a
+   tutta la sala durante l'esposizione. #qrBox è un <button>, quindi le
+   prime 5 proprietà qui sotto (background/border/font/ecc.) sono solo
+   un reset per togliergli l'aspetto di default del browser. */
 #qrBox {
+  background: none;
+  border: none;
+  font: inherit;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+
   position: fixed;
   bottom: calc(20px + env(safe-area-inset-bottom, 0px));
   left: 20px;
@@ -390,7 +400,6 @@ video { display: none; }
   flex-direction: column;
   align-items: center;
   gap: 4px;
-  text-decoration: none;
   opacity: 0.85;
   transition: opacity 0.25s;
 }
@@ -412,6 +421,55 @@ video { display: none; }
   text-align: center;
 }
 
+/* popup QR ingrandito — stesso identico pattern di
+   #pageReactionBackdrop/#pageReaction (vedi quella sezione più sotto):
+   sfondo a piena pagina che scurisce tutto il resto, popup sopra,
+   nessun timeout automatico (script.js gestisce la classe .visible) */
+#qrModalBackdrop {
+  position: fixed; inset: 0;
+  z-index: 999; /* sopra a #qrBox stesso (999), che così sparisce sotto lo sfondo quando il popup è aperto */
+  background: rgba(8,7,6,0.94);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.4s ease;
+}
+#qrModalBackdrop.visible { opacity: 1; pointer-events: auto; }
+
+#qrModal {
+  position: fixed;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 1000;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.4s ease;
+  text-align: center;
+  background: #fff; /* card bianca: il QR ha bisogno di contrasto netto, e un bordo bianco funge anche da "quiet zone" per una lettura affidabile */
+  padding: 2.2rem 2.2rem 1.6rem;
+  border-radius: 8px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+}
+#qrModal.visible { opacity: 1; pointer-events: auto; }
+#qrModalClose {
+  position: absolute;
+  top: 10px; right: 12px;
+  color: #262220;
+  border-color: rgba(0,0,0,0.25);
+}
+#qrModalImg {
+  display: block;
+  width: min(60vw, 60vh, 440px);
+  height: min(60vw, 60vh, 440px);
+  margin: 0 auto;
+}
+#qrModalLabel {
+  font-family: 'Courier New', monospace;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  color: #4a443e;
+  margin-top: 1rem;
+}
+
 /* ── MESSAGGIO DI DEBUG ──────────────────────────────────────────── */
 /* piccola scritta rossa in basso, usata per errori (webcam, Ollama). Vedi showDebug() in script.js */
 #debugMsg {
@@ -431,14 +489,14 @@ video { display: none; }
 }
 
 /* ── DATI OGGETTIVI (script.js, sezione 12) ───────────────────────── */
-/* pannello "clinico" SEMPRE VISIBILE (non più una fase che appare e
-   sparisce): mostra i valori misurati in tempo reale, a sinistra, sotto
-   al riquadro colore/quadratini di selezione. Font monospace come l'HUD,
-   in contrasto netto con il serif corsivo del giudizio AI (#aiJudgment)
-   che appare al centro — è proprio questo contrasto visivo a segnare la
-   differenza tra dato e sovrainterpretazione, il cuore della ricerca.
-   Resta invisibile (opacity 0) solo finché non arriva il primo
-   aggiornamento da updateDataPanel() — da lì in poi non sparisce più. */
+/* pannello "clinico" SEMPRE VISIBILE: mostra i valori misurati in tempo
+   reale, a sinistra, sotto al riquadro colore/quadratini di selezione.
+   Font monospace come l'HUD, in contrasto netto con il serif corsivo del
+   giudizio AI (#aiJudgment) che appare al centro — è proprio questo
+   contrasto visivo a segnare la differenza tra dato e sovrainterpretazione,
+   il cuore della ricerca. Resta invisibile (opacity 0) solo finché non
+   arriva il primo aggiornamento da updateDataPanel() — da lì in poi non
+   sparisce più. */
 #dataPanel {
   position: fixed;
   top: calc(10% + 170px);
@@ -795,6 +853,19 @@ video { display: none; }
   color: rgba(255,255,255,0.7);
 }
 #pageReactionAi:empty { display: none; }
+/* forma 3D generata dai dati del capitolo (script.js, sezione 19).
+   display:none di default: JS la mostra solo quando la forma è pronta,
+   così non lascia un riquadro vuoto se WebGL non è disponibile o se la
+   libreria Three.js non si è caricata (rete assente, CDN irraggiungibile). */
+#pageReaction3D {
+  display: none;
+  width: 200px;
+  height: 200px;
+  margin: 0 auto;
+  cursor: grab;
+  touch-action: none; /* evita che trascinare la forma faccia anche scorrere la pagina sotto, su telefono */
+}
+#pageReaction3D.dragging { cursor: grabbing; }
 
 /* ── SCANLINES ───────────────────────────────────────────────────── */
 /* leggerissime righe orizzontali sopra tutto, effetto "schermo vecchio" */
@@ -820,96 +891,14 @@ body::before {
 }
 @keyframes spinning { to { transform: rotate(360deg); } }
 
-/* ── SCHERMI PICCOLI (TELEFONO) ──────────────────────────────────── */
+/* ── SCHERMI PICCOLI (TABLET E TELEFONO) ─────────────────────────── */
 /* Il layout sopra è pensato per schermi grandi (PC). Qui sotto solo le
-   differenze per schermi stretti: elementi rimpiccioliti/riposizionati
-   per non sovrapporsi ed entrare comodamente in una larghezza da telefono.
-   Soglia 600px = copre qualunque telefono in verticale. */
-@media (max-width: 600px) {
-  #pulseCore { width: 120px; height: 120px; }
-
-  #colorOverlay { width: 64px; height: 64px; }
-  #paletteSwatches { top: calc(10% + 76px); }
-  .swatch { width: 18px; height: 18px; }
-
-  /* l'anteprima si sposta in alto a destra: libera tutta la fascia in
-     basso per il solo bottone GIUDICA, ben visibile e facile da toccare.
-     max-width/max-height (non width/height fissi) come nella regola base
-     sopra — sul telefono il video è spesso molto verticale, un'altezza
-     fissa lo farebbe uscire dal riquadro previsto */
-  #preview {
-    top: calc(20px + env(safe-area-inset-top, 0px));
-    right: 20px;
-    bottom: auto;
-    width: auto;
-    height: auto;
-    max-width: 100px;
-    max-height: 90px;
-  }
-
-  /* GIUDICA: già centrato di default (vedi regola base sopra) — qui solo
-     una misura adatta a un telefono, comunque ben più grande di prima */
-  #judgeBtn {
-    font-size: 12px;
-    padding: 12px 24px;
-  }
-
-  /* pannello dati oggettivi: più stretto e più in alto, per non scontrarsi
-     con i quadratini di selezione colore (più in alto su schermi piccoli) */
-  #dataPanel {
-    top: calc(10% + 100px);
-    left: calc(20px - 1rem); /* vedi nota sull'allineamento nella regola base di #dataPanel */
-    width: 58vw;
-    max-width: 240px;
-    min-width: 220px;
-    padding: 0.9rem 1rem;
-  }
-  .data-dominant-name { font-size: 13px; }
-  .data-row { font-size: 10px; gap: 6px; }
-
-  /* CAM e cambia-fotocamera: piccola coppia in alto a destra, sotto l'anteprima */
-  #camBtn, #switchCamBtn {
-    bottom: auto;
-    right: 20px;
-    font-size: 8px;
-    padding: 6px 9px;
-  }
-  #camBtn       { top: calc(100px + env(safe-area-inset-top, 0px)); }
-  #switchCamBtn { top: calc(132px + env(safe-area-inset-top, 0px)); }
-
-  #aiJudgment { padding: 1.6rem 1.4rem; max-width: 88vw; }
-  #aiTrace    { max-width: 88vw; }
-
-  #resolutionSlider { width: 90px; }
-
-  /* QR: un po' più piccolo per non occupare troppo spazio su schermi stretti */
-  #qrCode { width: 56px; height: 56px; }
-  #qrLabel { font-size: 7px; }
-
-  /* sequenza interattiva (domanda/riconoscimento/ritratto): un po' più
-     compatta per entrare comodamente in uno schermo da telefono */
-  .question-label { margin-bottom: 1rem; }
-  .mood-chip { font-size: 9px; padding: 7px 11px; }
-  .recognize-btns { gap: 8px; }
-  .recognize-btns button { font-size: 10px; padding: 8px 14px; }
-  #portraitCanvas { width: 55vw; height: 55vw; }
-
-  #pageReaction { padding: 2rem 1.6rem 1.7rem; width: min(560px, 90vw); }
-  #pageReactionText { font-size: 1.05rem; }
-}
-
-/* ══════════════════════════════════════════════════════════════════
-   CHROMA — RESPONSIVE V3
-   Base: CSS originale funzionante.
-   Correzioni mirate:
-   - preview webcam più grande su PC
-   - tablet/telefono senza QR
-   - dati in basso a sinistra + palette/colore sopra
-   - gruppo webcam ordinato in alto a destra
-   - GIUDICA mantiene sempre la stessa dimensione, anche durante lo spinner
-   - pulseCore torna realmente al centro
-   - leggero alleggerimento grafico su mobile
-   ══════════════════════════════════════════════════════════════════ */
+   differenze per schermi più stretti: dimensioni ed elementi
+   riposizionati per stare comodamente su tablet e telefono — pannello
+   dati in basso a sinistra, gruppo webcam in alto a destra, QR
+   nascosto (non serve installare l'app su un telefono che la sta già
+   usando), GIUDICA di dimensione fissa anche durante il caricamento,
+   #pulseCore centrato sullo schermo reale. */
 
 html, body {
   width: 100%;
@@ -924,10 +913,15 @@ body {
 /* ── DESKTOP ────────────────────────────────────────────────────── */
 @media (min-width: 1101px) {
   #preview {
+    /* width e height espliciti (clamp proporzionato a un rapporto 4:3),
+       mai "auto": su un elemento position:fixed, width/height:auto lo
+       farebbe ridimensionare in base al vero aspect ratio della webcam
+       invece di restare alla dimensione voluta. object-fit:cover ritaglia
+       il contenuto per riempire comunque queste dimensioni, senza mai
+       stirarlo. */
     width: clamp(250px, 20vw, 330px);
-    height: auto;
-    max-width: 330px;
-    max-height: 248px;
+    height: clamp(188px, 15vw, 248px);
+    object-fit: cover;
     right: 24px;
     bottom: 88px;
     opacity: 0.8;
@@ -935,6 +929,17 @@ body {
 }
 
 /* ── TABLET + TELEFONO ──────────────────────────────────────────── */
+
+/* IMPORTANTE per chi tocca questo file: qui sotto ci sono DUE blocchi
+   che si sovrappongono — "≤1100px" (subito qui sotto) e "≤600px" (più
+   avanti in questo file). In CSS, a parità di specificità del
+   selettore, vince sempre la regola scritta più in basso nel file,
+   indipendentemente da quale @media sia più stretto. Per questo il
+   blocco ≤600px (il più specifico, quello che deve avere l'ultima
+   parola sui telefoni) viene DOPO quello ≤1100px in questo file, e non
+   prima: se in futuro si aggiungono altre regole mobile, vanno tenute
+   nello stesso ordine (dalla condizione più larga alla più stretta),
+   altrimenti quelle più strette smettono silenziosamente di funzionare. */
 @media (max-width: 1100px) {
 
   #qrBox {
@@ -1022,36 +1027,23 @@ body {
     height: 18px;
   }
 
-  /* gruppo CAMERA: stessa larghezza, tutto allineato a destra */
-  #preview {
-    top: calc(14px + env(safe-area-inset-top, 0px));
-    right: 14px;
-    bottom: auto;
-    width: 140px;
-    height: auto;
-    max-width: 140px;
-    max-height: 105px;
-    opacity: 0.8;
-  }
+  /* #preview non è definito qui: la sua dimensione e posizione per
+     schermi ≤1100px sono nei due blocchi "TELEFONO / TABLET IN
+     VERTICALE" / "...IN ORIZZONTALE" più avanti in questo file (una
+     forma diversa per ciascun orientamento, con object-fit:cover). */
 
+  /* La dimensione, la posizione destra/alto e il padding di
+     #camBtn/#switchCamBtn per gli schermi ≤1100px sono definiti più
+     avanti in questo file, nei due blocchi "TELEFONO / TABLET IN
+     VERTICALE" e "...IN ORIZZONTALE" (una larghezza diversa per ciascun
+     orientamento). Qui restano solo le proprietà che quei due blocchi
+     NON toccano. */
   #camBtn,
   #switchCamBtn {
     left: auto;
-    right: 14px;
     bottom: auto;
-    width: 140px;
-    min-width: 140px;
     text-align: center;
     font-size: 7px;
-    padding: 6px 7px;
-  }
-
-  #camBtn {
-    top: calc(126px + env(safe-area-inset-top, 0px));
-  }
-
-  #switchCamBtn {
-    top: calc(160px + env(safe-area-inset-top, 0px));
   }
 
   /* slider separato dal gruppo camera */
@@ -1105,6 +1097,74 @@ body {
     max-height: 88dvh;
   }
 }
+@media (max-width: 600px) {
+  #pulseCore { width: 120px; height: 120px; }
+
+  #colorOverlay { width: 64px; height: 64px; }
+  #paletteSwatches { top: calc(10% + 76px); bottom: auto; } /* bottom:auto per non stirare l'elemento: vedi nota su #dataPanel qui sotto */
+  .swatch { width: 18px; height: 18px; }
+
+  /* #preview non è definito qui: dimensione e posizione sotto i 1101px
+     sono nei due blocchi per orientamento verso la fine del file
+     (portrait/landscape, object-fit:cover). */
+
+  /* GIUDICA: già centrato di default (vedi regola base sopra) — qui solo
+     una misura adatta a un telefono */
+  #judgeBtn {
+    font-size: 12px;
+    padding: 12px 24px;
+  }
+
+  /* pannello dati oggettivi: più stretto e più in alto, per non scontrarsi
+     con i quadratini di selezione colore (più in alto su schermi piccoli).
+     bottom:auto è necessario: senza, il "bottom" ereditato dal blocco
+     ≤1100px qui sopra resterebbe attivo insieme a questo "top" — con
+     entrambi impostati su un elemento position:fixed e height:auto, il
+     browser STIRA il pannello per riempire tutto lo spazio fra i due,
+     invece di dargli l'altezza naturale del contenuto. */
+  #dataPanel {
+    top: calc(10% + 100px);
+    bottom: auto;
+    left: calc(20px - 1rem); /* vedi nota sull'allineamento nella regola base di #dataPanel */
+    width: 58vw;
+    max-width: 240px;
+    min-width: 220px;
+    padding: 0.9rem 1rem;
+  }
+  .data-dominant-name { font-size: 13px; }
+  .data-row { font-size: 10px; gap: 6px; }
+
+  /* CAM e cambia-fotocamera: piccola coppia in alto a destra, sotto l'anteprima */
+  #camBtn, #switchCamBtn {
+    bottom: auto;
+    right: 20px;
+    font-size: 8px;
+    padding: 6px 9px;
+  }
+  #camBtn       { top: calc(100px + env(safe-area-inset-top, 0px)); }
+  #switchCamBtn { top: calc(132px + env(safe-area-inset-top, 0px)); }
+
+  #aiJudgment { padding: 1.6rem 1.4rem; max-width: 88vw; }
+  #aiTrace    { max-width: 88vw; }
+
+  #resolutionSlider { width: 90px; }
+
+  /* QR: un po' più piccolo per non occupare troppo spazio su schermi stretti */
+  #qrCode { width: 56px; height: 56px; }
+  #qrLabel { font-size: 7px; }
+
+  /* sequenza interattiva (domanda/riconoscimento/ritratto): un po' più
+     compatta per entrare comodamente in uno schermo da telefono */
+  .question-label { margin-bottom: 1rem; }
+  .mood-chip { font-size: 9px; padding: 7px 11px; }
+  .recognize-btns { gap: 8px; }
+  .recognize-btns button { font-size: 10px; padding: 8px 14px; }
+  #portraitCanvas { width: 55vw; height: 55vw; }
+
+  #pageReaction { padding: 2rem 1.6rem 1.7rem; width: min(560px, 90vw); }
+  #pageReactionText { font-size: 1.05rem; }
+  #pageReaction3D { width: 150px; height: 150px; }
+}
 
 /* ── TELEFONO VERTICALE ─────────────────────────────────────────── */
 @media (max-width: 600px) and (orientation: portrait) {
@@ -1116,7 +1176,12 @@ body {
     line-height: 1.7;
   }
 
+  /* top:auto qui per lo stesso motivo spiegato sopra (blocco ≤600px
+     generale): questa regola vuole ancorare il pannello al BASSO, quindi
+     deve annullare esplicitamente qualunque "top" ereditato da prima —
+     altrimenti torna a stirarsi fra i due. */
   #dataPanel {
+    top: auto;
     left: 10px;
     bottom: calc(12px + env(safe-area-inset-bottom, 0px));
     width: 57vw;
@@ -1158,6 +1223,7 @@ body {
   }
 
   #paletteSwatches {
+    top: auto; /* stesso motivo di #dataPanel qui sopra */
     left: 73px;
     bottom: calc(214px + env(safe-area-inset-bottom, 0px));
     gap: 4px;
@@ -1168,29 +1234,9 @@ body {
     height: 17px;
   }
 
-  /* CAMERA: più compatta e leggermente più interna dal bordo */
-  #preview {
-    top: calc(16px + env(safe-area-inset-top, 0px));
-    right: 14px;
-    width: 118px;
-    max-width: 118px;
-    max-height: 88px;
-  }
-
-  #camBtn,
-  #switchCamBtn {
-    right: 14px;
-    width: 118px;
-    min-width: 118px;
-  }
-
-  #camBtn {
-    top: calc(111px + env(safe-area-inset-top, 0px));
-  }
-
-  #switchCamBtn {
-    top: calc(143px + env(safe-area-inset-top, 0px));
-  }
+  /* #preview e #camBtn/#switchCamBtn (dimensione, posizione e top) sono
+     definiti nei blocchi per orientamento verso la fine del file, non
+     qui — vedi la nota qualche riga sopra. */
 
   #resolutionSlider {
     right: -1px;
@@ -1309,29 +1355,9 @@ body {
     height: 16px;
   }
 
-  /* landscape quasi funzionava: tengo la stessa logica ma allineo il gruppo */
-  #preview {
-    top: calc(10px + env(safe-area-inset-top, 0px));
-    right: 14px;
-    width: 154px;
-    max-width: 154px;
-    max-height: 96px;
-  }
-
-  #camBtn,
-  #switchCamBtn {
-    right: 14px;
-    width: 154px;
-    min-width: 154px;
-  }
-
-  #camBtn {
-    top: calc(112px + env(safe-area-inset-top, 0px));
-  }
-
-  #switchCamBtn {
-    top: calc(144px + env(safe-area-inset-top, 0px));
-  }
+  /* #preview e #camBtn/#switchCamBtn (dimensione, posizione e top) per
+     l'orientamento orizzontale sono nel blocco dedicato verso la fine
+     del file, non qui. */
 
   #resolutionSlider {
     right: 180px;
@@ -1410,14 +1436,11 @@ body {
 }
 
 
-/* ══════════════════════════════════════════════════════════════════
-   CHROMA — RESPONSIVE V4
-   PATCH CAMERA RESPONSIVA
-   Il riquadro webcam cambia forma con l'orientamento del dispositivo:
-   - portrait  -> verticale
-   - landscape -> orizzontale
-   Mantiene separati preview e controlli.
-   ══════════════════════════════════════════════════════════════════ */
+/* ── RIQUADRO WEBCAM PER ORIENTAMENTO DEL TELEFONO ──────────────────
+   Il riquadro #preview cambia forma con l'orientamento del dispositivo:
+   verticale in portrait, orizzontale in landscape — in entrambi i casi
+   con object-fit:cover (script.js, sezione 4, drawVideoCover), così il
+   video riempie sempre il riquadro senza mai stirarsi. ────────────── */
 
 /* TELEFONO / TABLET IN VERTICALE */
 @media (max-width: 1100px) and (orientation: portrait) {
