@@ -22,14 +22,6 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Sovrainterp.">
   <meta name="mobile-web-app-capable" content="yes">
-
-  <!-- Three.js: libreria per il rendering 3D nel browser, usata per la
-       forma tridimensionale generata nel popup di riconoscimento pagina
-       (script.js, sezione 17). Versione "classica" (non a moduli): si usa
-       come THREE.* nello script.js caricato dopo, senza bisogno di build
-       tool o import — coerente con il resto del progetto (tutto file
-       diretti, nessuna compilazione). -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 </head>
 
 <!--
@@ -68,7 +60,7 @@
   <!-- cerchio pulsante al centro: il "cuore" dell'installazione -->
   <div id="pulseCore"></div>
 
-  <!-- giudizio dell'AI (Ollama, in esecuzione sul PC — sezione 10 di script.js) — appare grande al centro dello schermo -->
+  <!-- giudizio dell'AI (WebLLM, in locale nel browser) — appare grande al centro dello schermo -->
   <div id="aiJudgment"></div>
 
   <!-- dopo il giudizio, il testo sale e resta come traccia leggera in alto -->
@@ -101,25 +93,12 @@
   <!-- messaggio di errore/debug (webcam non accessibile, AI locale non disponibile, ecc.) -->
   <div id="debugMsg"></div>
 
-  <!-- QR in basso a sinistra: un clic lo ingrandisce al centro con
-       #qrModal qui sotto, pensato per mostrarlo a tutta la sala durante
-       l'esposizione senza uscire dall'app (script.js, sezione 18). È un
-       bottone e non un link proprio per poter intercettare il clic
-       invece di aprire una nuova scheda. -->
-  <button id="qrBox" type="button">
+  <!-- QR in basso a sinistra: scansionandolo col telefono si apre la stessa
+       app (GitHub Pages), installabile anche lì come PWA (vedi manifest.json) -->
+  <a id="qrBox" href="https://sebabreak.github.io/Chroma/sovrainterpretazione-cromatica/" target="_blank" rel="noopener">
     <img id="qrCode" src="qr-telefono.png" alt="QR code per aprire l'app sul telefono">
     <span id="qrLabel">installa su telefono</span>
-  </button>
-
-  <!-- popup QR a schermo intero (script.js, sezione 18) — stesso pattern
-       di #pageReactionBackdrop/#pageReaction: sfondo che scurisce tutto
-       il resto, popup sopra, chiudibile con la X, cliccando fuori, o Esc -->
-  <div id="qrModalBackdrop"></div>
-  <div id="qrModal">
-    <button id="qrModalClose" class="ghost-btn" type="button">chiudi ✕</button>
-    <img id="qrModalImg" src="qr-telefono.png" alt="QR code per aprire l'app sul telefono">
-    <div id="qrModalLabel">inquadra per aprire CHROMA sul tuo telefono</div>
-  </div>
+  </a>
 
   <!-- SEQUENZA INTERATTIVA (script.js, sezioni 12-15), un elemento alla
        volta, dallo stesso "palco" al centro dello schermo:
@@ -137,6 +116,9 @@
   </div>
 
   <!-- 3. il giudizio AI vero e proprio è #aiJudgment, già definito sopra -->
+
+  <!-- 3b. confronto uomo/macchina: la parola scelta dal visitatore accanto a quella dell'AI (script.js, sezione 13b) -->
+  <div id="comparePanel"></div>
 
   <!-- 4. "ti riconosci?", mostrata subito dopo il giudizio -->
   <div id="recognizeQuestion">
@@ -163,19 +145,16 @@
        #pageReactionBackdrop scurisce TUTTO il resto (HUD, pannello dati,
        QR, GIUDICA, anteprima webcam) mentre il popup è aperto — senza,
        quegli elementi restavano visibili e in competizione visiva col
-       popup, specialmente su schermi piccoli (vedi nota in style.css).
-       #pageReaction3D (script.js, sezione 19) mostra una forma tridimensionale
-       generata dai dati del capitolo — colori e geometria calcolati dalla
-       stessa firma cromatica che ha fatto scattare il riconoscimento —
-       ruotabile trascinandola col mouse o col dito. -->
+       popup, specialmente su schermi piccoli (vedi nota in style.css). -->
+  <!-- riepilogo del registro risposte, visibile solo premendo "S" (script.js, sezione 16) -->
+  <div id="statsPanel"></div>
+
   <div id="pageReactionBackdrop"></div>
   <div id="pageReaction">
     <button id="pageReactionClose" class="ghost-btn" type="button">chiudi ✕</button>
-    <canvas id="pageReaction3D"></canvas>
     <div id="pageReactionText"></div>
   </div>
 
   <script src="script.js"></script>
 </body>
-
 </html>
