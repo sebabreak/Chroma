@@ -934,5 +934,8 @@ const UK = {
   "Che tipo di design produce?": "Який дизайн вона створює?",
   "A) Spento e neutro": "A) Тьмяний і нейтральний",
   "B) Monocromatico": "B) Монохромний",
-  "C) Energico e molto colorato": "C) Енергійний і дуже барвистий"
+  "C) Energico e molto colorato": "C) Енергійний і дуже барвистий",
+  "E se a leggerli fosse una macchina?": "А якщо їх прочитає машина?",
+  "Nell'installazione di CHROMA un'intelligenza artificiale attribuisce ai colori emozioni che non può conoscere. Confronta la tua lettura con la sua.": "В інсталяції CHROMA штучний інтелект приписує кольорам емоції, яких він не може знати. Порівняй своє прочитання з його.",
+  "Prova la sovrainterpretazione cromatica ›": "Спробуй кольорову надінтерпретацію ›"
 };
