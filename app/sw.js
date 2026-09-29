@@ -1,9 +1,10 @@
-const VERSION = "chroma-v21";
+const VERSION = "chroma-v22";
 const FILES = [
   "./",
   "index.html",
   "style.css",
   "data.js",
+  "en.js",
   "uk.js",
   "app.js",
   "tools.js",
@@ -75,7 +76,27 @@ const FILES = [
   "assets/triade.png",
   "assets/vinci-1.png",
   "assets/vinci-2.png",
-  "assets/vinci-3.png"
+  "assets/vinci-3.png",
+  "assets/fonts/inter-cyrillic-300-normal.woff2",
+  "assets/fonts/inter-latin-300-normal.woff2",
+  "assets/fonts/inter-cyrillic-400-normal.woff2",
+  "assets/fonts/inter-latin-400-normal.woff2",
+  "assets/fonts/inter-cyrillic-500-normal.woff2",
+  "assets/fonts/inter-latin-500-normal.woff2",
+  "assets/fonts/inter-cyrillic-600-normal.woff2",
+  "assets/fonts/inter-latin-600-normal.woff2",
+  "assets/fonts/inter-cyrillic-700-normal.woff2",
+  "assets/fonts/inter-latin-700-normal.woff2",
+  "assets/fonts/roboto-cyrillic-300-normal.woff2",
+  "assets/fonts/roboto-latin-300-normal.woff2",
+  "assets/fonts/roboto-cyrillic-400-normal.woff2",
+  "assets/fonts/roboto-latin-400-normal.woff2",
+  "assets/fonts/roboto-cyrillic-500-normal.woff2",
+  "assets/fonts/roboto-latin-500-normal.woff2",
+  "assets/fonts/roboto-cyrillic-600-normal.woff2",
+  "assets/fonts/roboto-latin-600-normal.woff2",
+  "assets/fonts/roboto-cyrillic-700-normal.woff2",
+  "assets/fonts/roboto-latin-700-normal.woff2"
 ];
 
 self.addEventListener("install", e => {
