@@ -11,22 +11,25 @@ const colorOf = x => x && x[0] === "#" ? { id: x, n: x.toUpperCase(), h: x } : C
 const MAX_LEVEL = LEVEL_TITLES.length;
 MISSIONS.forEach(m => { if (m.color) COLOR_BY[m.color].mission = m; });
 
-const LANGS = { it: "Italiano", uk: "Українська" };
+const LANGS = { it: "Italiano", en: "English", uk: "Українська" };
+const DICT = { en: EN, uk: UK };
 let LANG = "it";
 function t(text, vars) {
-  const out = LANG === "uk" && UK[text] || text;
+  const out = DICT[LANG]?.[text] || text;
   return vars ? out.replace(/\{(\w+)\}/g, (_, k) => vars[k]) : out;
 }
-const locale = () => LANG === "uk" ? "uk-UA" : "it-IT";
+const locale = () => ({ it: "it-IT", en: "en-GB", uk: "uk-UA" })[LANG];
+const browserLang = () => { const l = (navigator.language || "").toLowerCase().slice(0, 2); return LANGS[l] ? l : "it"; };
+const latinLang = () => { const l = browserLang(); return l === "uk" ? "it" : l; };
 const hintOf = c => c.mission ? t(c.mission.type === "serie" ? "Serie: {m}" : "Missione: {m}", { m: t(c.mission.title) }) : t(c.hint);
-const langOfName = name => /[\u0400-\u04ff]/.test(name) ? "uk" : /[a-zà-ÿ]/i.test(name) ? "it" : null;
+const langOfName = name => /[\u0400-\u04ff]/.test(name) ? "uk" : /[a-zà-ÿ]/i.test(name) ? (LANG === "uk" ? latinLang() : LANG) : null;
 const originals = new WeakMap();
 function translateDOM() {
   const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
   for (let node; (node = walker.nextNode());) {
     if (!originals.has(node)) {
       const key = node.parentElement.dataset.t || node.nodeValue.trim();
-      if (!key || !(key in UK)) continue;
+      if (!key || !(key in UK || key in EN)) continue;
       originals.set(node, [node.nodeValue, key]);
     }
     const [src, key] = originals.get(node);
@@ -1029,7 +1032,7 @@ addEventListener("visibilitychange", () => { if (document.hidden) save(); });
 
 document.addEventListener("DOMContentLoaded", () => {
   fit();
-  LANG = S.lang || (navigator.language?.toLowerCase().startsWith("uk") ? "uk" : "it");
+  LANG = S.lang || browserLang();
   setLang(LANG);
   updateStreak();
   fillTitles();
