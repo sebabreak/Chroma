@@ -9,7 +9,7 @@
 //  direttamente a una sezione:
 //
 //   1. ELEMENTI DOM ................ riferimenti agli elementi di index.html
-//   (2. AUDIO — non presente: l'installazione è puramente visiva, senza suono)
+//   (2. AUDIO — rimossa: l'installazione è puramente visiva, niente più suono)
 //   3. STATO ........................ variabili che tengono traccia di colore/tempo/AI
 //   4. CANVAS BASSA RISOLUZIONE ..... pixelazione video + campionamento colore
 //   5. SFONDO ANIMATO E PARTICELLE .. nebulosa di colori rilevati + i puntini che seguono il mouse
@@ -21,12 +21,11 @@
 //  11. CONTROLLI .................... bottoni cam / cambia fotocamera / giudica, selezione manuale del colore, avvio al click
 //  12. DATI OGGETTIVI ............... pannello nome colore/HEX/RGB/S/L/% area, SEMPRE VISIBILE a sinistra, si aggiorna da solo
 //  13. DOMANDA UMANA ................ "cosa ti trasmettono questi colori?", raccolta prima del giudizio AI (timeout se non risponde nessuno)
+//  13b. CONFRONTO UOMO/MACCHINA ..... la parola del visitatore accanto a quella a cui l'AI riconduce il suo giudizio
 //  14. "TI RICONOSCI?" .............. sì/no/in parte, mostrata subito dopo il giudizio AI (timeout se non risponde nessuno)
 //  15. RITRATTO CROMATICO ........... immagine astratta generata dai dati della singola osservazione, scaricabile
-//  16. LOG RISPOSTE .................. registro in memoria delle risposte + esportazione CSV (tasto "E")
+//  16. LOG RISPOSTE .................. registro salvato nel browser + esportazione CSV (tasto "E") + riepilogo (tasto "S")
 //  17. RICONOSCIMENTO PAGINA ........ riconosce la composizione cromatica stampata su una pagina della tesi e apre un popup a tema, chiudibile a mano
-//  18. QR INGRANDITO ................ un clic sul QR lo ingrandisce al centro, per mostrarlo a tutta la sala durante l'esposizione
-//  19. FORMA 3D PER CAPITOLO ........ genera e ruota una forma tridimensionale dai colori del capitolo, dentro al popup della sezione 17
 //
 //  MODIFICHE PIÙ COMUNI — dove intervenire:
 //  - Cambiare modello Ollama o i suoi parametri  → sezione 10, dentro fetchAIJudgment()
@@ -50,9 +49,6 @@
 //  - Colori/testo/tema di ogni pagina riconoscibile → sezione 17, costante PAGE_SIGNATURES
 //  - Quanto è tollerante il riconoscimento pagina (stampa/luce imprecise) → sezione 17, PAGE_MATCH_THRESHOLD / PAGE_MATCH_MIN_RATIO
 //  - Quanto resta "ignorata" una pagina dopo aver chiuso il suo popup    → sezione 17, PAGE_REOPEN_COOLDOWN
-//  - Quanto sono pronunciate le gobbe della forma 3D → sezione 19, i valori "strength"/"falloff" in generateChapterGeometry()
-//  - Velocità di rotazione automatica della forma 3D → sezione 19, il numero aggiunto a rotY in render3DLoop()
-//  - Passare a un modello 3D fatto a mano (Blender) invece che generato → sezione 19, vedi nota introduttiva della sezione
 // ══════════════════════════════════════════════════════════════════
 
 // Ollama gira sul PC (non nel telefono): il PC deve avere Ollama installato
@@ -112,10 +108,10 @@ if ('serviceWorker' in navigator) {
   });
 }
 
-// (la sezione 2, "AUDIO", non esiste: l'installazione è puramente visiva,
-// senza sintesi sonora reattiva né tasto AUDIO ON/OFF — la numerazione
-// riparte da 3 di proposito, per lasciare libero quel numero nel caso
-// serva reintrodurre l'audio in futuro senza dover rinumerare tutto)
+// (sezione 2, "AUDIO", rimossa: l'installazione ora è puramente visiva —
+// niente più sintesi sonora reattiva né tasto AUDIO ON/OFF. I numeri delle
+// sezioni successive sono rimasti quelli originali apposta, per restare
+// coerenti con eventuali appunti/versioni precedenti del progetto.)
 
 // ── 3. STATO ──────────────────────────────────────────────────────
 // colore del frame precedente/corrente, usati per calcolare quanto
@@ -187,20 +183,10 @@ let selectedColor = null;
 // Il range dello slider è definito in index.html (min/max dell'input
 // #resolutionSlider) — Math.max(1, ...) qui sotto è solo una sicurezza
 // per evitare un canvas alto 0px se in futuro il min venisse abbassato oltre 1.
-//
-// TARGET_ASPECT è il formato (4:3) a cui viene RITAGLIATO ogni fotogramma
-// prima di campionarlo (vedi drawVideoCover qui sotto), non il vero
-// aspect ratio della webcam: la fotocamera di un telefono o di un PC
-// raramente trasmette davvero in 4:3, quindi il fotogramma va sempre
-// ritagliato a un formato fisso — mai stirato, e mai lasciato libero di
-// cambiare dimensione col dispositivo, altrimenti anche il riquadro
-// #preview a schermo (style.css) dovrebbe rincorrerlo continuamente.
-const TARGET_ASPECT = 0.75;
 let lowResWidth  = Math.max(1, parseInt(resolutionSlider.value));
-let lowResHeight = Math.max(1, Math.round(lowResWidth * TARGET_ASPECT));
+let lowResHeight = 1; // valore reale calcolato da updateLowResDimensions() qui sotto, appena il video è pronto
 const lowResCanvas = document.createElement("canvas");
 const lowResCtx    = lowResCanvas.getContext("2d");
-lowResCanvas.width = lowResWidth; lowResCanvas.height = lowResHeight;
 
 // dimensione interna FISSA e volutamente piccola per il canvas #preview
 // (il riquadro pixelato cliccabile) — INDIPENDENTE dallo slider di
@@ -211,29 +197,26 @@ lowResCanvas.width = lowResWidth; lowResCanvas.height = lowResHeight;
 // image-rendering:pixelated in style.css) — pochi pixel bastano e
 // costano meno ad ogni frame, senza perdere nulla in precisione di
 // campionamento (quella resta governata solo dallo slider).
-const PREVIEW_RASTER_WIDTH  = 64;
-const PREVIEW_RASTER_HEIGHT = Math.max(1, Math.round(PREVIEW_RASTER_WIDTH * TARGET_ASPECT));
-previewCanvas.width = PREVIEW_RASTER_WIDTH; previewCanvas.height = PREVIEW_RASTER_HEIGHT;
+const PREVIEW_RASTER_WIDTH = 64;
 
-// disegna il video in un canvas RITAGLIANDOLO (mai stirandolo) per
-// riempire esattamente destW×destH: stesso principio già usato altrove
-// per il ritratto cromatico (captureVideoFrame(), sezione 10 — lì è un
-// ritaglio quadrato, qui invece è a formato TARGET_ASPECT). Se la webcam
-// è più larga del necessario, taglia i lati; se è più alta, taglia
-// sopra/sotto — sempre centrato.
-function drawVideoCover(ctx, destW, destH) {
-  const vw = video.videoWidth, vh = video.videoHeight;
-  if (!vw || !vh) return;
-  const targetAspect = destW / destH;
-  const srcAspect = vw / vh;
-  let sx, sy, sw, sh;
-  if (srcAspect > targetAspect) { // sorgente più larga del formato voluto: ritaglia i lati
-    sh = vh; sw = vh * targetAspect; sx = (vw - sw) / 2; sy = 0;
-  } else { // sorgente più alta del formato voluto: ritaglia sopra/sotto
-    sw = vw; sh = vw / targetAspect; sx = 0; sy = (vh - sh) / 2;
-  }
-  ctx.drawImage(video, sx, sy, sw, sh, 0, 0, destW, destH);
+// ricalcola le dimensioni di lowResCanvas E di #preview in base al VERO
+// aspect ratio della webcam (video.videoWidth/videoHeight), non più un
+// 4:3 fisso — quel valore fisso è la causa dell'anteprima "stretchata"
+// su telefono: la fotocamera di un telefono raramente trasmette davvero
+// in 4:3 (spesso è più stretta in verticale, o molto più larga in
+// orizzontale), quindi forzare il fotogramma dentro un riquadro 4:3 lo
+// deformava. Finché il video non è ancora pronto, usa 0.75 (4:3) come
+// stima di partenza ragionevole.
+function updateLowResDimensions() {
+  const aspect = (video.videoWidth && video.videoHeight) ? (video.videoHeight / video.videoWidth) : 0.75;
+  lowResHeight = Math.max(1, Math.round(lowResWidth * aspect));
+  lowResCanvas.width = lowResWidth; lowResCanvas.height = lowResHeight;
+
+  const previewH = Math.max(1, Math.round(PREVIEW_RASTER_WIDTH * aspect));
+  previewCanvas.width = PREVIEW_RASTER_WIDTH; previewCanvas.height = previewH;
 }
+updateLowResDimensions();
+let lastVideoW = 0, lastVideoH = 0; // per rilevare, dentro loop() (sezione 9), quando l'aspect ratio reale della webcam cambia (avvio, cambio fotocamera, rotazione del telefono) e va ricalcolato
 
 // lo slider verticale a destra permette di cambiare questa risoluzione a mano.
 // Al minimo (1 pixel) il colore "medio scena" (r,g,b in loop(), sezione 9)
@@ -242,9 +225,8 @@ function drawVideoCover(ctx, destW, destH) {
 // sezione 7) invece ha bisogno di più pixel: sotto i 5 campioni utili resta
 // semplicemente ferma sull'ultimo risultato valido, senza errori.
 resolutionSlider.addEventListener("input", e => {
-  lowResWidth  = Math.max(1, parseInt(e.target.value));
-  lowResHeight = Math.max(1, Math.round(lowResWidth * TARGET_ASPECT));
-  lowResCanvas.width = lowResWidth; lowResCanvas.height = lowResHeight;
+  lowResWidth = Math.max(1, parseInt(e.target.value));
+  updateLowResDimensions();
 });
 
 // ── 5. SFONDO ANIMATO E PARTICELLE ────────────────────────────────
@@ -430,7 +412,7 @@ function colorName([r,g,b]) {
 //  - KMEANS_ITERATIONS più alto   → i cluster convergono in modo più stabile/accurato
 //  - k più alto (vedi la chiamata extractPalette(imgData, 5, ...) in loop()) → più colori distinti riconosciuti
 const SAMPLE_STEP       = 8;  // 8 = un pixel ogni 2 (RGBA = 4 byte/pixel). Prima era 32 = un pixel ogni 8: 4x meno campioni.
-const KMEANS_ITERATIONS = 14; // più iterazioni = cluster più stabili/accurati, a costo di qualche ms in più per frame
+const KMEANS_ITERATIONS = 14; // prima erano 10: più iterazioni = palette più accurata
 
 function extractPalette(imageData, k, previousPalette = []) {
   const data = imageData.data;
@@ -615,11 +597,17 @@ function loop() {
     return;
   }
 
+  // l'aspect ratio reale della webcam può cambiare a stream già avviato
+  // (cambio fotocamera anteriore/posteriore, rotazione del telefono su
+  // alcuni browser): controllo economico (due confronti), ricalcola le
+  // dimensioni solo quando serve davvero
+  if (video.videoWidth !== lastVideoW || video.videoHeight !== lastVideoH) {
+    lastVideoW = video.videoWidth; lastVideoH = video.videoHeight;
+    updateLowResDimensions();
+  }
+
   // ── campiona il colore medio del frame ──
-  // drawVideoCover (sezione 4) ritaglia il fotogramma al formato
-  // TARGET_ASPECT invece di stirarlo dentro lowResCanvas — qualunque sia
-  // il vero aspect ratio della webcam, qui non viene mai distorto
-  drawVideoCover(lowResCtx, lowResCanvas.width, lowResCanvas.height);
+  lowResCtx.drawImage(video,0,0,lowResCanvas.width,lowResCanvas.height);
   const imgData=lowResCtx.getImageData(0,0,lowResCanvas.width,lowResCanvas.height);
   const data=imgData.data;
   let r=0,g=0,b=0;
@@ -670,26 +658,18 @@ function loop() {
   pctx.clearRect(0,0,previewCanvas.width,previewCanvas.height);
   pctx.drawImage(lowResCanvas,0,0,previewCanvas.width,previewCanvas.height);
 
-  // se il punto selezionato è sull'anteprima, disegna un piccolo mirino sopra per mostrare dov'è.
-  // Dimensioni in FRAZIONE di previewCanvas.width, non pixel fissi: dato
-  // che previewCanvas è piccolo (PREVIEW_RASTER_WIDTH, sezione 4), un
-  // mirino a pixel fissi occuperebbe una frazione sproporzionata del
-  // riquadro — restando proporzionale, il mirino ha sempre la stessa
-  // dimensione RELATIVA qualunque sia la risoluzione scelta.
+  // se il punto selezionato è sull'anteprima, disegna un piccolo mirino sopra per mostrare dov'è
   if (manualSelection?.type === 'point') {
     const mx = manualSelection.xFrac * previewCanvas.width;
     const my = manualSelection.yFrac * previewCanvas.height;
-    const r    = previewCanvas.width * 0.045; // raggio del cerchietto
-    const gap  = previewCanvas.width * 0.03;  // spazio vuoto attorno al cerchietto, prima dei bracci
-    const reach = previewCanvas.width * 0.075; // quanto si allungano i bracci dal centro
     pctx.strokeStyle = 'rgba(255,255,255,0.9)';
     pctx.lineWidth = 1;
     pctx.beginPath();
-    pctx.arc(mx, my, r, 0, Math.PI*2);
-    pctx.moveTo(mx-reach, my); pctx.lineTo(mx-gap, my);
-    pctx.moveTo(mx+gap, my);   pctx.lineTo(mx+reach, my);
-    pctx.moveTo(mx, my-reach); pctx.lineTo(mx, my-gap);
-    pctx.moveTo(mx, my+gap);   pctx.lineTo(mx, my+reach);
+    pctx.arc(mx, my, 5, 0, Math.PI*2);
+    pctx.moveTo(mx-8, my); pctx.lineTo(mx-3, my);
+    pctx.moveTo(mx+3, my); pctx.lineTo(mx+8, my);
+    pctx.moveTo(mx, my-8); pctx.lineTo(mx, my-3);
+    pctx.moveTo(mx, my+3); pctx.lineTo(mx, my+8);
     pctx.stroke();
   }
 
@@ -801,13 +781,13 @@ const OLLAMA_TUNNEL_URL = "https://stoop-situation-trifle.ngrok-free.dev/api/gen
 // non risponde in fretta (o non sei sul PC), passa al tunnel — ma solo se
 // è stato configurato, altrimenti rilancia subito l'errore originale
 //
-// NOTA sul timeout locale: NON deve essere troppo corto. Se Ollama è stato
-// (ri)avviato da poco (es. per cambiare OLLAMA_ORIGINS), il modello va
-// ricaricato in VRAM da zero alla prima richiesta, e questo può richiedere
-// qualche secondo — con un timeout troppo corto (es. 1.2s) il browser
-// annullerebbe la richiesta mentre il modello è ancora a metà del
-// caricamento, e Ollama la vedrebbe come "context canceled", fallendo
-// sempre anche restando sul PC con tutto acceso e funzionante.
+// NOTA sul timeout locale: NON deve essere troppo corto. Se hai appena
+// (ri)avviato "ollama serve" (es. per cambiare OLLAMA_ORIGINS), il modello
+// va ricaricato in VRAM da zero alla prima richiesta, e questo può richiedere
+// qualche secondo — se il browser annulla la richiesta troppo presto,
+// Ollama la vede come "context canceled" e fallisce SEMPRE, anche restando
+// sul PC con tutto acceso e funzionante (bug osservato: con un timeout di
+// 1.2s il caricamento del modello veniva interrotto ogni volta a metà).
 // Un timeout di qualche secondo qui non rallenta il caso "sei sul telefono,
 // niente Ollama in locale": lì la connessione a "localhost" fallisce subito
 // (connessione rifiutata), non c'è nulla da aspettare.
@@ -821,9 +801,8 @@ const OLLAMA_TUNNEL_URL = "https://stoop-situation-trifle.ngrok-free.dev/api/gen
 // tra quelle ammesse dal CORS di Ollama (che ha un elenco fisso e non la
 // contiene): il browser farebbe passare il pre-controllo OPTIONS ma poi
 // bloccherebbe lui stesso la richiesta vera prima ancora di mandarla,
-// perché l'intestazione non è nella lista concordata. Su iPhone questo si
-// manifesta con un OPTIONS che riceve 204 ma il POST successivo non arriva
-// mai a Ollama.
+// perché l'intestazione non è nella lista concordata — esattamente il bug
+// osservato su iPhone (OPTIONS 204, poi il POST non arrivava mai a Ollama).
 async function ollamaFetch(body) {
   const tryUrl = (url, timeoutMs) => {
     const ctrl = new AbortController();
@@ -971,6 +950,32 @@ Senza virgolette. In italiano. Frasi spezzate, non sempre complete.`;
   return data.response?.trim() || 'Il campo si cancella prima di essere letto.';
 }
 
+// ── TONO DEL GIUDIZIO (per il confronto uomo/macchina) ────────────
+// Seconda chiamata, brevissima e a temperatura 0: chiede al modello di
+// ricondurre il giudizio appena scritto a UNA delle stesse parole offerte
+// al visitatore (MOOD_WORDS, sezione 13). Così le due letture diventano
+// confrontabili sullo stesso vocabolario, senza toccare il prompt poetico
+// del giudizio. Se Ollama non risponde o la parola non è in elenco,
+// restituisce null e il confronto lo dichiara invece di inventare.
+const normalizeWord = w => String(w || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z]/g, '');
+
+async function classifyJudgmentMood(text) {
+  try {
+    const res = await ollamaFetch({
+      model: 'gemma3:4b',
+      prompt: `Leggi questo testo:\n"${text}"\n\nQuale di queste parole descrive meglio lo stato d'animo che il testo attribuisce? ${MOOD_WORDS.join(', ')}.\nRispondi con UNA sola parola dell'elenco, senza punteggiatura.`,
+      stream: false,
+      options: { temperature: 0, num_predict: 8 }
+    });
+    const data = await res.json();
+    const answer = normalizeWord((data.response || '').split(/\s+/).find(w => normalizeWord(w)) );
+    return MOOD_WORDS.find(w => normalizeWord(w) === answer) || null;
+  } catch (e) {
+    console.error(e);
+    return null;
+  }
+}
+
 // traduce un errore di fetchAIJudgment in un messaggio leggibile, e sospende
 // l'auto-giudizio se il problema è strutturale — condiviso da requestJudgment()
 // (auto-giudizio silenzioso) e runFullSequence() (sequenza interattiva)
@@ -1048,10 +1053,13 @@ async function runFullSequence() {
     judgeCount++;
     hudJudge.textContent=String(judgeCount).padStart(3,'0');
 
+    const aiMoodPromise = classifyJudgmentMood(text);
     await showJudgment(text);
+    const aiMood = await aiMoodPromise;
+    await showComparison(humanFeeling, aiMood);
     const recognized = await showRecognizeQuestion();
-    logResponse({ humanFeeling, aiJudgment: text, recognized, snapshot });
-    await showPortrait(snapshot);
+    logResponse({ humanFeeling, aiJudgment: text, aiMood, recognized, snapshot });
+    await showPortrait(snapshot, { humanFeeling, aiMood, text });
   } catch(e) {
     const friendly = describeJudgmentError(e);
     await showJudgment(friendly);
@@ -1067,7 +1075,7 @@ async function runFullSequence() {
 // JUDGMENT_LEN_MIN_SIZE scende fino a JUDGMENT_MIN_SCALE (fattore, non rem —
 // i rem veri e propri sono nel clamp() di #aiJudgment in style.css). Così un
 // giudizio lungo si legge tutto invece di sfondare il bordo dello schermo.
-const JUDGMENT_LEN_FULL_SIZE = 60;   // fino a questa lunghezza (caratteri): testo a dimensione piena — coerente con num_predict in sezione 10, che tiene i giudizi brevi
+const JUDGMENT_LEN_FULL_SIZE = 60;   // fino a questa lunghezza (caratteri): testo a dimensione piena (abbassata insieme a num_predict, sezione 10: i giudizi ora sono più corti)
 const JUDGMENT_LEN_MIN_SIZE  = 220;  // da questa lunghezza in su: dimensione minima
 const JUDGMENT_MIN_SCALE     = 0.55; // dimensione minima, come frazione di quella piena (1 = piena, 0.55 = 55%)
 
@@ -1262,13 +1270,14 @@ judgeBtn.addEventListener("click",()=>{
 requestAnimationFrame(loop);
 
 // ── 12. DATI OGGETTIVI ────────────────────────────────────────────
-// Pannello SEMPRE VISIBILE: mostra i valori che il sistema misura
-// DAVVERO — nome colore, HEX, RGB, saturazione/luminosità, percentuale
-// d'area di ciascun colore della palette — senza nessuna interpretazione.
-// Resta a sinistra, si aggiorna da solo quando la palette cambia
-// (chiamato da loop(), sezione 9, tramite il flag paletteDirty): prima
-// del primo aggiornamento resta invisibile (opacity 0 in style.css), poi
-// resta visibile per sempre.
+// Pannello SEMPRE VISIBILE (non più una fase transitoria): mostra i
+// valori che il sistema misura DAVVERO — nome colore, HEX, RGB,
+// saturazione/luminosità, percentuale d'area di ciascun colore della
+// palette — senza nessuna interpretazione. Resta a sinistra, si
+// aggiorna da solo quando la palette cambia (chiamato da loop(),
+// sezione 9, tramite il flag paletteDirty) e non sparisce mai: prima
+// del primo aggiornamento resta semplicemente invisibile (opacity 0 in
+// style.css), poi resta visibile per sempre.
 const dataPanel = document.getElementById('dataPanel');
 
 function updateDataPanel(domCol) {
@@ -1322,8 +1331,8 @@ function updateDataPanel(domCol) {
 // risolve quando l'osservatore clicca uno dei bottoni al suo interno, o
 // da sola dopo `timeoutMs` se nessuno risponde. Il timeout è la parte
 // importante: senza, un visitatore che si allontana senza rispondere
-// bloccherebbe la sequenza per sempre, e il GIUDICA successivo
-// sembrerebbe non funzionare più.
+// blocca la sequenza per sempre, e il prossimo GIUDICA sembra "non
+// funzionare più" — è il problema segnalato.
 function showOverlayChoice(el, buttons, readAnswer, timeoutMs) {
   return new Promise(resolve => {
     el.style.opacity = '1';
@@ -1362,6 +1371,47 @@ function showHumanQuestion() {
   const buttons = [...moodChipsEl.querySelectorAll('.mood-chip'), moodSkipBtn];
   // moodSkipBtn non ha data-word ("preferisco non rispondere") → risposta null, come il timeout
   return showOverlayChoice(humanQuestionEl, buttons, btn => btn.dataset.word || null, HUMAN_QUESTION_TIMEOUT);
+}
+
+// ── 13b. CONFRONTO UOMO / MACCHINA ─────────────────────────────────
+// Dopo il giudizio, mette una accanto all'altra la parola scelta dal
+// visitatore (sezione 13) e quella a cui l'AI ha ricondotto il proprio
+// giudizio (classifyJudgmentMood, sezione 10). Nessun punteggio: mostra
+// solo se le due letture coincidono o divergono. Si chiude da sola dopo
+// COMPARE_DURATION, oppure con un tocco.
+const COMPARE_DURATION = 6000;
+const comparePanel = document.getElementById('comparePanel');
+
+function showComparison(human, machine) {
+  const same = human && machine && human === machine;
+  const verdict = !human
+    ? 'Non hai scelto. La macchina ha deciso comunque.'
+    : !machine
+      ? 'La macchina non ha saputo ridurre il suo giudizio a una parola.'
+      : same ? 'Stessa lettura.' : 'Letture diverse degli stessi colori.';
+  comparePanel.innerHTML = `
+    <div class="compare-cols">
+      <div class="compare-col"><div class="compare-who">TU</div><div class="compare-word">${human || '—'}</div></div>
+      <div class="compare-sep">${same ? '=' : '≠'}</div>
+      <div class="compare-col"><div class="compare-who">MACCHINA</div><div class="compare-word">${machine || '—'}</div></div>
+    </div>
+    <div class="compare-verdict">${verdict}</div>`;
+  return new Promise(resolve => {
+    comparePanel.style.opacity = '1';
+    comparePanel.style.pointerEvents = 'auto';
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      clearTimeout(timer);
+      comparePanel.onclick = null;
+      comparePanel.style.opacity = '0';
+      comparePanel.style.pointerEvents = 'none';
+      setTimeout(resolve, 500);
+    };
+    const timer = setTimeout(finish, COMPARE_DURATION);
+    comparePanel.onclick = finish;
+  });
 }
 
 // ── 14. "TI RICONOSCI IN QUESTA INTERPRETAZIONE?" ─────────────────
@@ -1442,9 +1492,44 @@ function renderPortrait(snapshot) {
   portraitCtx.globalCompositeOperation = 'source-over';
 }
 
-function showPortrait(snapshot) {
+// fascia in basso sul ritratto: giudizio, le due parole del confronto e
+// la data — così l'immagine salvata porta con sé la sua interpretazione
+function drawPortraitCaption(info) {
+  if (!info) return;
+  const S = PORTRAIT_SIZE, pad = 44;
+  const words = info.text.split(/\s+/);
+  portraitCtx.font = 'italic 300 34px "Cormorant Garamond", serif';
+  const lines = [];
+  let line = '';
+  for (const w of words) {
+    const test = line ? line + ' ' + w : w;
+    if (portraitCtx.measureText(test).width > S - pad * 2 && line) { lines.push(line); line = w; }
+    else line = test;
+  }
+  if (line) lines.push(line);
+  const shown = lines.slice(0, 4);
+  const bandH = 90 + shown.length * 42 + 40;
+  const g = portraitCtx.createLinearGradient(0, S - bandH - 60, 0, S);
+  g.addColorStop(0, 'rgba(0,0,0,0)');
+  g.addColorStop(0.35, 'rgba(0,0,0,0.72)');
+  g.addColorStop(1, 'rgba(0,0,0,0.9)');
+  portraitCtx.fillStyle = g;
+  portraitCtx.fillRect(0, S - bandH - 60, S, bandH + 60);
+  portraitCtx.fillStyle = '#fff';
+  portraitCtx.textBaseline = 'alphabetic';
+  shown.forEach((l, i) => portraitCtx.fillText(i === shown.length - 1 && lines.length > shown.length ? l + '…' : l, pad, S - bandH + 40 + i * 42));
+  portraitCtx.font = '18px "Courier New", monospace';
+  portraitCtx.fillStyle = 'rgba(255,255,255,0.6)';
+  const date = new Date().toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  portraitCtx.fillText(`TU: ${(info.humanFeeling || '—').toUpperCase()}   ·   MACCHINA: ${(info.aiMood || '—').toUpperCase()}`, pad, S - 72);
+  portraitCtx.fillStyle = 'rgba(255,255,255,0.4)';
+  portraitCtx.fillText(`SOVRAINTERPRETAZIONE CROMATICA · ${date}`, pad, S - 42);
+}
+
+function showPortrait(snapshot, info) {
   return new Promise(resolve => {
     renderPortrait(snapshot);
+    drawPortraitCaption(info);
     // NOTA iOS Safari: un tocco lungo su "salva il ritratto" apre l'immagine
     // invece di scaricarla direttamente (limite del browser, non del codice) —
     // da lì "Salva immagine" funziona comunque.
@@ -1467,17 +1552,32 @@ function showPortrait(snapshot) {
 // dati servono. Nessuna persistenza automatica finché non viene decisa
 // una modalità precisa (locale, server, ecc.) — vedi la nota in cima a
 // exportResponseLog().
-const responseLog = [];
+// Il registro ora è salvato anche nel browser (localStorage, chiave
+// LOG_KEY): sopravvive a ricariche e chiusure della pagina sullo stesso
+// dispositivo. Resta comunque locale: va esportato (tasto "E") da ogni
+// dispositivo usato. Shift+R lo svuota dopo una conferma.
+const LOG_KEY = 'sovrainterpretazione-registro';
+const responseLog = (() => {
+  try { return JSON.parse(localStorage.getItem(LOG_KEY)) || []; } catch (e) { return []; }
+})();
 
-function logResponse({ humanFeeling, aiJudgment, recognized, snapshot }) {
+function saveResponseLog() {
+  try { localStorage.setItem(LOG_KEY, JSON.stringify(responseLog)); } catch (e) { console.error(e); }
+}
+
+function logResponse({ humanFeeling, aiJudgment, aiMood, recognized, snapshot }) {
   responseLog.push({
     timestamp: new Date().toISOString(),
     dominante: colorName(snapshot.dominant),
     hexDominante: toHex(snapshot.dominant),
+    palette: snapshot.palette.map(toHex).join(' '),
     sensazioneUmana: humanFeeling ?? '(nessuna risposta)',
     giudizioAI: aiJudgment,
-    riconoscimento: recognized,
+    emozioneAI: aiMood ?? '(non classificata)',
+    coincidenza: humanFeeling && aiMood ? (humanFeeling === aiMood ? 'sì' : 'no') : '—',
+    riconoscimento: recognized ?? '(nessuna risposta)',
   });
+  saveResponseLog();
 }
 
 // Scarica il registro come CSV. Attivabile in due modi, ENTRAMBI discreti
@@ -1490,12 +1590,12 @@ function logResponse({ humanFeeling, aiJudgment, recognized, snapshot }) {
 // logResponse() sopra resta l'unico punto che riceve ogni nuova risposta.
 function exportResponseLog() {
   if (!responseLog.length) { showDebug('Nessuna risposta ancora registrata.'); return; }
-  const headers = ['timestamp','dominante','hexDominante','sensazioneUmana','giudizioAI','riconoscimento'];
+  const headers = ['timestamp','dominante','hexDominante','palette','sensazioneUmana','giudizioAI','emozioneAI','coincidenza','riconoscimento'];
   const escape = v => `"${String(v).replace(/"/g,'""')}"`;
   const csv = [headers.join(',')]
     .concat(responseLog.map(row => headers.map(h => escape(row[h])).join(',')))
     .join('\n');
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+  const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
@@ -1507,6 +1607,59 @@ function exportResponseLog() {
   showDebug(`Esportate ${responseLog.length} risposte.`, 4000);
 }
 window.exportResponseLog = exportResponseLog; // richiamabile anche da console: exportResponseLog()
+
+// Riepilogo dei dati raccolti (tasto "S"): numero di sessioni, quante
+// persone hanno risposto, quanto spesso le due letture coincidono e come
+// si distribuiscono le risposte a "ti riconosci?". Serve alla valutazione
+// dell'esperienza nella tesi; si chiude con un tocco o con "S".
+const statsPanel = document.getElementById('statsPanel');
+
+function countBy(list, key) {
+  return list.reduce((acc, row) => { acc[row[key]] = (acc[row[key]] || 0) + 1; return acc; }, {});
+}
+
+function toggleStats() {
+  if (statsPanel.style.opacity === '1') {
+    statsPanel.style.opacity = '0';
+    statsPanel.style.pointerEvents = 'none';
+    return;
+  }
+  const n = responseLog.length;
+  const pct = (a, b) => b ? Math.round(a / b * 100) + '%' : '—';
+  const answered = responseLog.filter(r => MOOD_WORDS.includes(r.sensazioneUmana));
+  const compared = responseLog.filter(r => r.coincidenza === 'sì' || r.coincidenza === 'no');
+  const same = compared.filter(r => r.coincidenza === 'sì').length;
+  const rec = countBy(responseLog, 'riconoscimento');
+  const recAnswered = (rec['si'] || 0) + (rec['in parte'] || 0) + (rec['no'] || 0);
+  const list = (obj, total) => Object.entries(obj)
+    .filter(([k]) => MOOD_WORDS.includes(k))
+    .sort((a, b) => b[1] - a[1])
+    .map(([k, v]) => `<div class="stats-row"><span>${k}</span><span>${v} · ${pct(v, total)}</span></div>`).join('') || '<div class="stats-row"><span>—</span></div>';
+  statsPanel.innerHTML = `
+    <div class="data-title">REGISTRO · ${n} SESSIONI</div>
+    <div class="stats-row"><span>Hanno scelto una parola</span><span>${answered.length} · ${pct(answered.length, n)}</span></div>
+    <div class="stats-row"><span>Stessa lettura uomo/macchina</span><span>${same} su ${compared.length} · ${pct(same, compared.length)}</span></div>
+    <div class="stats-sub">TI RICONOSCI? (${recAnswered} risposte)</div>
+    <div class="stats-row"><span>Sì</span><span>${rec['si'] || 0} · ${pct(rec['si'] || 0, recAnswered)}</span></div>
+    <div class="stats-row"><span>In parte</span><span>${rec['in parte'] || 0} · ${pct(rec['in parte'] || 0, recAnswered)}</span></div>
+    <div class="stats-row"><span>No</span><span>${rec['no'] || 0} · ${pct(rec['no'] || 0, recAnswered)}</span></div>
+    <div class="stats-cols">
+      <div><div class="stats-sub">PAROLE DEI VISITATORI</div>${list(countBy(responseLog, 'sensazioneUmana'), answered.length)}</div>
+      <div><div class="stats-sub">PAROLE DELLA MACCHINA</div>${list(countBy(responseLog, 'emozioneAI'), responseLog.filter(r => MOOD_WORDS.includes(r.emozioneAI)).length)}</div>
+    </div>
+    <div class="stats-hint">E esporta CSV · S chiude · Shift+R svuota</div>`;
+  statsPanel.style.opacity = '1';
+  statsPanel.style.pointerEvents = 'auto';
+}
+statsPanel.onclick = toggleStats;
+
+function clearResponseLog() {
+  if (!responseLog.length) return;
+  if (!confirm(`Cancellare le ${responseLog.length} risposte registrate su questo dispositivo? Esportale prima con "E" se ti servono.`)) return;
+  responseLog.length = 0;
+  saveResponseLog();
+  showDebug('Registro svuotato.', 4000);
+}
 
 // ── 17. RICONOSCIMENTO PAGINA (trigger cromatico da tesi stampata) ─
 // Estensione pensata per la versione telefono/PWA: alcune pagine della
@@ -1666,7 +1819,6 @@ async function triggerPageReaction(sig) {
   pageReactionTextEl.textContent = sig.fixedText || '…';
   pageReactionEl.classList.add('visible');
   pageReactionBackdrop.classList.add('visible');
-  show3DForChapter(sig);
 
   if (!sig.fixedText) {
     // risposta generata dal vivo (solo il cap. 3, vedi PAGE_SIGNATURES)
@@ -1688,7 +1840,6 @@ async function triggerPageReaction(sig) {
 function closePageReaction() {
   pageReactionEl.classList.remove('visible');
   pageReactionBackdrop.classList.remove('visible');
-  hide3DView();
   if (activePageId) pageCooldownUntil[activePageId] = performance.now() + PAGE_REOPEN_COOLDOWN;
   activePageId = null;
   pageRequestSeq++; // scarta un'eventuale risposta AI ancora in arrivo per la pagina appena chiusa
@@ -1718,227 +1869,11 @@ window.CHROMA_DEBUG = {
   resetCooldowns: () => { for (const k in pageCooldownUntil) delete pageCooldownUntil[k]; console.log('cooldown azzerati'); },
 };
 
-// ── 18. QR INGRANDITO ──────────────────────────────────────────────
-// Un clic su #qrBox ingrandisce lo stesso QR al centro dello schermo
-// (#qrModal), pensato per mostrarlo a tutta la sala durante
-// l'esposizione della tesi senza uscire dall'app — #qrBox è un bottone,
-// non un link, proprio per poter intercettare il clic invece di aprire
-// una nuova scheda. Stesso pattern di #pageReactionBackdrop/#pageReaction
-// (sezione 17): sfondo che scurisce tutto, popup sopra, nessun timeout —
-// resta finché non lo si chiude a mano.
-const qrBoxBtn        = document.getElementById('qrBox');
-const qrModal         = document.getElementById('qrModal');
-const qrModalBackdrop = document.getElementById('qrModalBackdrop');
-const qrModalClose    = document.getElementById('qrModalClose');
-
-function openQrModal() {
-  qrModal.classList.add('visible');
-  qrModalBackdrop.classList.add('visible');
-}
-function closeQrModal() {
-  qrModal.classList.remove('visible');
-  qrModalBackdrop.classList.remove('visible');
-}
-qrBoxBtn.addEventListener('click', openQrModal);
-qrModalClose.addEventListener('click', closeQrModal);
-qrModalBackdrop.addEventListener('click', closeQrModal); // clic fuori dal popup = stesso effetto del bottone "chiudi"
-
-// ── 19. FORMA 3D PER CAPITOLO ───────────────────────────────────────
-// Quando il popup di riconoscimento pagina si apre (sezione 17), oltre
-// al testo mostra una forma tridimensionale generata dai dati DI QUEL
-// CAPITOLO — gli stessi colori della firma cromatica — invece di un
-// modello disegnato a mano: è CHROMA stessa a "scolpire" una forma a
-// partire dai dati, con lo stesso principio degli emblemi di capitolo
-// (macchie che nascono da un seed deterministico, non a caso). Ruotabile
-// trascinando col mouse o col dito; ruota lentamente da sola quando non
-// viene toccata.
-//
-// Per passare in futuro a modelli fatti a mano in Blender: basta
-// sostituire generateChapterGeometry()/colorizeGeometry() qui sotto con
-// un caricamento di file .glb (es. tramite GLTFLoader di Three.js, o il
-// componente <model-viewer> al posto del canvas) — il resto (apertura
-// popup, trascinamento, avvio/arresto del rendering) resta identico.
-
-const page3DCanvas = document.getElementById('pageReaction3D');
-
-// stesso PRNG deterministico usato per gli emblemi grafici di capitolo
-// (mulberry32, seed dalla stringa dell'id): stessa forma ogni volta per
-// lo stesso capitolo, non rigenerata a caso ad ogni apertura.
-function mulberry32_3d(seed) {
-  return function() {
-    seed |= 0; seed = (seed + 0x6D2B79F5) | 0;
-    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-function hashSeed3D(str) {
-  let h = 0;
-  for (let i = 0; i < str.length; i++) { h = (Math.imul(31, h) + str.charCodeAt(i)) | 0; }
-  return h;
-}
-
-let scene3D, camera3D, renderer3D, mesh3D, animFrame3D = null;
-let rotX = -0.3, rotY = 0.6; // orientamento iniziale, leggermente di tre-quarti invece che frontale piatto
-let dragging3D = false, lastPointerX = 0, lastPointerY = 0;
-
-function ensure3DScene() {
-  if (scene3D) return true; // già creata, riusala
-  if (typeof THREE === 'undefined') {
-    console.warn('Three.js non caricato: la forma 3D resta disattivata, il popup mostra comunque il testo.');
-    return false;
-  }
-  scene3D = new THREE.Scene();
-  camera3D = new THREE.PerspectiveCamera(40, 1, 0.1, 10);
-  camera3D.position.set(0, 0, 3.4);
-
-  renderer3D = new THREE.WebGLRenderer({ canvas: page3DCanvas, antialias: true, alpha: true });
-  renderer3D.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
-
-  scene3D.add(new THREE.AmbientLight(0xffffff, 0.55));
-  const key = new THREE.DirectionalLight(0xffffff, 0.9);
-  key.position.set(2, 2.5, 3);
-  scene3D.add(key);
-  const rim = new THREE.DirectionalLight(0xffffff, 0.35);
-  rim.position.set(-2, -1, -2);
-  scene3D.add(rim);
-
-  // trascinamento manuale (mouse o tocco) per ruotare — niente libreria
-  // OrbitControls: bastano due variabili (rotX/rotY) aggiornate ad ogni
-  // spostamento del puntatore, più semplice da mantenere qui
-  const onDown = (x, y) => { dragging3D = true; lastPointerX = x; lastPointerY = y; page3DCanvas.classList.add('dragging'); };
-  const onMove = (x, y) => {
-    if (!dragging3D) return;
-    rotY += (x - lastPointerX) * 0.008;
-    rotX += (y - lastPointerY) * 0.008;
-    rotX = Math.max(-1.3, Math.min(1.3, rotX)); // non lasciare che la forma si "ribalti" sopra/sotto
-    lastPointerX = x; lastPointerY = y;
-  };
-  const onUp = () => { dragging3D = false; page3DCanvas.classList.remove('dragging'); };
-
-  page3DCanvas.addEventListener('pointerdown', e => { page3DCanvas.setPointerCapture(e.pointerId); onDown(e.clientX, e.clientY); });
-  page3DCanvas.addEventListener('pointermove', e => onMove(e.clientX, e.clientY));
-  page3DCanvas.addEventListener('pointerup', onUp);
-  page3DCanvas.addEventListener('pointercancel', onUp);
-
-  return true;
-}
-
-// deforma una sfera (icosaedro suddiviso) con alcune "gobbe" morbide
-// posizionate e dimensionate dal seed — stesso principio delle macchie
-// sfocate 2D degli emblemi, qui applicato come spostamento radiale su
-// una superficie sferica invece che su un piano
-function generateChapterGeometry(sig) {
-  const rnd = mulberry32_3d(hashSeed3D(sig.id + '-forma'));
-  const geo = new THREE.IcosahedronGeometry(1, 4);
-  const pos = geo.attributes.position;
-
-  const numBumps = 4 + Math.floor(rnd() * 3); // 4-6 gobbe
-  const bumps = [];
-  for (let i = 0; i < numBumps; i++) {
-    const theta = rnd() * Math.PI * 2;
-    const phi = Math.acos(2 * rnd() - 1);
-    bumps.push({
-      dir: new THREE.Vector3(Math.sin(phi) * Math.cos(theta), Math.sin(phi) * Math.sin(theta), Math.cos(phi)),
-      strength: 0.12 + rnd() * 0.30,
-      falloff: 1.4 + rnd() * 2.2,
-      sign: rnd() > 0.3 ? 1 : -1, // per lo più protuberanze verso fuori, qualche insenatura verso dentro
-    });
-  }
-
-  const v = new THREE.Vector3();
-  for (let i = 0; i < pos.count; i++) {
-    v.fromBufferAttribute(pos, i).normalize();
-    let disp = 0;
-    bumps.forEach(b => {
-      const influence = Math.max(0, v.dot(b.dir)); // 0-1: quanto questo punto guarda verso la gobba
-      disp += b.sign * b.strength * Math.pow(influence, b.falloff);
-    });
-    v.multiplyScalar(1 + disp);
-    pos.setXYZ(i, v.x, v.y, v.z);
-  }
-  geo.computeVertexNormals();
-  return geo;
-}
-
-// colora ogni vertice sfumando fra i colori della firma del capitolo: le
-// stesse identiche coordinate colore usate per il riconoscimento (sezione
-// 17) diventano qui il colore della forma — non una scelta estetica
-// indipendente
-function colorizeGeometry(geo, colors) {
-  const rnd = mulberry32_3d(hashSeed3D('colore-' + colors.map(c => c.join(',')).join('|')));
-  const anchors = colors.map(c => {
-    const theta = rnd() * Math.PI * 2, phi = Math.acos(2 * rnd() - 1);
-    return {
-      dir: new THREE.Vector3(Math.sin(phi) * Math.cos(theta), Math.sin(phi) * Math.sin(theta), Math.cos(phi)),
-      color: new THREE.Color(c[0] / 255, c[1] / 255, c[2] / 255),
-    };
-  });
-  const pos = geo.attributes.position;
-  const colArr = new Float32Array(pos.count * 3);
-  const v = new THREE.Vector3();
-  for (let i = 0; i < pos.count; i++) {
-    v.fromBufferAttribute(pos, i).normalize();
-    let totalW = 0, r = 0, g = 0, b = 0;
-    anchors.forEach(a => {
-      const w = Math.pow(Math.max(0, v.dot(a.dir)), 3);
-      totalW += w; r += a.color.r * w; g += a.color.g * w; b += a.color.b * w;
-    });
-    if (totalW > 0) { r /= totalW; g /= totalW; b /= totalW; } else { r = g = b = 0.5; }
-    colArr[i*3] = r; colArr[i*3+1] = g; colArr[i*3+2] = b;
-  }
-  geo.setAttribute('color', new THREE.BufferAttribute(colArr, 3));
-}
-
-function show3DForChapter(sig) {
-  if (!ensure3DScene()) return; // Three.js non disponibile: il popup resta solo testuale, nessun errore visibile
-
-  if (mesh3D) { scene3D.remove(mesh3D); mesh3D.geometry.dispose(); mesh3D.material.dispose(); }
-  const geo = generateChapterGeometry(sig);
-  colorizeGeometry(geo, sig.colors);
-  const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.55, metalness: 0.12 });
-  mesh3D = new THREE.Mesh(geo, mat);
-  scene3D.add(mesh3D);
-
-  rotX = -0.3; rotY = 0.6; // stesso orientamento di partenza ad ogni apertura, per coerenza fra un capitolo e l'altro
-
-  // display:'block' PRIMA di leggere clientWidth/clientHeight: un elemento
-  // display:none (lo stato di partenza in style.css) non ha una vera area
-  // occupata, quindi clientWidth/clientHeight risulterebbero sempre 0 —
-  // misurarli in quell'ordine darebbe un renderer di dimensione zero e un
-  // aspect ratio NaN, con la forma 3D che non apparirebbe mai.
-  page3DCanvas.style.display = 'block';
-
-  const w = page3DCanvas.clientWidth, h = page3DCanvas.clientHeight;
-  renderer3D.setSize(w, h, false);
-  camera3D.aspect = w / h;
-  camera3D.updateProjectionMatrix();
-
-  if (!animFrame3D) render3DLoop();
-}
-
-function render3DLoop() {
-  animFrame3D = requestAnimationFrame(render3DLoop);
-  if (!dragging3D) rotY += 0.004; // rotazione lenta automatica quando non viene trascinata
-  if (mesh3D) { mesh3D.rotation.x = rotX; mesh3D.rotation.y = rotY; }
-  renderer3D.render(scene3D, camera3D);
-}
-
-function hide3DView() {
-  page3DCanvas.style.display = 'none';
-  if (animFrame3D) { cancelAnimationFrame(animFrame3D); animFrame3D = null; }
-}
-
 document.addEventListener('keydown', e => {
   // ignora la scorciatoia mentre si sta scrivendo in un campo di testo
   // (qui non ce ne sono, ma è una sicurezza per eventuali aggiunte future)
   if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
   if (e.key === 'e' || e.key === 'E') exportResponseLog();
-  if (e.key === 'Escape') {
-    closeQrModal(); // innocuo anche se già chiuso
-    // closePageReaction() invece NON va chiamata a vuoto: resetta anche
-    // "analyzing" e riabilita GIUDICA, il che interromperebbe un giudizio
-    // AI normale in corso se il popup pagina non è nemmeno aperto
-    if (pageReactionEl.classList.contains('visible')) closePageReaction();
-  }
+  if (e.key === 's' || e.key === 'S') toggleStats();
+  if (e.key === 'R' && e.shiftKey) clearResponseLog();
 });
