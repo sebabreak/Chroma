@@ -930,5 +930,8 @@ const EN = {
   "Che tipo di design produce?": "What kind of design does it produce?",
   "A) Spento e neutro": "A) Dull and neutral",
   "B) Monocromatico": "B) Monochromatic",
-  "C) Energico e molto colorato": "C) Energetic and very colorful"
+  "C) Energico e molto colorato": "C) Energetic and very colorful",
+  "E se a leggerli fosse una macchina?": "What if a machine read them?",
+  "Nell'installazione di CHROMA un'intelligenza artificiale attribuisce ai colori emozioni che non può conoscere. Confronta la tua lettura con la sua.": "In the CHROMA installation, an artificial intelligence attributes to colors emotions it cannot know. Compare your reading with its own.",
+  "Prova la sovrainterpretazione cromatica ›": "Try chromatic overinterpretation ›"
 };
