@@ -57,8 +57,8 @@
     <div class="swatch auto" title="Torna alla scelta automatica">AUTO</div>
   </div>
 
-  <!-- cerchio pulsante al centro: il "cuore" dell'installazione -->
-  <div id="pulseCore"></div>
+  <!-- CHROMA al centro: il personaggio con la sua aura cromatica che pulsa, il "cuore" dell'installazione -->
+  <div id="pulseCore"><div id="coreAura"></div><img id="coreChar" src="chroma.png" alt="CHROMA"></div>
 
   <!-- giudizio dell'AI (WebLLM, in locale nel browser) — appare grande al centro dello schermo -->
   <div id="aiJudgment"></div>
@@ -152,7 +152,10 @@
   <div id="pageReactionBackdrop"></div>
   <div id="pageReaction">
     <button id="pageReactionClose" class="ghost-btn" type="button">chiudi ✕</button>
+    <div id="pageReactionTitle"></div>
+    <canvas id="pageReactionCanvas"></canvas>
     <div id="pageReactionText"></div>
+    <div id="pageReactionAi"></div>
   </div>
 
   <script src="script.js"></script>
