@@ -9,7 +9,7 @@
 //  direttamente a una sezione:
 //
 //   1. ELEMENTI DOM ................ riferimenti agli elementi di index.html
-//   (2. AUDIO — rimossa: l'installazione è puramente visiva, niente più suono)
+//   (2. AUDIO — non presente: l'installazione è puramente visiva, senza suono)
 //   3. STATO ........................ variabili che tengono traccia di colore/tempo/AI
 //   4. CANVAS BASSA RISOLUZIONE ..... pixelazione video + campionamento colore
 //   5. SFONDO ANIMATO E PARTICELLE .. nebulosa di colori rilevati + i puntini che seguono il mouse
@@ -26,6 +26,8 @@
 //  15. RITRATTO CROMATICO ........... immagine astratta generata dai dati della singola osservazione, scaricabile
 //  16. LOG RISPOSTE .................. registro salvato nel browser + esportazione CSV (tasto "E") + riepilogo (tasto "S")
 //  17. RICONOSCIMENTO CARTE/PAGINE .. riconosce le 4 tinte di una carta del mazzo o di un'apertura di capitolo e apre un popup con figura e testo
+//  18. QR INGRANDITO ................ un clic sul QR lo ingrandisce al centro, per mostrarlo a tutta la sala durante l'esposizione
+//  19. FORMA 3D PER CARTA ........... genera e ruota una forma tridimensionale dai colori della carta, dentro al popup della sezione 17
 //
 //  MODIFICHE PIÙ COMUNI — dove intervenire:
 //  - Cambiare modello Ollama o i suoi parametri  → sezione 10, dentro fetchAIJudgment()
@@ -35,7 +37,7 @@
 //  - Cambiare quanto si rimpicciolisce il testo dei giudizi lunghi → sezione 10, costanti JUDGMENT_*
 //  - Cambiare i nomi dei colori o le soglie      → sezione 6, funzione colorName()
 //  - Cambiare velocità/forma del "battito cardiaco" → sezione 3, costanti BEAT_*
-//  - Cambiare quanto il cerchio si deforma (forma organica) → sezione 3, costanti ORGANIC_WOBBLE_*
+//  - Cambiare quanto si muove CHROMA al centro e i colori della sua aura → sezione 9 e costante CHROMA_AURA
 //  - Cambiare colori/movimento/dimensione della nebulosa di sfondo → sezione 5, updateAndDrawAmbient() e costanti AMBIENT_*
 //  - Cambiare la lunghezza delle scie delle particelle → sezione 5, costante TRAIL_LENGTH
 //  - Cambiare il minimo/massimo della risoluzione webcam → index.html, input#resolutionSlider
@@ -49,6 +51,9 @@
 //  - Colori/testo/tema di ogni carta o pagina riconoscibile → sezione 17, costanti CARD_COLORS e PAGE_SIGNATURES
 //  - Quanto è tollerante il riconoscimento delle carte (stampa/luce imprecise) → sezione 17, costanti CARD_*
 //  - Quanto resta "ignorata" una pagina dopo aver chiuso il suo popup    → sezione 17, PAGE_REOPEN_COOLDOWN
+//  - Quanto sono pronunciate le gobbe della forma 3D → sezione 19, i valori "strength"/"falloff" in generateChapterGeometry()
+//  - Velocità di rotazione automatica della forma 3D → sezione 19, il numero aggiunto a rotY in render3DLoop()
+//  - Passare a un modello 3D fatto a mano (Blender) invece che generato → sezione 19, vedi nota introduttiva della sezione
 // ══════════════════════════════════════════════════════════════════
 
 // Ollama gira sul PC (non nel telefono): il PC deve avere Ollama installato
@@ -76,6 +81,8 @@ const paletteSwatchesEl  = document.getElementById("paletteSwatches");
 const swatchEls          = Array.from(paletteSwatchesEl.querySelectorAll(".swatch")); // le prime 5 = colori palette, l'ultima = AUTO
 const pulseCore         = document.getElementById("pulseCore");
 const coreAura          = document.getElementById("coreAura");
+// i colori del cappuccio del personaggio, usati per la sua aura (sezione 9)
+const CHROMA_AURA = ['#7B3FB0', '#3D5FD6', '#1FA9A0', '#58B94A', '#F2D024', '#F2821B', '#E2413A', '#C23C98'];
 const previewCanvas     = document.getElementById("preview");
 const pctx              = previewCanvas.getContext("2d");
 const resolutionSlider  = document.getElementById("resolutionSlider");
@@ -109,10 +116,10 @@ if ('serviceWorker' in navigator) {
   });
 }
 
-// (sezione 2, "AUDIO", rimossa: l'installazione ora è puramente visiva —
-// niente più sintesi sonora reattiva né tasto AUDIO ON/OFF. I numeri delle
-// sezioni successive sono rimasti quelli originali apposta, per restare
-// coerenti con eventuali appunti/versioni precedenti del progetto.)
+// (la sezione 2, "AUDIO", non esiste: l'installazione è puramente visiva,
+// senza sintesi sonora reattiva né tasto AUDIO ON/OFF — la numerazione
+// riparte da 3 di proposito, per lasciare libero quel numero nel caso
+// serva reintrodurre l'audio in futuro senza dover rinumerare tutto)
 
 // ── 3. STATO ──────────────────────────────────────────────────────
 // colore del frame precedente/corrente, usati per calcolare quanto
@@ -141,8 +148,6 @@ const BEAT_DUB_INTENSITY = 0.35; // intensità dell'eco secondario rispetto al b
 // quanto il cerchio pulsante si deforma in modo organico/amebico invece di
 // restare un cerchio perfetto (vedi loop(), sezione 9). Valori in punti
 // percentuali di border-radius: più alti = forma più irregolare.
-const ORGANIC_WOBBLE_BASE = 10; // deformazione "di riposo", sempre presente
-const ORGANIC_WOBBLE_BEAT = 14; // deformazione extra durante il battito
 
 // contatori e stato del ciclo di giudizio AI
 let obsCount    = 0;     // numero di "osservazioni" (battiti) registrate
@@ -184,10 +189,20 @@ let selectedColor = null;
 // Il range dello slider è definito in index.html (min/max dell'input
 // #resolutionSlider) — Math.max(1, ...) qui sotto è solo una sicurezza
 // per evitare un canvas alto 0px se in futuro il min venisse abbassato oltre 1.
+//
+// TARGET_ASPECT è il formato (4:3) a cui viene RITAGLIATO ogni fotogramma
+// prima di campionarlo (vedi drawVideoCover qui sotto), non il vero
+// aspect ratio della webcam: la fotocamera di un telefono o di un PC
+// raramente trasmette davvero in 4:3, quindi il fotogramma va sempre
+// ritagliato a un formato fisso — mai stirato, e mai lasciato libero di
+// cambiare dimensione col dispositivo, altrimenti anche il riquadro
+// #preview a schermo (style.css) dovrebbe rincorrerlo continuamente.
+const TARGET_ASPECT = 0.75;
 let lowResWidth  = Math.max(1, parseInt(resolutionSlider.value));
-let lowResHeight = 1; // valore reale calcolato da updateLowResDimensions() qui sotto, appena il video è pronto
+let lowResHeight = Math.max(1, Math.round(lowResWidth * TARGET_ASPECT));
 const lowResCanvas = document.createElement("canvas");
 const lowResCtx    = lowResCanvas.getContext("2d");
+lowResCanvas.width = lowResWidth; lowResCanvas.height = lowResHeight;
 
 // dimensione interna FISSA e volutamente piccola per il canvas #preview
 // (il riquadro pixelato cliccabile) — INDIPENDENTE dallo slider di
@@ -198,26 +213,29 @@ const lowResCtx    = lowResCanvas.getContext("2d");
 // image-rendering:pixelated in style.css) — pochi pixel bastano e
 // costano meno ad ogni frame, senza perdere nulla in precisione di
 // campionamento (quella resta governata solo dallo slider).
-const PREVIEW_RASTER_WIDTH = 64;
+const PREVIEW_RASTER_WIDTH  = 64;
+const PREVIEW_RASTER_HEIGHT = Math.max(1, Math.round(PREVIEW_RASTER_WIDTH * TARGET_ASPECT));
+previewCanvas.width = PREVIEW_RASTER_WIDTH; previewCanvas.height = PREVIEW_RASTER_HEIGHT;
 
-// ricalcola le dimensioni di lowResCanvas E di #preview in base al VERO
-// aspect ratio della webcam (video.videoWidth/videoHeight), non più un
-// 4:3 fisso — quel valore fisso è la causa dell'anteprima "stretchata"
-// su telefono: la fotocamera di un telefono raramente trasmette davvero
-// in 4:3 (spesso è più stretta in verticale, o molto più larga in
-// orizzontale), quindi forzare il fotogramma dentro un riquadro 4:3 lo
-// deformava. Finché il video non è ancora pronto, usa 0.75 (4:3) come
-// stima di partenza ragionevole.
-function updateLowResDimensions() {
-  const aspect = (video.videoWidth && video.videoHeight) ? (video.videoHeight / video.videoWidth) : 0.75;
-  lowResHeight = Math.max(1, Math.round(lowResWidth * aspect));
-  lowResCanvas.width = lowResWidth; lowResCanvas.height = lowResHeight;
-
-  const previewH = Math.max(1, Math.round(PREVIEW_RASTER_WIDTH * aspect));
-  previewCanvas.width = PREVIEW_RASTER_WIDTH; previewCanvas.height = previewH;
+// disegna il video in un canvas RITAGLIANDOLO (mai stirandolo) per
+// riempire esattamente destW×destH: stesso principio già usato altrove
+// per il ritratto cromatico (captureVideoFrame(), sezione 10 — lì è un
+// ritaglio quadrato, qui invece è a formato TARGET_ASPECT). Se la webcam
+// è più larga del necessario, taglia i lati; se è più alta, taglia
+// sopra/sotto — sempre centrato.
+function drawVideoCover(ctx, destW, destH) {
+  const vw = video.videoWidth, vh = video.videoHeight;
+  if (!vw || !vh) return;
+  const targetAspect = destW / destH;
+  const srcAspect = vw / vh;
+  let sx, sy, sw, sh;
+  if (srcAspect > targetAspect) { // sorgente più larga del formato voluto: ritaglia i lati
+    sh = vh; sw = vh * targetAspect; sx = (vw - sw) / 2; sy = 0;
+  } else { // sorgente più alta del formato voluto: ritaglia sopra/sotto
+    sw = vw; sh = vw / targetAspect; sx = 0; sy = (vh - sh) / 2;
+  }
+  ctx.drawImage(video, sx, sy, sw, sh, 0, 0, destW, destH);
 }
-updateLowResDimensions();
-let lastVideoW = 0, lastVideoH = 0; // per rilevare, dentro loop() (sezione 9), quando l'aspect ratio reale della webcam cambia (avvio, cambio fotocamera, rotazione del telefono) e va ricalcolato
 
 // lo slider verticale a destra permette di cambiare questa risoluzione a mano.
 // Al minimo (1 pixel) il colore "medio scena" (r,g,b in loop(), sezione 9)
@@ -226,8 +244,9 @@ let lastVideoW = 0, lastVideoH = 0; // per rilevare, dentro loop() (sezione 9), 
 // sezione 7) invece ha bisogno di più pixel: sotto i 5 campioni utili resta
 // semplicemente ferma sull'ultimo risultato valido, senza errori.
 resolutionSlider.addEventListener("input", e => {
-  lowResWidth = Math.max(1, parseInt(e.target.value));
-  updateLowResDimensions();
+  lowResWidth  = Math.max(1, parseInt(e.target.value));
+  lowResHeight = Math.max(1, Math.round(lowResWidth * TARGET_ASPECT));
+  lowResCanvas.width = lowResWidth; lowResCanvas.height = lowResHeight;
 });
 
 // ── 5. SFONDO ANIMATO E PARTICELLE ────────────────────────────────
@@ -413,7 +432,7 @@ function colorName([r,g,b]) {
 //  - KMEANS_ITERATIONS più alto   → i cluster convergono in modo più stabile/accurato
 //  - k più alto (vedi la chiamata extractPalette(imgData, 5, ...) in loop()) → più colori distinti riconosciuti
 const SAMPLE_STEP       = 8;  // 8 = un pixel ogni 2 (RGBA = 4 byte/pixel). Prima era 32 = un pixel ogni 8: 4x meno campioni.
-const KMEANS_ITERATIONS = 14; // prima erano 10: più iterazioni = palette più accurata
+const KMEANS_ITERATIONS = 14; // più iterazioni = cluster più stabili/accurati, a costo di qualche ms in più per frame
 
 function extractPalette(imageData, k, previousPalette = []) {
   const data = imageData.data;
@@ -598,17 +617,11 @@ function loop() {
     return;
   }
 
-  // l'aspect ratio reale della webcam può cambiare a stream già avviato
-  // (cambio fotocamera anteriore/posteriore, rotazione del telefono su
-  // alcuni browser): controllo economico (due confronti), ricalcola le
-  // dimensioni solo quando serve davvero
-  if (video.videoWidth !== lastVideoW || video.videoHeight !== lastVideoH) {
-    lastVideoW = video.videoWidth; lastVideoH = video.videoHeight;
-    updateLowResDimensions();
-  }
-
   // ── campiona il colore medio del frame ──
-  lowResCtx.drawImage(video,0,0,lowResCanvas.width,lowResCanvas.height);
+  // drawVideoCover (sezione 4) ritaglia il fotogramma al formato
+  // TARGET_ASPECT invece di stirarlo dentro lowResCanvas — qualunque sia
+  // il vero aspect ratio della webcam, qui non viene mai distorto
+  drawVideoCover(lowResCtx, lowResCanvas.width, lowResCanvas.height);
   const imgData=lowResCtx.getImageData(0,0,lowResCanvas.width,lowResCanvas.height);
   const data=imgData.data;
   let r=0,g=0,b=0;
@@ -659,18 +672,26 @@ function loop() {
   pctx.clearRect(0,0,previewCanvas.width,previewCanvas.height);
   pctx.drawImage(lowResCanvas,0,0,previewCanvas.width,previewCanvas.height);
 
-  // se il punto selezionato è sull'anteprima, disegna un piccolo mirino sopra per mostrare dov'è
+  // se il punto selezionato è sull'anteprima, disegna un piccolo mirino sopra per mostrare dov'è.
+  // Dimensioni in FRAZIONE di previewCanvas.width, non pixel fissi: dato
+  // che previewCanvas è piccolo (PREVIEW_RASTER_WIDTH, sezione 4), un
+  // mirino a pixel fissi occuperebbe una frazione sproporzionata del
+  // riquadro — restando proporzionale, il mirino ha sempre la stessa
+  // dimensione RELATIVA qualunque sia la risoluzione scelta.
   if (manualSelection?.type === 'point') {
     const mx = manualSelection.xFrac * previewCanvas.width;
     const my = manualSelection.yFrac * previewCanvas.height;
+    const r    = previewCanvas.width * 0.045; // raggio del cerchietto
+    const gap  = previewCanvas.width * 0.03;  // spazio vuoto attorno al cerchietto, prima dei bracci
+    const reach = previewCanvas.width * 0.075; // quanto si allungano i bracci dal centro
     pctx.strokeStyle = 'rgba(255,255,255,0.9)';
     pctx.lineWidth = 1;
     pctx.beginPath();
-    pctx.arc(mx, my, 5, 0, Math.PI*2);
-    pctx.moveTo(mx-8, my); pctx.lineTo(mx-3, my);
-    pctx.moveTo(mx+3, my); pctx.lineTo(mx+8, my);
-    pctx.moveTo(mx, my-8); pctx.lineTo(mx, my-3);
-    pctx.moveTo(mx, my+3); pctx.lineTo(mx, my+8);
+    pctx.arc(mx, my, r, 0, Math.PI*2);
+    pctx.moveTo(mx-reach, my); pctx.lineTo(mx-gap, my);
+    pctx.moveTo(mx+gap, my);   pctx.lineTo(mx+reach, my);
+    pctx.moveTo(mx, my-reach); pctx.lineTo(mx, my-gap);
+    pctx.moveTo(mx, my+gap);   pctx.lineTo(mx, my+reach);
     pctx.stroke();
   }
 
@@ -727,29 +748,26 @@ function loop() {
     pushMemory(r,g,b);
   }
 
-  // ── CHROMA al centro: il personaggio e la sua aura si illuminano/ingrandiscono ad ogni battito ──
+  // colore del battito: serve ancora alle particelle (sezione 5), non più al personaggio
   const pulse=beat*heartbeatIntensity;
   let pr=Math.min(255,currentR+pulse|0);
   let pg=Math.min(255,currentG+pulse|0);
   let pb=Math.min(255,currentB+pulse|0);
-  // il personaggio respira (sale e scende), si inclina appena e cresce ad ogni battito
-  const floatY = Math.sin(frameCount * 0.03) * 6;
-  const tilt = Math.sin(frameCount * 0.017) * 3;
-  pulseCore.style.transform=`translate(-50%,-50%) translateY(${floatY}px) rotate(${tilt}deg) scale(${1+pulse/200})`;
 
-  // aura: i colori della palette girano lentamente attorno al personaggio;
-  // il colore dominante illumina il bagliore esterno ad ogni battito
-  const auraCols = currentPalette.length ? currentPalette.slice(0, 5).map(toHex) : [`rgb(${pr},${pg},${pb})`];
-  coreAura.style.background = auraCols.length > 1
-    ? `conic-gradient(from ${(frameCount * 0.4) % 360}deg, ${auraCols.join(', ')}, ${auraCols[0]})`
-    : auraCols[0];
-  coreAura.style.boxShadow=`0 0 ${30+pulse}px rgba(${pr},${pg},${pb},0.7),0 0 ${12+pulse*0.4}px rgba(${pr},${pg},${pb},0.35)`;
+  // ── CHROMA al centro: si muove appena, con un respiro lento e regolare ──
+  const floatY = Math.sin(frameCount * 0.012) * 2.5;
+  const tilt = Math.sin(frameCount * 0.008) * 0.8;
+  pulseCore.style.transform=`translate(-50%,-50%) translateY(${floatY}px) rotate(${tilt}deg)`;
 
-  // forma organica/amebica: 8 raggi (angoli) che oscillano lentamente con
-  // fasi diverse, più marcati durante il battito — mai un cerchio perfetto e immobile
-  const wobble = ORGANIC_WOBBLE_BASE + beat*ORGANIC_WOBBLE_BEAT;
-  const wt = frameCount * 0.02;
-  const rad = i => 50 + Math.sin(wt*(0.7+i*0.13) + i*1.7) * wobble;
+  // aura: i colori del cappuccio di CHROMA (CHROMA_AURA), che girano piano
+  // attorno al personaggio. È sua e non dipende dalla scena, così resta
+  // distinta dalla nebulosa di sfondo che invece segue la webcam.
+  coreAura.style.background = `conic-gradient(from ${(frameCount * 0.15) % 360}deg, ${CHROMA_AURA.join(', ')}, ${CHROMA_AURA[0]})`;
+  const glowHue = (frameCount * 0.12) % 360;
+  coreAura.style.boxShadow = `0 0 60px hsla(${glowHue}, 85%, 60%, 0.45), 0 0 22px hsla(${(glowHue + 120) % 360}, 85%, 65%, 0.35)`;
+  coreAura.style.opacity = (0.78 + Math.sin(frameCount * 0.01) * 0.1).toFixed(3);
+  const wt = frameCount * 0.01;
+  const rad = i => 50 + Math.sin(wt*(0.7+i*0.13) + i*1.7) * 4;
   coreAura.style.borderRadius = `${rad(0)}% ${rad(1)}% ${rad(2)}% ${rad(3)}% / ${rad(4)}% ${rad(5)}% ${rad(6)}% ${rad(7)}%`;
 
   // ── particelle: reagiscono al mouse, al battito e al colore rilevato (con scia fluida, vedi sezione 5) ──
@@ -791,13 +809,13 @@ const OLLAMA_TUNNEL_URL = "https://stoop-situation-trifle.ngrok-free.dev/api/gen
 // non risponde in fretta (o non sei sul PC), passa al tunnel — ma solo se
 // è stato configurato, altrimenti rilancia subito l'errore originale
 //
-// NOTA sul timeout locale: NON deve essere troppo corto. Se hai appena
-// (ri)avviato "ollama serve" (es. per cambiare OLLAMA_ORIGINS), il modello
-// va ricaricato in VRAM da zero alla prima richiesta, e questo può richiedere
-// qualche secondo — se il browser annulla la richiesta troppo presto,
-// Ollama la vede come "context canceled" e fallisce SEMPRE, anche restando
-// sul PC con tutto acceso e funzionante (bug osservato: con un timeout di
-// 1.2s il caricamento del modello veniva interrotto ogni volta a metà).
+// NOTA sul timeout locale: NON deve essere troppo corto. Se Ollama è stato
+// (ri)avviato da poco (es. per cambiare OLLAMA_ORIGINS), il modello va
+// ricaricato in VRAM da zero alla prima richiesta, e questo può richiedere
+// qualche secondo — con un timeout troppo corto (es. 1.2s) il browser
+// annullerebbe la richiesta mentre il modello è ancora a metà del
+// caricamento, e Ollama la vedrebbe come "context canceled", fallendo
+// sempre anche restando sul PC con tutto acceso e funzionante.
 // Un timeout di qualche secondo qui non rallenta il caso "sei sul telefono,
 // niente Ollama in locale": lì la connessione a "localhost" fallisce subito
 // (connessione rifiutata), non c'è nulla da aspettare.
@@ -811,8 +829,9 @@ const OLLAMA_TUNNEL_URL = "https://stoop-situation-trifle.ngrok-free.dev/api/gen
 // tra quelle ammesse dal CORS di Ollama (che ha un elenco fisso e non la
 // contiene): il browser farebbe passare il pre-controllo OPTIONS ma poi
 // bloccherebbe lui stesso la richiesta vera prima ancora di mandarla,
-// perché l'intestazione non è nella lista concordata — esattamente il bug
-// osservato su iPhone (OPTIONS 204, poi il POST non arrivava mai a Ollama).
+// perché l'intestazione non è nella lista concordata. Su iPhone questo si
+// manifesta con un OPTIONS che riceve 204 ma il POST successivo non arriva
+// mai a Ollama.
 async function ollamaFetch(body) {
   const tryUrl = (url, timeoutMs) => {
     const ctrl = new AbortController();
@@ -1085,7 +1104,7 @@ async function runFullSequence() {
 // JUDGMENT_LEN_MIN_SIZE scende fino a JUDGMENT_MIN_SCALE (fattore, non rem —
 // i rem veri e propri sono nel clamp() di #aiJudgment in style.css). Così un
 // giudizio lungo si legge tutto invece di sfondare il bordo dello schermo.
-const JUDGMENT_LEN_FULL_SIZE = 60;   // fino a questa lunghezza (caratteri): testo a dimensione piena (abbassata insieme a num_predict, sezione 10: i giudizi ora sono più corti)
+const JUDGMENT_LEN_FULL_SIZE = 60;   // fino a questa lunghezza (caratteri): testo a dimensione piena — coerente con num_predict in sezione 10, che tiene i giudizi brevi
 const JUDGMENT_LEN_MIN_SIZE  = 220;  // da questa lunghezza in su: dimensione minima
 const JUDGMENT_MIN_SCALE     = 0.55; // dimensione minima, come frazione di quella piena (1 = piena, 0.55 = 55%)
 
@@ -1280,14 +1299,13 @@ judgeBtn.addEventListener("click",()=>{
 requestAnimationFrame(loop);
 
 // ── 12. DATI OGGETTIVI ────────────────────────────────────────────
-// Pannello SEMPRE VISIBILE (non più una fase transitoria): mostra i
-// valori che il sistema misura DAVVERO — nome colore, HEX, RGB,
-// saturazione/luminosità, percentuale d'area di ciascun colore della
-// palette — senza nessuna interpretazione. Resta a sinistra, si
-// aggiorna da solo quando la palette cambia (chiamato da loop(),
-// sezione 9, tramite il flag paletteDirty) e non sparisce mai: prima
-// del primo aggiornamento resta semplicemente invisibile (opacity 0 in
-// style.css), poi resta visibile per sempre.
+// Pannello SEMPRE VISIBILE: mostra i valori che il sistema misura
+// DAVVERO — nome colore, HEX, RGB, saturazione/luminosità, percentuale
+// d'area di ciascun colore della palette — senza nessuna interpretazione.
+// Resta a sinistra, si aggiorna da solo quando la palette cambia
+// (chiamato da loop(), sezione 9, tramite il flag paletteDirty): prima
+// del primo aggiornamento resta invisibile (opacity 0 in style.css), poi
+// resta visibile per sempre.
 const dataPanel = document.getElementById('dataPanel');
 
 function updateDataPanel(domCol) {
@@ -1341,8 +1359,8 @@ function updateDataPanel(domCol) {
 // risolve quando l'osservatore clicca uno dei bottoni al suo interno, o
 // da sola dopo `timeoutMs` se nessuno risponde. Il timeout è la parte
 // importante: senza, un visitatore che si allontana senza rispondere
-// blocca la sequenza per sempre, e il prossimo GIUDICA sembra "non
-// funzionare più" — è il problema segnalato.
+// bloccherebbe la sequenza per sempre, e il GIUDICA successivo
+// sembrerebbe non funzionare più.
 function showOverlayChoice(el, buttons, readAnswer, timeoutMs) {
   return new Promise(resolve => {
     el.style.opacity = '1';
@@ -1939,7 +1957,9 @@ async function triggerPageReaction(sig) {
   hideAllOverlays();
 
   pageReactionTitleEl.textContent = sig.label;
-  drawCardFigure(pageReactionCanvas, sig);
+  const has3D = show3DForChapter(sig);
+  pageReactionCanvas.style.display = has3D ? 'none' : 'block';
+  if (!has3D) drawCardFigure(pageReactionCanvas, sig);
   pageReactionTextEl.textContent = sig.text;
   pageReactionAiEl.textContent = '';
   pageReactionEl.classList.add('visible');
@@ -1959,6 +1979,7 @@ async function triggerPageReaction(sig) {
 function closePageReaction() {
   pageReactionEl.classList.remove('visible');
   pageReactionBackdrop.classList.remove('visible');
+  hide3DView();
   if (activePageId) pageCooldownUntil[activePageId] = performance.now() + PAGE_REOPEN_COOLDOWN;
   activePageId = null;
   pageRequestSeq++; // scarta un'eventuale risposta AI ancora in arrivo per la pagina appena chiusa
@@ -1989,6 +2010,218 @@ window.CHROMA_DEBUG = {
   resetCooldowns: () => { for (const k in pageCooldownUntil) delete pageCooldownUntil[k]; console.log('cooldown azzerati'); },
 };
 
+// ── 18. QR INGRANDITO ──────────────────────────────────────────────
+// Un clic su #qrBox ingrandisce lo stesso QR al centro dello schermo
+// (#qrModal), pensato per mostrarlo a tutta la sala durante
+// l'esposizione della tesi senza uscire dall'app — #qrBox è un bottone,
+// non un link, proprio per poter intercettare il clic invece di aprire
+// una nuova scheda. Stesso pattern di #pageReactionBackdrop/#pageReaction
+// (sezione 17): sfondo che scurisce tutto, popup sopra, nessun timeout —
+// resta finché non lo si chiude a mano.
+const qrBoxBtn        = document.getElementById('qrBox');
+const qrModal         = document.getElementById('qrModal');
+const qrModalBackdrop = document.getElementById('qrModalBackdrop');
+const qrModalClose    = document.getElementById('qrModalClose');
+
+function openQrModal() {
+  qrModal.classList.add('visible');
+  qrModalBackdrop.classList.add('visible');
+}
+function closeQrModal() {
+  qrModal.classList.remove('visible');
+  qrModalBackdrop.classList.remove('visible');
+}
+qrBoxBtn.addEventListener('click', openQrModal);
+qrModalClose.addEventListener('click', closeQrModal);
+qrModalBackdrop.addEventListener('click', closeQrModal); // clic fuori dal popup = stesso effetto del bottone "chiudi"
+
+// ── 19. FORMA 3D PER CAPITOLO ───────────────────────────────────────
+// Quando il popup di riconoscimento pagina si apre (sezione 17), oltre
+// al testo mostra una forma tridimensionale generata dai dati DI QUEL
+// CAPITOLO — gli stessi colori della firma cromatica — invece di un
+// modello disegnato a mano: è CHROMA stessa a "scolpire" una forma a
+// partire dai dati, con lo stesso principio degli emblemi di capitolo
+// (macchie che nascono da un seed deterministico, non a caso). Ruotabile
+// trascinando col mouse o col dito; ruota lentamente da sola quando non
+// viene toccata.
+//
+// Per passare in futuro a modelli fatti a mano in Blender: basta
+// sostituire generateChapterGeometry()/colorizeGeometry() qui sotto con
+// un caricamento di file .glb (es. tramite GLTFLoader di Three.js, o il
+// componente <model-viewer> al posto del canvas) — il resto (apertura
+// popup, trascinamento, avvio/arresto del rendering) resta identico.
+
+const page3DCanvas = document.getElementById('pageReaction3D');
+
+// stesso PRNG deterministico usato per gli emblemi grafici di capitolo
+// (mulberry32, seed dalla stringa dell'id): stessa forma ogni volta per
+// lo stesso capitolo, non rigenerata a caso ad ogni apertura.
+function mulberry32_3d(seed) {
+  return function() {
+    seed |= 0; seed = (seed + 0x6D2B79F5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+function hashSeed3D(str) {
+  let h = 0;
+  for (let i = 0; i < str.length; i++) { h = (Math.imul(31, h) + str.charCodeAt(i)) | 0; }
+  return h;
+}
+
+let scene3D, camera3D, renderer3D, mesh3D, animFrame3D = null;
+let rotX = -0.3, rotY = 0.6; // orientamento iniziale, leggermente di tre-quarti invece che frontale piatto
+let dragging3D = false, lastPointerX = 0, lastPointerY = 0;
+
+function ensure3DScene() {
+  if (scene3D) return true; // già creata, riusala
+  if (typeof THREE === 'undefined') {
+    console.warn('Three.js non caricato: la forma 3D resta disattivata, il popup mostra comunque il testo.');
+    return false;
+  }
+  scene3D = new THREE.Scene();
+  camera3D = new THREE.PerspectiveCamera(40, 1, 0.1, 10);
+  camera3D.position.set(0, 0, 3.4);
+
+  renderer3D = new THREE.WebGLRenderer({ canvas: page3DCanvas, antialias: true, alpha: true });
+  renderer3D.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+
+  scene3D.add(new THREE.AmbientLight(0xffffff, 0.55));
+  const key = new THREE.DirectionalLight(0xffffff, 0.9);
+  key.position.set(2, 2.5, 3);
+  scene3D.add(key);
+  const rim = new THREE.DirectionalLight(0xffffff, 0.35);
+  rim.position.set(-2, -1, -2);
+  scene3D.add(rim);
+
+  // trascinamento manuale (mouse o tocco) per ruotare — niente libreria
+  // OrbitControls: bastano due variabili (rotX/rotY) aggiornate ad ogni
+  // spostamento del puntatore, più semplice da mantenere qui
+  const onDown = (x, y) => { dragging3D = true; lastPointerX = x; lastPointerY = y; page3DCanvas.classList.add('dragging'); };
+  const onMove = (x, y) => {
+    if (!dragging3D) return;
+    rotY += (x - lastPointerX) * 0.008;
+    rotX += (y - lastPointerY) * 0.008;
+    rotX = Math.max(-1.3, Math.min(1.3, rotX)); // non lasciare che la forma si "ribalti" sopra/sotto
+    lastPointerX = x; lastPointerY = y;
+  };
+  const onUp = () => { dragging3D = false; page3DCanvas.classList.remove('dragging'); };
+
+  page3DCanvas.addEventListener('pointerdown', e => { page3DCanvas.setPointerCapture(e.pointerId); onDown(e.clientX, e.clientY); });
+  page3DCanvas.addEventListener('pointermove', e => onMove(e.clientX, e.clientY));
+  page3DCanvas.addEventListener('pointerup', onUp);
+  page3DCanvas.addEventListener('pointercancel', onUp);
+
+  return true;
+}
+
+// deforma una sfera (icosaedro suddiviso) con alcune "gobbe" morbide
+// posizionate e dimensionate dal seed — stesso principio delle macchie
+// sfocate 2D degli emblemi, qui applicato come spostamento radiale su
+// una superficie sferica invece che su un piano
+function generateChapterGeometry(sig) {
+  const rnd = mulberry32_3d(hashSeed3D(sig.id + '-forma'));
+  const geo = new THREE.IcosahedronGeometry(1, 4);
+  const pos = geo.attributes.position;
+
+  const numBumps = 4 + Math.floor(rnd() * 3); // 4-6 gobbe
+  const bumps = [];
+  for (let i = 0; i < numBumps; i++) {
+    const theta = rnd() * Math.PI * 2;
+    const phi = Math.acos(2 * rnd() - 1);
+    bumps.push({
+      dir: new THREE.Vector3(Math.sin(phi) * Math.cos(theta), Math.sin(phi) * Math.sin(theta), Math.cos(phi)),
+      strength: 0.12 + rnd() * 0.30,
+      falloff: 1.4 + rnd() * 2.2,
+      sign: rnd() > 0.3 ? 1 : -1, // per lo più protuberanze verso fuori, qualche insenatura verso dentro
+    });
+  }
+
+  const v = new THREE.Vector3();
+  for (let i = 0; i < pos.count; i++) {
+    v.fromBufferAttribute(pos, i).normalize();
+    let disp = 0;
+    bumps.forEach(b => {
+      const influence = Math.max(0, v.dot(b.dir)); // 0-1: quanto questo punto guarda verso la gobba
+      disp += b.sign * b.strength * Math.pow(influence, b.falloff);
+    });
+    v.multiplyScalar(1 + disp);
+    pos.setXYZ(i, v.x, v.y, v.z);
+  }
+  geo.computeVertexNormals();
+  return geo;
+}
+
+// colora ogni vertice sfumando fra i colori della firma del capitolo: le
+// stesse identiche coordinate colore usate per il riconoscimento (sezione
+// 17) diventano qui il colore della forma — non una scelta estetica
+// indipendente
+function colorizeGeometry(geo, colors) {
+  const rnd = mulberry32_3d(hashSeed3D('colore-' + colors.map(c => c.join(',')).join('|')));
+  const anchors = colors.map(c => {
+    const theta = rnd() * Math.PI * 2, phi = Math.acos(2 * rnd() - 1);
+    return {
+      dir: new THREE.Vector3(Math.sin(phi) * Math.cos(theta), Math.sin(phi) * Math.sin(theta), Math.cos(phi)),
+      color: new THREE.Color(c[0] / 255, c[1] / 255, c[2] / 255),
+    };
+  });
+  const pos = geo.attributes.position;
+  const colArr = new Float32Array(pos.count * 3);
+  const v = new THREE.Vector3();
+  for (let i = 0; i < pos.count; i++) {
+    v.fromBufferAttribute(pos, i).normalize();
+    let totalW = 0, r = 0, g = 0, b = 0;
+    anchors.forEach(a => {
+      const w = Math.pow(Math.max(0, v.dot(a.dir)), 3);
+      totalW += w; r += a.color.r * w; g += a.color.g * w; b += a.color.b * w;
+    });
+    if (totalW > 0) { r /= totalW; g /= totalW; b /= totalW; } else { r = g = b = 0.5; }
+    colArr[i*3] = r; colArr[i*3+1] = g; colArr[i*3+2] = b;
+  }
+  geo.setAttribute('color', new THREE.BufferAttribute(colArr, 3));
+}
+
+function show3DForChapter(sig) {
+  if (!ensure3DScene()) return false; // Three.js non disponibile: al suo posto resta la figura 2D
+
+  if (mesh3D) { scene3D.remove(mesh3D); mesh3D.geometry.dispose(); mesh3D.material.dispose(); }
+  const geo = generateChapterGeometry(sig);
+  colorizeGeometry(geo, sig.colors.map(n => [1, 3, 5].map(i => parseInt(CARD_COLORS[n].slice(i, i + 2), 16))));
+  const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.55, metalness: 0.12 });
+  mesh3D = new THREE.Mesh(geo, mat);
+  scene3D.add(mesh3D);
+
+  rotX = -0.3; rotY = 0.6; // stesso orientamento di partenza ad ogni apertura, per coerenza fra un capitolo e l'altro
+
+  // display:'block' PRIMA di leggere clientWidth/clientHeight: un elemento
+  // display:none (lo stato di partenza in style.css) non ha una vera area
+  // occupata, quindi clientWidth/clientHeight risulterebbero sempre 0 —
+  // misurarli in quell'ordine darebbe un renderer di dimensione zero e un
+  // aspect ratio NaN, con la forma 3D che non apparirebbe mai.
+  page3DCanvas.style.display = 'block';
+
+  const w = page3DCanvas.clientWidth, h = page3DCanvas.clientHeight;
+  renderer3D.setSize(w, h, false);
+  camera3D.aspect = w / h;
+  camera3D.updateProjectionMatrix();
+
+  if (!animFrame3D) render3DLoop();
+  return true;
+}
+
+function render3DLoop() {
+  animFrame3D = requestAnimationFrame(render3DLoop);
+  if (!dragging3D) rotY += 0.004; // rotazione lenta automatica quando non viene trascinata
+  if (mesh3D) { mesh3D.rotation.x = rotX; mesh3D.rotation.y = rotY; }
+  renderer3D.render(scene3D, camera3D);
+}
+
+function hide3DView() {
+  page3DCanvas.style.display = 'none';
+  if (animFrame3D) { cancelAnimationFrame(animFrame3D); animFrame3D = null; }
+}
+
 document.addEventListener('keydown', e => {
   // ignora la scorciatoia mentre si sta scrivendo in un campo di testo
   // (qui non ce ne sono, ma è una sicurezza per eventuali aggiunte future)
@@ -1996,4 +2229,11 @@ document.addEventListener('keydown', e => {
   if (e.key === 'e' || e.key === 'E') exportResponseLog();
   if (e.key === 's' || e.key === 'S') toggleStats();
   if (e.key === 'R' && e.shiftKey) clearResponseLog();
+  if (e.key === 'Escape') {
+    closeQrModal(); // innocuo anche se già chiuso
+    // closePageReaction() invece NON va chiamata a vuoto: resetta anche
+    // "analyzing" e riabilita GIUDICA, il che interromperebbe un giudizio
+    // AI normale in corso se il popup pagina non è nemmeno aperto
+    if (pageReactionEl.classList.contains('visible')) closePageReaction();
+  }
 });
