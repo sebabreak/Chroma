@@ -20,7 +20,7 @@
 //  sola quando il telefono è online), ma pulisce la cache vecchia invece
 //  di lasciarla lì a occupare spazio inutilmente.
 // ══════════════════════════════════════════════════════════════════
-const CACHE_NAME = 'sovrainterpretazione-v26'; // ricorda di alzare questo numero ad ogni modifica di index.html/style.css/script.js (vedi commento sopra)
+const CACHE_NAME = 'sovrainterpretazione-v27'; // ricorda di alzare questo numero ad ogni modifica di index.html/style.css/script.js (vedi commento sopra)
 
 const ASSETS = [
   './',
