@@ -1727,13 +1727,13 @@ const CARD_REF = Object.entries(CARD_COLORS).map(([name, hex]) => {
 // text: la frase di CHROMA, già scritta (compare subito, anche senza Ollama).
 // topic: il tema passato a Ollama per la "lettura" dal vivo, se raggiungibile.
 const PAGE_SIGNATURES = [
-  { id: 'intro', label: 'Introduzione', thesis: true, colors: ['rosso', 'arancio', 'verde', 'acqua'],
+  { id: 'intro', label: 'Introduzione', thesis: true, colors: ['rosso', 'arancio', 'verde', 'azzurro'],
     text: 'Una webcam osserva. Non riconosce volti: misura soltanto luce. Da qui parte tutto, dal salto tra un numero e un giudizio.',
     topic: 'l\'introduzione di una tesi sul momento in cui un colore misurato riceve un significato' },
-  { id: 'cap1', label: 'Capitolo 1 — Il colore', thesis: true, colors: ['giallo', 'lime', 'verde', 'acqua'],
+  { id: 'cap1', minShare: 0.05, label: 'Capitolo 1 — Il colore', thesis: true, colors: ['giallo', 'azzurro', 'arancio', 'rosso', 'lime', 'verde', 'magenta', 'viola'],
     text: 'Tre modi di guardarmi: come sistema, come esperienza dell\'occhio, come significato culturale. Nessuno basta da solo.',
     topic: 'il colore come teoria, percezione e costruzione culturale' },
-  { id: 'newton', label: 'Isaac Newton', thesis: false, colors: ['rosso', 'arancio', 'giallo', 'lime'],
+  { id: 'newton', minTotal: 0.008, minShare: 0.1, label: 'Isaac Newton', thesis: false, colors: ['arancio', 'rosso', 'giallo', 'azzurro', 'verde'],
     text: 'Newton mi ha fatto passare attraverso un prisma: la luce bianca conteneva già tutti i colori.',
     topic: 'Newton e la scomposizione della luce bianca con il prisma' },
   { id: 'goethe', label: 'Johann Wolfgang von Goethe', thesis: false, colors: ['arancio', 'lime', 'blu', 'magenta'],
@@ -1745,61 +1745,61 @@ const PAGE_SIGNATURES = [
   { id: 'albers', label: 'Josef Albers', thesis: false, colors: ['arancio', 'giallo', 'azzurro', 'viola'],
     text: 'Albers ha dimostrato che non mi vedi mai da solo: lo stesso grigio cambia a seconda di chi gli sta accanto.',
     topic: 'Albers e la relatività del colore, che cambia con il contesto' },
-  { id: 'heller', label: 'Eva Heller', thesis: false, colors: ['rosso', 'acqua', 'blu', 'magenta'],
+  { id: 'heller', label: 'Eva Heller', thesis: false, colors: ['rosso', 'blu', 'acqua'],
     text: 'Eva Heller ha chiesto a circa duemila persone che cosa significo per loro. Le risposte parlano più di voi che di me.',
     topic: 'Eva Heller e le associazioni psicologiche dei colori raccolte con un sondaggio' },
-  { id: 'kandinsky', label: 'Wassily Kandinsky', thesis: false, colors: ['rosso', 'giallo', 'azzurro', 'blu'],
+  { id: 'kandinsky', label: 'Wassily Kandinsky', thesis: false, colors: ['rosso', 'azzurro', 'giallo', 'blu'],
     text: 'Kandinsky mi sentiva come un suono: il giallo squilla come una tromba, il blu si allontana e chiama verso l\'infinito.',
     topic: 'Kandinsky, lo spirituale nell\'arte e il colore come suono interiore' },
-  { id: 'pastoureau', label: 'Michel Pastoureau', thesis: false, colors: ['giallo', 'lime', 'azzurro', 'magenta'],
+  { id: 'pastoureau', minShare: 0.05, label: 'Michel Pastoureau', thesis: false, colors: ['giallo', 'arancio', 'verde'],
     text: 'Pastoureau ha scritto la mia storia: i miei significati cambiano da un secolo all\'altro e da una società all\'altra.',
     topic: 'Pastoureau e la storia sociale e simbolica dei colori' },
-  { id: 'falcinelli', label: 'Riccardo Falcinelli', thesis: false, colors: ['verde', 'acqua', 'blu', 'viola'],
+  { id: 'falcinelli', label: 'Riccardo Falcinelli', thesis: false, colors: ['viola', 'acqua', 'blu', 'giallo'],
     text: 'Falcinelli racconta come pittura, industria e tecnologia hanno cambiato il modo in cui mi guardi.',
     topic: 'Falcinelli, Cromorama e il colore nella cultura visiva' },
-  { id: 'cap2', label: 'Capitolo 2 — Il colore digitale', thesis: true, colors: ['azzurro', 'blu', 'viola', 'magenta'],
+  { id: 'cap2', label: 'Capitolo 2 — Il colore digitale', thesis: true, colors: ['viola', 'magenta', 'azzurro'],
     text: 'Qui divento tre numeri tra 0 e 255. Posso essere copiato all\'infinito, ma su ogni schermo appaio un po\' diverso.',
     topic: 'il colore trasformato in dato digitale: pixel, RGB, schermi' },
-  { id: 'mcluhan', label: 'Marshall McLuhan', thesis: false, colors: ['arancio', 'giallo', 'verde', 'magenta'],
+  { id: 'mcluhan', label: 'Marshall McLuhan', thesis: false, colors: ['giallo', 'arancio', 'viola', 'azzurro', 'magenta'],
     text: 'Per McLuhan ogni medium è un\'estensione dei sensi. Sullo schermo della televisione divento punti luminosi che il tuo occhio deve ricomporre.',
     topic: 'McLuhan, i media come estensioni dei sensi e lo schermo televisivo' },
-  { id: 'grau', label: 'Oliver Grau', thesis: false, colors: ['rosso', 'arancio', 'blu', 'viola'],
+  { id: 'grau', label: 'Oliver Grau', thesis: false, colors: ['blu', 'arancio', 'rosso', 'viola'],
     text: 'Grau racconta un desiderio antico: entrare dentro l\'immagine. Dagli affreschi di Pompei ai panorami, fino al digitale.',
     topic: 'Oliver Grau, la storia dell\'immersione nell\'immagine' },
-  { id: 'avolve', label: 'Christa Sommerer e Laurent Mignonneau', thesis: false, colors: ['rosso', 'acqua', 'azzurro', 'viola'],
+  { id: 'avolve', label: 'Christa Sommerer e Laurent Mignonneau', thesis: false, colors: ['azzurro', 'acqua'],
     text: 'In A-Volve disegni una creatura su uno schermo e la vedi nuotare in una vasca d\'acqua insieme alle altre. La sua forma nasce dal tuo gesto.',
     topic: 'A-Volve di Sommerer e Mignonneau, creature virtuali nate da un disegno' },
-  { id: 'hoffman', label: 'Donald Hoffman', thesis: false, colors: ['verde', 'acqua', 'azzurro', 'magenta'],
+  { id: 'hoffman', label: 'Donald Hoffman', thesis: false, colors: ['giallo', 'magenta', 'azzurro', 'verde', 'acqua'],
     text: 'Per Hoffman vedere è costruire: davanti allo stesso cubo di Necker, il tuo occhio sceglie ogni volta una forma diversa.',
     topic: 'Hoffman, l\'intelligenza visiva e il cubo di Necker' },
-  { id: 'gregory', label: 'Richard Gregory', thesis: false, colors: ['arancio', 'verde', 'azzurro', 'blu'],
+  { id: 'gregory', label: 'Richard Gregory', thesis: false, colors: ['azzurro', 'verde', 'arancio'],
     text: 'Per Gregory la visione non è una fotografia: il cervello interpreta ciò che l\'occhio riceve, e a volte si inganna.',
     topic: 'Gregory, occhio e cervello e la psicologia del vedere' },
-  { id: 'cap3', label: 'Capitolo 3 — Media Art', thesis: true, colors: ['lime', 'verde', 'azzurro', 'viola'],
+  { id: 'cap3', label: 'Capitolo 3 — Media Art', thesis: true, colors: ['verde', 'azzurro', 'lime', 'viola'],
     text: 'Nella Media Art smetto di stare su una superficie: divento spazio, esperienza, risposta di un sistema.',
     topic: 'il colore nella Media Art, come esperienza nello spazio e interazione' },
-  { id: 'turrell', label: 'James Turrell', thesis: false, colors: ['lime', 'acqua', 'azzurro', 'blu'],
+  { id: 'turrell', label: 'James Turrell', thesis: false, colors: ['lime', 'blu', 'azzurro', 'verde'],
     text: 'Turrell usa la luce come materia. Nei suoi Skyspaces il cielo resta lo stesso, ma cambia il modo in cui lo vedi.',
     topic: 'James Turrell, la luce come materia e gli Skyspaces' },
-  { id: 'eliasson', label: 'Olafur Eliasson', thesis: false, colors: ['arancio', 'giallo', 'acqua', 'blu'],
+  { id: 'eliasson', label: 'Olafur Eliasson', thesis: false, colors: ['arancio', 'blu', 'giallo', 'acqua'],
     text: 'In Room for one colour Eliasson mi riduce a un solo giallo: quando esci, il mondo ti sembra tendere al blu.',
     topic: 'Olafur Eliasson, la luce e la percezione condivisa' },
-  { id: 'rokeby', label: 'David Rokeby', thesis: false, colors: ['giallo', 'acqua', 'viola', 'magenta'],
+  { id: 'rokeby', label: 'David Rokeby', thesis: false, colors: ['viola', 'giallo', 'arancio', 'rosso'],
     text: 'In Very Nervous System i movimenti del corpo diventano suono: il sistema osserva e risponde a modo suo.',
     topic: 'David Rokeby e i sistemi interattivi che trasformano il movimento in suono' },
-  { id: 'lozano', label: 'Rafael Lozano-Hemmer', thesis: false, colors: ['rosso', 'lime', 'verde', 'blu'],
+  { id: 'lozano', label: 'Rafael Lozano-Hemmer', thesis: false, colors: ['blu', 'rosso', 'lime', 'verde'],
     text: 'In Pulse Index il battito e l\'impronta del pubblico diventano immagini: un dato del corpo trasformato in opera.',
     topic: 'Rafael Lozano-Hemmer e i dati biometrici del pubblico trasformati in opera' },
-  { id: 'ryabchenko', label: 'Stepan Ryabchenko', thesis: false, colors: ['rosso', 'lime', 'viola', 'magenta'],
+  { id: 'ryabchenko', label: 'Stepan Ryabchenko', thesis: false, colors: ['viola', 'magenta', 'lime', 'rosso'],
     text: 'Ryabchenko costruisce mondi digitali, ma lascia a ogni spettatore la libertà di leggerli a modo suo.',
     topic: 'i mondi digitali di Stepan Ryabchenko e la libertà di interpretazione dello spettatore' },
-  { id: 'cap4', label: 'Capitolo 4 — CHROMA', thesis: true, colors: ['giallo', 'lime', 'blu', 'viola'],
+  { id: 'cap4', minShare: 0.03, label: 'Capitolo 4 — CHROMA', thesis: true, colors: ['viola', 'arancio', 'azzurro', 'magenta', 'verde', 'rosso', 'giallo', 'acqua', 'lime'],
     text: 'Questo capitolo parla di me: come guardo, come misuro, come trasformo cinque colori in una frase sicura.',
     topic: 'CHROMA stesso: una webcam, cinque colori e una frase detta con certezza' },
-  { id: 'cap5', label: 'Capitolo 5 — Gli elaborati', thesis: true, colors: ['arancio', 'lime', 'acqua', 'viola'],
+  { id: 'cap5', label: 'Capitolo 5 — Gli elaborati', thesis: true, colors: ['blu', 'arancio', 'magenta', 'acqua'],
     text: 'Sono un\'installazione, un\'app e questo mazzo di carte. Tre modi di chiederti che cosa credi quando ti parlo.',
     topic: 'gli elaborati di CHROMA: un\'installazione, un\'app e un mazzo di carte' },
-  { id: 'fine', label: 'Conclusioni', thesis: true, colors: ['rosso', 'giallo', 'verde', 'viola'],
+  { id: 'fine', label: 'Conclusioni', thesis: true, colors: ['giallo', 'viola', 'arancio', 'lime'],
     text: 'Non ti dirò che cosa significa un colore. Ti mostro quanto sei disposto a credermi.',
     topic: 'la fiducia che diamo a un significato quando arriva dopo dei numeri' },
 ];
@@ -1875,12 +1875,12 @@ function cardColorAreas(imageData) {
 function matchPageSignature(imageData) {
   const areas = cardColorAreas(imageData);
   const total = Object.values(areas).reduce((x, y) => x + y, 0);
-  if (total < CARD_MIN_TOTAL) return null;
   let best = null, bestPurity = 0;
   for (const sig of PAGE_SIGNATURES) {
+    if (total < (sig.minTotal || CARD_MIN_TOTAL)) continue;
     const a = sig.colors.map(c => (areas[c] || 0) / total);
     const purity = a.reduce((x, y) => x + y, 0);
-    if (Math.min(...a) >= CARD_MIN_SHARE && purity >= CARD_MIN_PURITY && purity > bestPurity) { bestPurity = purity; best = sig; }
+    if (Math.min(...a) >= (sig.minShare || CARD_MIN_SHARE) && purity >= CARD_MIN_PURITY && purity > bestPurity) { bestPurity = purity; best = sig; }
   }
   return best;
 }
@@ -1914,7 +1914,7 @@ function drawCardFigure(canvas, sig) {
   ctx.filter = 'blur(28px)';
   for (let i = 0; i < 9; i++) {
     const a = rnd() * Math.PI * 2, d = rnd() * S * 0.28;
-    ctx.fillStyle = cols[i % 4];
+    ctx.fillStyle = cols[i % cols.length];
     ctx.globalAlpha = 0.55 + rnd() * 0.35;
     ctx.beginPath();
     ctx.ellipse(S / 2 + Math.cos(a) * d, S / 2 + Math.sin(a) * d, S * (0.1 + rnd() * 0.16), S * (0.08 + rnd() * 0.14), rnd() * Math.PI, 0, Math.PI * 2);
@@ -1925,7 +1925,7 @@ function drawCardFigure(canvas, sig) {
   ctx.globalAlpha = 1;
   ctx.lineWidth = 1.2;
   for (let i = 0; i < 4; i++) {
-    ctx.strokeStyle = cols[i];
+    ctx.strokeStyle = cols[i % cols.length];
     ctx.beginPath();
     const r0 = S * (0.18 + i * 0.07), ph = rnd() * 6;
     for (let t = 0; t <= 200; t++) {
