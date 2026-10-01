@@ -25,9 +25,9 @@
 //  14. "TI RICONOSCI?" .............. sì/no/in parte, mostrata subito dopo il giudizio AI (timeout se non risponde nessuno)
 //  15. RITRATTO CROMATICO ........... immagine astratta generata dai dati della singola osservazione, scaricabile
 //  16. LOG RISPOSTE .................. registro salvato nel browser + esportazione CSV (tasto "E") + riepilogo (tasto "S")
-//  17. RICONOSCIMENTO CARTE/PAGINE .. riconosce le 4 tinte di una carta del mazzo o di un'apertura di capitolo e apre un popup con figura e testo
+//  17. RICONOSCIMENTO CARTE/PAGINE .. riconosce i colori di una carta del mazzo e apre il popup: la carta scomposta in dati, la lettura di CHROMA, il contenuto vero
 //  18. QR INGRANDITO ................ un clic sul QR lo ingrandisce al centro, per mostrarlo a tutta la sala durante l'esposizione
-//  19. FORMA 3D PER CARTA ........... genera e ruota una forma tridimensionale dai colori della carta, dentro al popup della sezione 17
+//  19. RICONOSCIMENTO PER IMMAGINE .. confronta l'inquadratura con le immagini delle 25 carte (OpenCV), insieme ai colori della sezione 17
 //
 //  MODIFICHE PIÙ COMUNI — dove intervenire:
 //  - Cambiare modello Ollama o i suoi parametri  → sezione 10, dentro fetchAIJudgment()
@@ -51,9 +51,9 @@
 //  - Colori/testo/tema di ogni carta o pagina riconoscibile → sezione 17, costanti CARD_COLORS e PAGE_SIGNATURES
 //  - Quanto è tollerante il riconoscimento delle carte (stampa/luce imprecise) → sezione 17, costanti CARD_*
 //  - Quanto resta "ignorata" una pagina dopo aver chiuso il suo popup    → sezione 17, PAGE_REOPEN_COOLDOWN
-//  - Quanto sono pronunciate le gobbe della forma 3D → sezione 19, i valori "strength"/"falloff" in generateChapterGeometry()
-//  - Velocità di rotazione automatica della forma 3D → sezione 19, il numero aggiunto a rotY in render3DLoop()
-//  - Passare a un modello 3D fatto a mano (Blender) invece che generato → sezione 19, vedi nota introduttiva della sezione
+//  - Quanto è severo il riconoscimento per immagine → sezione 19, costanti IMG_*
+//  - Tempi del popup della carta (pixel, CHROMA, testo) → sezione 17, costanti REVEAL_*
+//  - Testo/personalità della lettura di CHROMA sulla carta → sezione 17, prompt in fetchCardReading()
 // ══════════════════════════════════════════════════════════════════
 
 // Ollama gira sul PC (non nel telefono): il PC deve avere Ollama installato
@@ -1690,13 +1690,12 @@ function clearResponseLog() {
 }
 
 // ── 17. RICONOSCIMENTO CARTE E PAGINE ─────────────────────────────
-// Le carte del mazzo e le aperture di capitolo della tesi stampata hanno
-// una composizione di 4 colori (non un QR code). Ad ogni ricalcolo della
-// palette (sezione 9) il sistema controlla se nell'inquadratura ci sono
-// tutti e 4 i colori di una carta; se la lettura resta uguale per qualche
-// istante, apre un popup con il nome della carta, una figura generata dai
-// suoi colori, la frase di CHROMA e, se Ollama risponde, una lettura dal
-// vivo. Il popup resta finché non lo si chiude a mano.
+// Ogni carta del mazzo ha i suoi colori. Il sistema li cerca nell'inquadratura
+// e, quando OpenCV è pronto, confronta anche l'immagine intera con quella
+// delle carte (sezione 19). Riconosciuta una carta, il popup si svolge in tre
+// tempi: la carta scomposta in pixel e percentuali di colore, la lettura di
+// CHROMA fatta solo da quei colori (senza sapere cosa rappresenta), e infine
+// che cosa racconta davvero la carta. Resta finché non lo si chiude a mano.
 //
 // ── I COLORI DELLE CARTE ──
 // Dieci colori da stampa, scelti con tonalità lontane tra loro (almeno 26°)
@@ -1719,13 +1718,12 @@ const CARD_REF = Object.entries(CARD_COLORS).map(([name, hex]) => {
   return { name, hsl: toHsl(rgb) };
 });
 
-// ── LE CARTE (e le aperture di capitolo della tesi stampata) ──
-// Ogni carta usa 4 dei 10 colori. Le 25 combinazioni sono scelte in modo
-// che due carte qualsiasi abbiano al massimo 2 colori in comune: per essere
-// scambiata con un'altra, una carta dovrebbe "sbagliare" almeno 2 colori.
-// thesis: true = la stessa composizione va anche all'inizio del capitolo nella tesi.
-// text: la frase di CHROMA, già scritta (compare subito, anche senza Ollama).
-// topic: il tema passato a Ollama per la "lettura" dal vivo, se raggiungibile.
+// ── LE CARTE ──
+// colors: i colori presenti sulla carta, misurati sui file disegnati in
+// Affinity (dal più esteso al meno esteso). minShare/minTotal, dove ci sono,
+// abbassano le soglie per le carte con poco colore o con molti colori piccoli.
+// text: che cosa racconta la carta, mostrato dopo la lettura di CHROMA.
+// img: l'immagine della carta (cartella carte/), aggiunta subito sotto.
 const PAGE_SIGNATURES = [
   { id: 'intro', label: 'Introduzione', thesis: true, colors: ['rosso', 'arancio', 'verde', 'azzurro'],
     text: 'Una webcam osserva. Non riconosce volti: misura soltanto luce. Da qui parte tutto, dal salto tra un numero e un giudizio.',
@@ -1803,6 +1801,7 @@ const PAGE_SIGNATURES = [
     text: 'Non ti dirò che cosa significa un colore. Ti mostro quanto sei disposto a credermi.',
     topic: 'la fiducia che diamo a un significato quando arriva dopo dei numeri' },
 ];
+PAGE_SIGNATURES.forEach((sig, i) => { sig.img = `carte/${String(i + 1).padStart(2, '0')}.png`; });
 
 // riconduce un colore rilevato al più vicino degli 8 colori delle carte,
 // usando soprattutto la tonalità (più stabile della luminosità quando la
@@ -1830,7 +1829,11 @@ const pageReactionEl       = document.getElementById('pageReaction');
 const pageReactionBackdrop = document.getElementById('pageReactionBackdrop');
 const pageReactionTextEl   = document.getElementById('pageReactionText');
 const pageReactionTitleEl  = document.getElementById('pageReactionTitle');
-const pageReactionCanvas   = document.getElementById('pageReactionCanvas');
+const prDataEl             = document.getElementById('prData');
+const prChromaEl           = document.getElementById('prChroma');
+const prCardEl             = document.getElementById('prCard');
+const prPixelsCanvas       = document.getElementById('prPixels');
+const prPaletteEl          = document.getElementById('prPalette');
 const pageReactionAiEl     = document.getElementById('pageReactionAi');
 const pageReactionCloseBtn = document.getElementById('pageReactionClose');
 
@@ -1887,55 +1890,21 @@ function matchPageSignature(imageData) {
 
 let lastCardCandidate = null, cardHits = 0;
 
-function checkPageSignature(imageData) {
-  const match = matchPageSignature(imageData);
-  if (match && lastCardCandidate === match.id) cardHits++;
-  else { lastCardCandidate = match ? match.id : null; cardHits = match ? 1 : 0; }
-  if (!match || cardHits < CARD_STABLE_HITS) return;
-  if (match.id === activePageId) return;
-  const cooldownUntil = pageCooldownUntil[match.id];
+function registerCardCandidate(sig, needed) {
+  if (sig && lastCardCandidate === sig.id) cardHits++;
+  else { lastCardCandidate = sig ? sig.id : null; cardHits = sig ? 1 : 0; }
+  if (!sig || cardHits < needed) return;
+  if (sig.id === activePageId) return;
+  const cooldownUntil = pageCooldownUntil[sig.id];
   if (cooldownUntil && performance.now() < cooldownUntil) return;
-  triggerPageReaction(match);
+  triggerPageReaction(sig);
 }
 
-// la figura che CHROMA crea per ogni carta: una composizione astratta con i
-// suoi quattro colori. È generata da un seme legato alla carta, quindi la
-// stessa carta produce sempre una figura della stessa famiglia, ma ogni
-// volta leggermente diversa (il seme cambia anche con l'ora).
-function drawCardFigure(canvas, sig) {
-  const S = canvas.width = canvas.height = 600;
-  const ctx = canvas.getContext('2d');
-  let seed = [...sig.id].reduce((a, ch) => a * 31 + ch.charCodeAt(0), 7) + Math.floor(Date.now() / 60000);
-  const rnd = () => ((seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff);
-  const cols = sig.colors.map(c => CARD_COLORS[c]);
-  ctx.fillStyle = '#050506';
-  ctx.fillRect(0, 0, S, S);
-  ctx.globalCompositeOperation = 'screen';
-  ctx.filter = 'blur(28px)';
-  for (let i = 0; i < 9; i++) {
-    const a = rnd() * Math.PI * 2, d = rnd() * S * 0.28;
-    ctx.fillStyle = cols[i % cols.length];
-    ctx.globalAlpha = 0.55 + rnd() * 0.35;
-    ctx.beginPath();
-    ctx.ellipse(S / 2 + Math.cos(a) * d, S / 2 + Math.sin(a) * d, S * (0.1 + rnd() * 0.16), S * (0.08 + rnd() * 0.14), rnd() * Math.PI, 0, Math.PI * 2);
-    ctx.fill();
-  }
-  ctx.filter = 'none';
-  ctx.globalCompositeOperation = 'source-over';
-  ctx.globalAlpha = 1;
-  ctx.lineWidth = 1.2;
-  for (let i = 0; i < 4; i++) {
-    ctx.strokeStyle = cols[i % cols.length];
-    ctx.beginPath();
-    const r0 = S * (0.18 + i * 0.07), ph = rnd() * 6;
-    for (let t = 0; t <= 200; t++) {
-      const ang = t / 200 * Math.PI * 2;
-      const r = r0 + Math.sin(ang * (3 + i) + ph) * S * 0.02;
-      const x = S / 2 + Math.cos(ang) * r, y = S / 2 + Math.sin(ang) * r;
-      t ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
-    }
-    ctx.stroke();
-  }
+// finché il riconoscimento per immagine (sezione 19) non è pronto, decide
+// solo il colore; dopo, la decisione passa a quella sezione
+function checkPageSignature(imageData) {
+  if (imgRec.ready) return;
+  registerCardCandidate(matchPageSignature(imageData), CARD_STABLE_HITS);
 }
 
 function hideAllOverlays() {
@@ -1949,6 +1918,92 @@ function hideAllOverlays() {
   portraitPanel.style.pointerEvents = 'none';
 }
 
+// i tempi del popup: quanto dura ogni passo della pixelazione, quanto si
+// aspetta prima che parli CHROMA, quanto prima che si riveli la carta
+const REVEAL_PIXEL_STEP  = 420;
+const REVEAL_PIXEL_SIZES = [1, 4, 8, 14, 22];
+const REVEAL_CARD_DELAY  = 2600;
+const cardShareCache = {};
+
+const wait = ms => new Promise(r => setTimeout(r, ms));
+
+// quanta parte di ciascun colore c'è sulla carta, misurata sull'immagine
+// della carta stessa con lo stesso metodo usato per la webcam
+async function cardShares(sig) {
+  if (cardShareCache[sig.id]) return cardShareCache[sig.id];
+  const img = await loadImage(sig.img);
+  const c = document.createElement('canvas');
+  c.width = 140; c.height = 180;
+  const cx = c.getContext('2d', { willReadFrequently: true });
+  cx.drawImage(img, 0, 0, 140, 180);
+  const areas = cardColorAreas(cx.getImageData(0, 0, 140, 180));
+  const total = Object.values(areas).reduce((x, y) => x + y, 0) || 1;
+  const list = Object.entries(areas)
+    .map(([name, a]) => ({ name, share: a / total }))
+    .filter(x => x.share >= 0.03)
+    .sort((x, y) => y.share - x.share);
+  return (cardShareCache[sig.id] = { img, list, colored: total });
+}
+
+async function pixelateCard(img, myRequest) {
+  const W = prPixelsCanvas.width = 280, H = prPixelsCanvas.height = 360;
+  const ctx = prPixelsCanvas.getContext('2d');
+  const tmp = document.createElement('canvas');
+  const tctx = tmp.getContext('2d');
+  for (const size of REVEAL_PIXEL_SIZES) {
+    if (myRequest !== pageRequestSeq) return;
+    tmp.width = Math.max(1, Math.round(W / size));
+    tmp.height = Math.max(1, Math.round(H / size));
+    tctx.drawImage(img, 0, 0, tmp.width, tmp.height);
+    ctx.imageSmoothingEnabled = false;
+    ctx.clearRect(0, 0, W, H);
+    ctx.drawImage(tmp, 0, 0, W, H);
+    await wait(REVEAL_PIXEL_STEP);
+  }
+}
+
+function renderCardPalette(data) {
+  prPaletteEl.innerHTML = '';
+  const bar = document.createElement('div');
+  bar.className = 'pr-bar';
+  const legend = document.createElement('div');
+  legend.className = 'pr-legend';
+  for (const { name, share } of data.list) {
+    const seg = document.createElement('span');
+    seg.style.background = CARD_COLORS[name];
+    seg.style.flexGrow = share;
+    bar.appendChild(seg);
+    const item = document.createElement('span');
+    item.innerHTML = `<i style="background:${CARD_COLORS[name]}"></i>${name} ${Math.round(share * 100)}%`;
+    legend.appendChild(item);
+  }
+  const note = document.createElement('div');
+  note.className = 'pr-note';
+  note.textContent = `${Math.round(data.colored * 100)}% della carta è colore, il resto è carta e inchiostro.`;
+  prPaletteEl.append(bar, legend, note);
+}
+
+// CHROMA legge la carta SOLO dai suoi colori: non riceve titolo, autore né
+// tema. È la sovrainterpretazione in piccolo: subito dopo, la carta rivela
+// che cosa racconta davvero.
+async function fetchCardReading(list) {
+  const colors = list.map(x => `${x.name} ${Math.round(x.share * 100)}%`).join(', ');
+  const prompt = `Sei CHROMA, un'entità artificiale che osserva il mondo solo attraverso il colore.
+Ti mostrano una carta stampata. Non sai che cosa rappresenta e non puoi leggerne le parole: ricevi soltanto i suoi colori, in percentuale.
+Colori della carta: ${colors}.
+SOVRAINTERPRETA: dichiara con totale sicurezza di che cosa parla questa carta e che cosa rivela di chi la tiene in mano.
+Niente condizionali, niente "forse" o "sembra", nessuna domanda: solo affermazioni categoriche, come un responso.
+Rispondi con MASSIMO 2 frasi brevi, in italiano, senza virgolette.`;
+  const res = await ollamaFetch({
+    model: 'gemma3:4b',
+    prompt,
+    stream: false,
+    options: { temperature: 1.1, num_predict: 70 }
+  });
+  const data = await res.json();
+  return data.response?.trim() || '';
+}
+
 async function triggerPageReaction(sig) {
   const myRequest = ++pageRequestSeq;
   activePageId = sig.id;
@@ -1956,30 +2011,52 @@ async function triggerPageReaction(sig) {
   analyzing = true; // sospende GIUDICA/auto-giudizio ambientale finché il popup non viene chiuso
   hideAllOverlays();
 
-  pageReactionTitleEl.textContent = sig.label;
-  const has3D = show3DForChapter(sig);
-  pageReactionCanvas.style.display = has3D ? 'none' : 'block';
-  if (!has3D) drawCardFigure(pageReactionCanvas, sig);
-  pageReactionTextEl.textContent = sig.text;
+  [prDataEl, prChromaEl, prCardEl].forEach(el => el.classList.remove('shown'));
+  prPaletteEl.innerHTML = '';
   pageReactionAiEl.textContent = '';
+  pageReactionAiEl.classList.add('thinking');
+  pageReactionTitleEl.textContent = sig.label;
+  pageReactionTextEl.textContent = sig.text;
+  pageReactionEl.scrollTop = 0;
   pageReactionEl.classList.add('visible');
   pageReactionBackdrop.classList.add('visible');
 
-  // la "lettura" dal vivo di Ollama arriva sotto, se il modello è raggiungibile;
-  // se non lo è, la carta resta comunque completa con la sua frase già scritta
+  let data;
   try {
-    const text = await fetchAIJudgment(captureObjectiveSnapshot(), sig.topic);
-    if (myRequest !== pageRequestSeq) return;
-    pageReactionAiEl.textContent = text;
+    data = await cardShares(sig);
   } catch (e) {
     console.error(e);
+    prChromaEl.classList.add('shown');
+    prCardEl.classList.add('shown');
+    pageReactionAiEl.classList.remove('thinking');
+    return;
   }
+  if (myRequest !== pageRequestSeq) return;
+
+  const reading = fetchCardReading(data.list).catch(e => { console.error(e); return ''; });
+
+  prDataEl.classList.add('shown');
+  await pixelateCard(data.img, myRequest);
+  if (myRequest !== pageRequestSeq) return;
+  renderCardPalette(data);
+
+  await wait(900);
+  if (myRequest !== pageRequestSeq) return;
+  prChromaEl.classList.add('shown');
+
+  const text = await reading;
+  if (myRequest !== pageRequestSeq) return;
+  pageReactionAiEl.classList.remove('thinking');
+  pageReactionAiEl.textContent = text || 'CHROMA resta in silenzio: il modello non è raggiungibile.';
+
+  await wait(text ? REVEAL_CARD_DELAY : 900);
+  if (myRequest !== pageRequestSeq) return;
+  prCardEl.classList.add('shown');
 }
 
 function closePageReaction() {
   pageReactionEl.classList.remove('visible');
   pageReactionBackdrop.classList.remove('visible');
-  hide3DView();
   if (activePageId) pageCooldownUntil[activePageId] = performance.now() + PAGE_REOPEN_COOLDOWN;
   activePageId = null;
   pageRequestSeq++; // scarta un'eventuale risposta AI ancora in arrivo per la pagina appena chiusa
@@ -2006,6 +2083,7 @@ window.CHROMA_DEBUG = {
   close: closePageReaction,
   match: () => matchPageSignature(lowResCtx.getImageData(0, 0, lowResCanvas.width, lowResCanvas.height)),
   seen: () => cardColorAreas(lowResCtx.getImageData(0, 0, lowResCanvas.width, lowResCanvas.height)),
+  image: () => imgRec.last,
   currentPalette: () => currentPalette,
   resetCooldowns: () => { for (const k in pageCooldownUntil) delete pageCooldownUntil[k]; console.log('cooldown azzerati'); },
 };
@@ -2035,192 +2113,153 @@ qrBoxBtn.addEventListener('click', openQrModal);
 qrModalClose.addEventListener('click', closeQrModal);
 qrModalBackdrop.addEventListener('click', closeQrModal); // clic fuori dal popup = stesso effetto del bottone "chiudi"
 
-// ── 19. FORMA 3D PER CAPITOLO ───────────────────────────────────────
-// Quando il popup di riconoscimento pagina si apre (sezione 17), oltre
-// al testo mostra una forma tridimensionale generata dai dati DI QUEL
-// CAPITOLO — gli stessi colori della firma cromatica — invece di un
-// modello disegnato a mano: è CHROMA stessa a "scolpire" una forma a
-// partire dai dati, con lo stesso principio degli emblemi di capitolo
-// (macchie che nascono da un seed deterministico, non a caso). Ruotabile
-// trascinando col mouse o col dito; ruota lentamente da sola quando non
-// viene toccata.
-//
-// Per passare in futuro a modelli fatti a mano in Blender: basta
-// sostituire generateChapterGeometry()/colorizeGeometry() qui sotto con
-// un caricamento di file .glb (es. tramite GLTFLoader di Three.js, o il
-// componente <model-viewer> al posto del canvas) — il resto (apertura
-// popup, trascinamento, avvio/arresto del rendering) resta identico.
+// ── 19. RICONOSCIMENTO PER IMMAGINE ─────────────────────────────────
+// Oltre ai colori (sezione 17), il sistema confronta l'inquadratura con le
+// immagini vere delle 25 carte (cartella carte/). OpenCV trova in entrambe
+// dei punti caratteristici (angoli, bordi delle forme, lettere) e cerca
+// quelli che si corrispondono: se abbastanza punti di una carta ritrovano
+// la loro posizione nell'inquadratura, anche se la carta è ruotata,
+// inclinata o lontana, la carta è quella. I punti della testata "CHROMA",
+// uguale su tutte le carte, sono esclusi.
+// La decisione unisce le due letture: molti punti in comune bastano da soli;
+// pochi punti valgono solo se anche i colori indicano la stessa carta.
+// OpenCV (opencv.js, circa 10 MB) si carica dopo l'avvio: finché non è
+// pronto, o se non si carica, resta attivo solo il riconoscimento per colore.
+const IMG_REC_INTERVAL = 450;  // ogni quanti ms confrontare l'inquadratura con le carte
+const IMG_FRAME_WIDTH  = 320;  // larghezza a cui viene ridotta l'inquadratura per il confronto
+const IMG_MIN_INLIERS  = 8;    // punti in comune sufficienti da soli
+const IMG_WEAK_INLIERS = 4;    // punti in comune sufficienti se anche i colori concordano
+const IMG_MARGIN       = 1.5;  // quante volte la prima carta deve superare la seconda
+const IMG_STABLE_HITS  = 2;    // letture consecutive uguali prima di reagire
 
-const page3DCanvas = document.getElementById('pageReaction3D');
+const imgRec = { ready: false, busy: false, orb: null, bf: null, des: null, owner: [], pts: [], last: null };
+const imgRecCanvas = document.createElement('canvas');
+const imgRecCtx = imgRecCanvas.getContext('2d', { willReadFrequently: true });
 
-// stesso PRNG deterministico usato per gli emblemi grafici di capitolo
-// (mulberry32, seed dalla stringa dell'id): stessa forma ogni volta per
-// lo stesso capitolo, non rigenerata a caso ad ogni apertura.
-function mulberry32_3d(seed) {
-  return function() {
-    seed |= 0; seed = (seed + 0x6D2B79F5) | 0;
-    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-function hashSeed3D(str) {
-  let h = 0;
-  for (let i = 0; i < str.length; i++) { h = (Math.imul(31, h) + str.charCodeAt(i)) | 0; }
-  return h;
-}
-
-let scene3D, camera3D, renderer3D, mesh3D, animFrame3D = null;
-let rotX = -0.3, rotY = 0.6; // orientamento iniziale, leggermente di tre-quarti invece che frontale piatto
-let dragging3D = false, lastPointerX = 0, lastPointerY = 0;
-
-function ensure3DScene() {
-  if (scene3D) return true; // già creata, riusala
-  if (typeof THREE === 'undefined') {
-    console.warn('Three.js non caricato: la forma 3D resta disattivata, il popup mostra comunque il testo.');
-    return false;
-  }
-  scene3D = new THREE.Scene();
-  camera3D = new THREE.PerspectiveCamera(40, 1, 0.1, 10);
-  camera3D.position.set(0, 0, 3.4);
-
-  renderer3D = new THREE.WebGLRenderer({ canvas: page3DCanvas, antialias: true, alpha: true });
-  renderer3D.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
-
-  scene3D.add(new THREE.AmbientLight(0xffffff, 0.55));
-  const key = new THREE.DirectionalLight(0xffffff, 0.9);
-  key.position.set(2, 2.5, 3);
-  scene3D.add(key);
-  const rim = new THREE.DirectionalLight(0xffffff, 0.35);
-  rim.position.set(-2, -1, -2);
-  scene3D.add(rim);
-
-  // trascinamento manuale (mouse o tocco) per ruotare — niente libreria
-  // OrbitControls: bastano due variabili (rotX/rotY) aggiornate ad ogni
-  // spostamento del puntatore, più semplice da mantenere qui
-  const onDown = (x, y) => { dragging3D = true; lastPointerX = x; lastPointerY = y; page3DCanvas.classList.add('dragging'); };
-  const onMove = (x, y) => {
-    if (!dragging3D) return;
-    rotY += (x - lastPointerX) * 0.008;
-    rotX += (y - lastPointerY) * 0.008;
-    rotX = Math.max(-1.3, Math.min(1.3, rotX)); // non lasciare che la forma si "ribalti" sopra/sotto
-    lastPointerX = x; lastPointerY = y;
-  };
-  const onUp = () => { dragging3D = false; page3DCanvas.classList.remove('dragging'); };
-
-  page3DCanvas.addEventListener('pointerdown', e => { page3DCanvas.setPointerCapture(e.pointerId); onDown(e.clientX, e.clientY); });
-  page3DCanvas.addEventListener('pointermove', e => onMove(e.clientX, e.clientY));
-  page3DCanvas.addEventListener('pointerup', onUp);
-  page3DCanvas.addEventListener('pointercancel', onUp);
-
-  return true;
-}
-
-// deforma una sfera (icosaedro suddiviso) con alcune "gobbe" morbide
-// posizionate e dimensionate dal seed — stesso principio delle macchie
-// sfocate 2D degli emblemi, qui applicato come spostamento radiale su
-// una superficie sferica invece che su un piano
-function generateChapterGeometry(sig) {
-  const rnd = mulberry32_3d(hashSeed3D(sig.id + '-forma'));
-  const geo = new THREE.IcosahedronGeometry(1, 4);
-  const pos = geo.attributes.position;
-
-  const numBumps = 4 + Math.floor(rnd() * 3); // 4-6 gobbe
-  const bumps = [];
-  for (let i = 0; i < numBumps; i++) {
-    const theta = rnd() * Math.PI * 2;
-    const phi = Math.acos(2 * rnd() - 1);
-    bumps.push({
-      dir: new THREE.Vector3(Math.sin(phi) * Math.cos(theta), Math.sin(phi) * Math.sin(theta), Math.cos(phi)),
-      strength: 0.12 + rnd() * 0.30,
-      falloff: 1.4 + rnd() * 2.2,
-      sign: rnd() > 0.3 ? 1 : -1, // per lo più protuberanze verso fuori, qualche insenatura verso dentro
-    });
-  }
-
-  const v = new THREE.Vector3();
-  for (let i = 0; i < pos.count; i++) {
-    v.fromBufferAttribute(pos, i).normalize();
-    let disp = 0;
-    bumps.forEach(b => {
-      const influence = Math.max(0, v.dot(b.dir)); // 0-1: quanto questo punto guarda verso la gobba
-      disp += b.sign * b.strength * Math.pow(influence, b.falloff);
-    });
-    v.multiplyScalar(1 + disp);
-    pos.setXYZ(i, v.x, v.y, v.z);
-  }
-  geo.computeVertexNormals();
-  return geo;
-}
-
-// colora ogni vertice sfumando fra i colori della firma del capitolo: le
-// stesse identiche coordinate colore usate per il riconoscimento (sezione
-// 17) diventano qui il colore della forma — non una scelta estetica
-// indipendente
-function colorizeGeometry(geo, colors) {
-  const rnd = mulberry32_3d(hashSeed3D('colore-' + colors.map(c => c.join(',')).join('|')));
-  const anchors = colors.map(c => {
-    const theta = rnd() * Math.PI * 2, phi = Math.acos(2 * rnd() - 1);
-    return {
-      dir: new THREE.Vector3(Math.sin(phi) * Math.cos(theta), Math.sin(phi) * Math.sin(theta), Math.cos(phi)),
-      color: new THREE.Color(c[0] / 255, c[1] / 255, c[2] / 255),
-    };
+function loadImage(src) {
+  return new Promise((ok, ko) => {
+    const img = new Image();
+    img.onload = () => ok(img);
+    img.onerror = ko;
+    img.src = src;
   });
-  const pos = geo.attributes.position;
-  const colArr = new Float32Array(pos.count * 3);
-  const v = new THREE.Vector3();
-  for (let i = 0; i < pos.count; i++) {
-    v.fromBufferAttribute(pos, i).normalize();
-    let totalW = 0, r = 0, g = 0, b = 0;
-    anchors.forEach(a => {
-      const w = Math.pow(Math.max(0, v.dot(a.dir)), 3);
-      totalW += w; r += a.color.r * w; g += a.color.g * w; b += a.color.b * w;
-    });
-    if (totalW > 0) { r /= totalW; g /= totalW; b /= totalW; } else { r = g = b = 0.5; }
-    colArr[i*3] = r; colArr[i*3+1] = g; colArr[i*3+2] = b;
+}
+
+function loadOpenCV() {
+  return new Promise((ok, ko) => {
+    const s = document.createElement('script');
+    s.src = 'opencv.js';
+    s.async = true;
+    s.onerror = ko;
+    s.onload = () => {
+      if (window.cv && window.cv.Mat) ok();
+      else if (window.cv && typeof window.cv.then === 'function') window.cv.then(m => { window.cv = m; ok(); });
+      else window.cv.onRuntimeInitialized = ok;
+    };
+    document.head.appendChild(s);
+  });
+}
+
+async function initImageRecognition() {
+  try {
+    await loadOpenCV();
+    imgRec.orb = new cv.ORB(700);
+    imgRec.bf = new cv.BFMatcher(cv.NORM_HAMMING, false);
+    const W = 280, H = 360;
+    const c = document.createElement('canvas');
+    c.width = W; c.height = H;
+    const cx = c.getContext('2d', { willReadFrequently: true });
+    const all = new cv.MatVector();
+    for (let k = 0; k < PAGE_SIGNATURES.length; k++) {
+      const img = await loadImage(PAGE_SIGNATURES[k].img);
+      cx.clearRect(0, 0, W, H);
+      cx.drawImage(img, 0, 0, W, H);
+      const rgba = cv.imread(c), gray = new cv.Mat();
+      cv.cvtColor(rgba, gray, cv.COLOR_RGBA2GRAY);
+      const mask = new cv.Mat(H, W, cv.CV_8UC1, new cv.Scalar(255));
+      cv.rectangle(mask, new cv.Point(0, 0), new cv.Point(W, 45), new cv.Scalar(0), -1);
+      const kp = new cv.KeyPointVector(), des = new cv.Mat();
+      imgRec.orb.detectAndCompute(gray, mask, kp, des);
+      if (des.rows > 0) {
+        for (let i = 0; i < kp.size(); i++) {
+          const p = kp.get(i).pt;
+          imgRec.pts.push([p.x, p.y]);
+          imgRec.owner.push(k);
+        }
+        all.push_back(des);
+      }
+      rgba.delete(); gray.delete(); mask.delete(); kp.delete(); des.delete();
+    }
+    imgRec.des = new cv.Mat();
+    cv.vconcat(all, imgRec.des);
+    all.delete();
+    imgRec.ready = true;
+    setInterval(imageRecognitionTick, IMG_REC_INTERVAL);
+  } catch (e) {
+    console.error('Riconoscimento per immagine non disponibile, resta quello per colore:', e);
   }
-  geo.setAttribute('color', new THREE.BufferAttribute(colArr, 3));
 }
 
-function show3DForChapter(sig) {
-  if (!ensure3DScene()) return false; // Three.js non disponibile: al suo posto resta la figura 2D
-
-  if (mesh3D) { scene3D.remove(mesh3D); mesh3D.geometry.dispose(); mesh3D.material.dispose(); }
-  const geo = generateChapterGeometry(sig);
-  colorizeGeometry(geo, sig.colors.map(n => [1, 3, 5].map(i => parseInt(CARD_COLORS[n].slice(i, i + 2), 16))));
-  const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.55, metalness: 0.12 });
-  mesh3D = new THREE.Mesh(geo, mat);
-  scene3D.add(mesh3D);
-
-  rotX = -0.3; rotY = 0.6; // stesso orientamento di partenza ad ogni apertura, per coerenza fra un capitolo e l'altro
-
-  // display:'block' PRIMA di leggere clientWidth/clientHeight: un elemento
-  // display:none (lo stato di partenza in style.css) non ha una vera area
-  // occupata, quindi clientWidth/clientHeight risulterebbero sempre 0 —
-  // misurarli in quell'ordine darebbe un renderer di dimensione zero e un
-  // aspect ratio NaN, con la forma 3D che non apparirebbe mai.
-  page3DCanvas.style.display = 'block';
-
-  const w = page3DCanvas.clientWidth, h = page3DCanvas.clientHeight;
-  renderer3D.setSize(w, h, false);
-  camera3D.aspect = w / h;
-  camera3D.updateProjectionMatrix();
-
-  if (!animFrame3D) render3DLoop();
-  return true;
+// confronta un'inquadratura con tutte le carte: restituisce la carta con più
+// punti in comune "geometricamente coerenti" (inliers) e il valore della seconda
+function matchCardImage(canvas) {
+  const rgba = cv.imread(canvas), gray = new cv.Mat();
+  cv.cvtColor(rgba, gray, cv.COLOR_RGBA2GRAY);
+  const kp = new cv.KeyPointVector(), des = new cv.Mat(), noMask = new cv.Mat();
+  imgRec.orb.detectAndCompute(gray, noMask, kp, des);
+  const perCard = PAGE_SIGNATURES.map(() => []);
+  if (des.rows > 0) {
+    const pairs = new cv.DMatchVectorVector();
+    imgRec.bf.knnMatch(des, imgRec.des, pairs, 2);
+    for (let i = 0; i < pairs.size(); i++) {
+      const pr = pairs.get(i);
+      if (pr.size() < 2) continue;
+      const a = pr.get(0), b = pr.get(1);
+      if (a.distance < 0.8 * b.distance) {
+        const q = kp.get(a.queryIdx).pt;
+        perCard[imgRec.owner[a.trainIdx]].push([imgRec.pts[a.trainIdx], [q.x, q.y]]);
+      }
+    }
+    pairs.delete();
+  }
+  const candidates = perCard.map((p, k) => [p.length, k]).sort((x, y) => y[0] - x[0]).slice(0, 3);
+  const scores = candidates.map(([n, k]) => {
+    if (n < 6) return [0, k];
+    const src = cv.matFromArray(n, 1, cv.CV_32FC2, perCard[k].flatMap(p => p[0]));
+    const dst = cv.matFromArray(n, 1, cv.CV_32FC2, perCard[k].flatMap(p => p[1]));
+    const inl = new cv.Mat();
+    const Hm = cv.findHomography(src, dst, cv.RANSAC, 6, inl);
+    let count = 0;
+    if (!Hm.empty()) for (let i = 0; i < inl.rows; i++) count += inl.data[i];
+    src.delete(); dst.delete(); inl.delete(); Hm.delete();
+    return [count, k];
+  }).sort((x, y) => y[0] - x[0]);
+  rgba.delete(); gray.delete(); kp.delete(); des.delete(); noMask.delete();
+  return { sig: PAGE_SIGNATURES[scores[0][1]], best: scores[0][0], second: scores[1] ? scores[1][0] : 0 };
 }
 
-function render3DLoop() {
-  animFrame3D = requestAnimationFrame(render3DLoop);
-  if (!dragging3D) rotY += 0.004; // rotazione lenta automatica quando non viene trascinata
-  if (mesh3D) { mesh3D.rotation.x = rotX; mesh3D.rotation.y = rotY; }
-  renderer3D.render(scene3D, camera3D);
+function imageRecognitionTick() {
+  if (!camActive || video.videoWidth === 0 || imgRec.busy) return;
+  imgRec.busy = true;
+  try {
+    const w = IMG_FRAME_WIDTH, h = Math.round(IMG_FRAME_WIDTH * video.videoHeight / video.videoWidth);
+    imgRecCanvas.width = w; imgRecCanvas.height = h;
+    imgRecCtx.drawImage(video, 0, 0, w, h);
+    const img = matchCardImage(imgRecCanvas);
+    const color = matchPageSignature(imgRecCtx.getImageData(0, 0, w, h));
+    let sig = null;
+    if (img.best >= IMG_MIN_INLIERS && img.best >= IMG_MARGIN * img.second) sig = img.sig;
+    else if (color && color.id === img.sig.id && img.best >= IMG_WEAK_INLIERS) sig = color;
+    imgRec.last = { image: img.sig.id, inliers: img.best, second: img.second, color: color ? color.id : null, card: sig ? sig.id : null };
+    registerCardCandidate(sig, IMG_STABLE_HITS);
+  } catch (e) {
+    console.error(e);
+  } finally {
+    imgRec.busy = false;
+  }
 }
 
-function hide3DView() {
-  page3DCanvas.style.display = 'none';
-  if (animFrame3D) { cancelAnimationFrame(animFrame3D); animFrame3D = null; }
-}
+initImageRecognition();
 
 document.addEventListener('keydown', e => {
   // ignora la scorciatoia mentre si sta scrivendo in un campo di testo
