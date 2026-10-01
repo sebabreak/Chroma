@@ -273,8 +273,16 @@ const ambientBlobs = Array.from({ length: AMBIENT_BLOB_COUNT }, (_, i) => ({
   phaseY: Math.random()*Math.PI*2,
 }));
 
-ambientCanvas.width  = window.innerWidth;
-ambientCanvas.height = window.innerHeight;
+// la nebulosa è disegnata su un canvas piccolo (un quarto dello schermo) con
+// macchie già sfumate, e il browser lo ingrandisce: stesso aspetto di prima,
+// ma senza il filtro blur del CSS, che era la parte più pesante di ogni frame
+const AMBIENT_SCALE = 0.25;
+const AMBIENT_SATURATE = 1.4;
+function sizeAmbientCanvas() {
+  ambientCanvas.width  = Math.max(1, Math.round(window.innerWidth * AMBIENT_SCALE));
+  ambientCanvas.height = Math.max(1, Math.round(window.innerHeight * AMBIENT_SCALE));
+}
+sizeAmbientCanvas();
 
 // ricalcola e disegna la posizione/colore di ogni blob. Chiamata una volta
 // per frame da loop() (sezione 9), sempre — anche prima che la webcam sia attiva.
@@ -294,10 +302,15 @@ function updateAndDrawAmbient() {
     const y = h * (0.5 + 0.34 * Math.cos(t*blob.freqY*6 + blob.phaseY));
     const r = baseRadius * (0.85 + 0.15 * Math.sin(t*3 + i)); // leggero "respiro" del raggio
 
-    actx.fillStyle = `rgb(${blob.color[0]|0},${blob.color[1]|0},${blob.color[2]|0})`;
-    actx.beginPath();
-    actx.arc(x, y, r, 0, Math.PI*2);
-    actx.fill();
+    const gray = (blob.color[0] + blob.color[1] + blob.color[2]) / 3;
+    const [cr, cg, cb] = blob.color.map(v => Math.max(0, Math.min(255, gray + (v - gray) * AMBIENT_SATURATE)) | 0);
+    const soft = r + Math.min(w, h) * 0.22;
+    const grad = actx.createRadialGradient(x, y, 0, x, y, soft);
+    grad.addColorStop(0, `rgba(${cr},${cg},${cb},1)`);
+    grad.addColorStop(Math.max(0, (r - Math.min(w, h) * 0.2) / soft), `rgba(${cr},${cg},${cb},0.92)`);
+    grad.addColorStop(1, `rgba(${cr},${cg},${cb},0)`);
+    actx.fillStyle = grad;
+    actx.fillRect(x - soft, y - soft, soft * 2, soft * 2);
   });
 
   actx.globalCompositeOperation = 'source-over';
@@ -329,8 +342,7 @@ window.addEventListener("mousemove", e => { mouse.x = e.clientX; mouse.y = e.cli
 window.addEventListener("resize", () => {
   particlesCanvas.width  = window.innerWidth;
   particlesCanvas.height = window.innerHeight;
-  ambientCanvas.width    = window.innerWidth;
-  ambientCanvas.height   = window.innerHeight;
+  sizeAmbientCanvas();
 });
 
 // aggiorna la fisica di tutte le particelle e le disegna, ognuna con una
@@ -340,6 +352,7 @@ window.addEventListener("resize", () => {
 // in un solo posto invece di essere duplicata.
 function updateAndDrawParticles(pr, pg, pb, beat) {
   particlesCtx.clearRect(0, 0, particlesCanvas.width, particlesCanvas.height);
+  const alpha = 0.25 + beat*0.45;
   particles.forEach(p => {
     const dx = mouse.x - p.x, dy = mouse.y - p.y;
     const dist = Math.sqrt(dx*dx + dy*dy) + 1;
@@ -347,31 +360,39 @@ function updateAndDrawParticles(pr, pg, pb, beat) {
     p.vx += dx*0.002*force + (Math.random()-0.5)*(0.3 + beat*0.5);
     p.vy += dy*0.002*force + (Math.random()-0.5)*(0.3 + beat*0.5);
     p.vx *= 0.94; p.vy *= 0.94; p.x += p.vx; p.y += p.vy;
+    p.sz = (1.5 + Math.min(4, 80/dist)) * (1 + beat*1.2);
 
     // memorizza la posizione corrente in coda alla scia, scartando la più vecchia
     if (TRAIL_LENGTH > 0) {
       p.trail.push({ x: p.x, y: p.y });
       if (p.trail.length > TRAIL_LENGTH) p.trail.shift();
     }
-
-    const sz = (1.5 + Math.min(4, 80/dist)) * (1 + beat*1.2);
-    const alpha = 0.25 + beat*0.45;
-
-    // disegna la scia: i "fantasmi" più vecchi sono più piccoli e più trasparenti
-    p.trail.forEach((pos, i) => {
-      const age = (i + 1) / (p.trail.length + 1); // 0 = più vecchio, ~1 = posizione attuale
-      particlesCtx.fillStyle = `rgba(${pr},${pg},${pb},${(alpha * age * 0.6).toFixed(2)})`;
-      particlesCtx.beginPath();
-      particlesCtx.arc(pos.x, pos.y, sz * age, 0, Math.PI*2);
-      particlesCtx.fill();
-    });
-
-    // la particella vera e propria, in primo piano rispetto alla sua scia
-    particlesCtx.fillStyle = `rgba(${pr},${pg},${pb},${alpha.toFixed(2)})`;
-    particlesCtx.beginPath();
-    particlesCtx.arc(p.x, p.y, sz, 0, Math.PI*2);
-    particlesCtx.fill();
   });
+
+  // disegna per "strati": prima tutti i fantasmi più vecchi (più piccoli e
+  // trasparenti), poi quelli più recenti, infine le particelle vere. Ogni
+  // strato è un'unica forma con un solo colore: molte meno operazioni di
+  // disegno per frame, stesso risultato a schermo.
+  for (let i = 0; i < TRAIL_LENGTH; i++) {
+    particlesCtx.beginPath();
+    particles.forEach(p => {
+      const pos = p.trail[i];
+      if (!pos) return;
+      const age = (i + 1) / (p.trail.length + 1);
+      particlesCtx.moveTo(pos.x + p.sz * age, pos.y);
+      particlesCtx.arc(pos.x, pos.y, p.sz * age, 0, Math.PI*2);
+    });
+    const age = (i + 1) / (TRAIL_LENGTH + 1);
+    particlesCtx.fillStyle = `rgba(${pr},${pg},${pb},${(alpha * age * 0.6).toFixed(2)})`;
+    particlesCtx.fill();
+  }
+  particlesCtx.beginPath();
+  particles.forEach(p => {
+    particlesCtx.moveTo(p.x + p.sz, p.y);
+    particlesCtx.arc(p.x, p.y, p.sz, 0, Math.PI*2);
+  });
+  particlesCtx.fillStyle = `rgba(${pr},${pg},${pb},${alpha.toFixed(2)})`;
+  particlesCtx.fill();
 }
 
 // ── 6. UTILS COLORE ───────────────────────────────────────────────
@@ -433,13 +454,15 @@ function colorName([r,g,b]) {
 //  - k più alto (vedi la chiamata extractPalette(imgData, 5, ...) in loop()) → più colori distinti riconosciuti
 const SAMPLE_STEP       = 8;  // 8 = un pixel ogni 2 (RGBA = 4 byte/pixel). Prima era 32 = un pixel ogni 8: 4x meno campioni.
 const KMEANS_ITERATIONS = 14; // più iterazioni = cluster più stabili/accurati, a costo di qualche ms in più per frame
+const KMEANS_MAX_SAMPLES = 1500; // oltre questo numero di pixel il campione viene diradato: la palette non cambia, il calcolo è molto più leggero
 
 function extractPalette(imageData, k, previousPalette = []) {
   const data = imageData.data;
   const pixels = [];
   // scarta pixel quasi-neri o quasi-bianchi: spesso sono ombre/luci
   // bruciate senza informazione di colore utile
-  for (let i = 0; i < data.length; i += SAMPLE_STEP) {
+  const step = Math.max(SAMPLE_STEP, 4 * Math.ceil(data.length / 4 / KMEANS_MAX_SAMPLES));
+  for (let i = 0; i < data.length; i += step) {
     const r = data[i], g = data[i+1], b = data[i+2];
     if (r + g + b > 30 && r + g + b < 740) pixels.push([r, g, b]);
   }
@@ -473,7 +496,8 @@ function extractPalette(imageData, k, previousPalette = []) {
     for (let c = 1; c < k; c++) {
       let maxDist = 0, best = pixels[0];
       for (const p of pixels) {
-        const d = Math.min(...centroids.map(ct => colorDist(p, ct)));
+        let d = Infinity;
+        for (const ct of centroids) { const dc = colorDist(p, ct); if (dc < d) d = dc; }
         if (d > maxDist) { maxDist = d; best = p; }
       }
       centroids.push(best.slice());
@@ -482,21 +506,26 @@ function extractPalette(imageData, k, previousPalette = []) {
 
   // ── iterazioni k-means: assegna ogni pixel al centroide più vicino,
   //    poi sposta ogni centroide sulla media dei pixel che gli sono stati assegnati ──
+  // si ferma prima se nessun centroide si è più spostato: il risultato è lo stesso
   for (let iter = 0; iter < KMEANS_ITERATIONS; iter++) {
-    const clusters = Array.from({length: k}, () => []);
+    const sums = Array.from({length: k}, () => [0, 0, 0, 0]);
     for (const p of pixels) {
       let best = 0, bestD = Infinity;
       for (let c = 0; c < k; c++) {
         const d = colorDist(p, centroids[c]);
         if (d < bestD) { bestD = d; best = c; }
       }
-      clusters[best].push(p);
+      const sm = sums[best];
+      sm[0] += p[0]; sm[1] += p[1]; sm[2] += p[2]; sm[3]++;
     }
-    centroids = clusters.map((cl, idx) => {
-      if (!cl.length) return centroids[idx]; // cluster rimasto vuoto: mantieni il centroide precedente invece di azzerarlo
-      const sum = cl.reduce((a,b) => [a[0]+b[0],a[1]+b[1],a[2]+b[2]], [0,0,0]);
-      return sum.map(v => Math.round(v / cl.length));
+    let moved = false;
+    centroids = sums.map((sm, idx) => {
+      if (!sm[3]) return centroids[idx]; // cluster rimasto vuoto: mantieni il centroide precedente invece di azzerarlo
+      const next = [Math.round(sm[0] / sm[3]), Math.round(sm[1] / sm[3]), Math.round(sm[2] / sm[3])];
+      if (next[0] !== centroids[idx][0] || next[1] !== centroids[idx][1] || next[2] !== centroids[idx][2]) moved = true;
+      return next;
     });
+    if (!moved) break;
   }
 
   // smorza le variazioni da un ricalcolo all'altro mescolando ogni nuovo
@@ -606,8 +635,17 @@ const PALETTE_FORCE_RESEED_EVERY = 5; // ogni quanti RICALCOLI (non frame) si ri
                                        // dimenticare il passato e ripartire da un k-means++ fresco sui pixel attuali.
 let paletteRecomputeCount = 0;
 
+// il loop gira a 30 fotogrammi al secondo fissi, anche su schermi a 60, 120
+// o 144 Hz: tutti i tempi del programma (movimento di CHROMA, nebulosa,
+// ricalcolo della palette, auto-giudizio) sono contati in fotogrammi, quindi
+// così restano uguali su ogni dispositivo, e il lavoro per secondo si dimezza
+// (o più) sugli schermi veloci
+const LOOP_FPS = 30;
+let lastLoopAt = 0;
 let frameCount = 0;
-function loop() {
+function loop(now = performance.now()) {
+  if (now - lastLoopAt < 1000 / LOOP_FPS - 2) { requestAnimationFrame(loop); return; }
+  lastLoopAt = now;
   frameCount++;
   updateAndDrawAmbient(); // nebulosa di sfondo: sempre attiva, anche prima del primo click (sezione 5)
   if(!camActive || video.videoWidth===0) {
@@ -832,7 +870,9 @@ const OLLAMA_TUNNEL_URL = "https://stoop-situation-trifle.ngrok-free.dev/api/gen
 // perché l'intestazione non è nella lista concordata. Su iPhone questo si
 // manifesta con un OPTIONS che riceve 204 ma il POST successivo non arriva
 // mai a Ollama.
+const OLLAMA_KEEP_ALIVE = '2h'; // quanto il modello resta caricato nella scheda video dopo l'ultima richiesta: evita la prima risposta lenta dopo una pausa
 async function ollamaFetch(body) {
+  body = { keep_alive: OLLAMA_KEEP_ALIVE, ...body };
   const tryUrl = (url, timeoutMs) => {
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), timeoutMs);
