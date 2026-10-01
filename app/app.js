@@ -183,7 +183,7 @@ document.addEventListener("click", e => {
   const el = e.target.closest("button, [data-unlock]");
   if (!el) return;
   const d = el.dataset;
-  if ("onboarded" in d) { S.name = $("[data-onb-name]").value.trim() || S.name; S.onboarded = true; save(); render(); }
+  if ("onboarded" in d) { S.name = $("[data-onb-name]").value.trim() || S.name; S.onboarded = true; save(); render(); setTimeout(unlockByName, 300); }
   if (d.go) { if (d.go === "impostazioni") $("[data-set-name]").value = S.name; go(d.go); }
   else if (d.tabGo) { navStack.length = 0; go(d.tabGo); }
   else if ("back" in d) back();
@@ -747,7 +747,7 @@ function confirmBox(title, text, yes) {
   bg.hidden = false;
 }
 
-$("[data-set-name]").addEventListener("change", e => { S.name = e.target.value.trim(); langFromName(S.name); save(); render(); toast(t("Nome salvato")); });
+$("[data-set-name]").addEventListener("change", e => { S.name = e.target.value.trim(); langFromName(S.name); save(); render(); if (!unlockByName()) toast(t("Nome salvato")); });
 $("[data-onb-name]").addEventListener("input", e => langFromName(e.target.value));
 $("[data-lang-seg]").addEventListener("click", e => {
   const b = e.target.closest("[data-lang]");
@@ -935,6 +935,13 @@ const SIM = {
   },
   fresh: () => { confirmBox(t("Nuovo utente?"), t("Tutti i progressi verranno azzerati e ripartirà l'onboarding."), resetAll); return ""; }
 };
+const UNLOCK_NAME = "chroma";
+function unlockByName() {
+  if (S.name.trim().toLowerCase() !== UNLOCK_NAME) return false;
+  SIM.badges();
+  SIM.secret();
+  return true;
+}
 function secretTaps(el) {
   let n = 0, timer;
   el.addEventListener("click", () => {
