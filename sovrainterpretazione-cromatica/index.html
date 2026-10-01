@@ -29,7 +29,6 @@
        come THREE.* nello script.js caricato dopo, senza bisogno di build
        tool o import — coerente con il resto del progetto (tutto file
        diretti, nessuna compilazione). -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 </head>
 
 <!--
@@ -167,21 +166,36 @@
        QR, GIUDICA, anteprima webcam) mentre il popup è aperto — senza,
        quegli elementi restavano visibili e in competizione visiva col
        popup, specialmente su schermi piccoli (vedi nota in style.css).
-       #pageReaction3D (script.js, sezione 19) mostra una forma tridimensionale
-       generata dai colori della carta, ruotabile trascinandola col mouse o
-       col dito; se Three.js non è disponibile compare al suo posto la figura
-       2D #pageReactionCanvas. -->
+       Il popup si svolge in tre tempi: #prData (la carta scomposta in pixel
+       e percentuali di colore), #prChroma (la lettura di CHROMA, fatta solo
+       dai colori) e #prCard (che cosa racconta davvero la carta). -->
   <!-- riepilogo del registro risposte, visibile solo premendo "S" (script.js, sezione 16) -->
   <div id="statsPanel"></div>
 
   <div id="pageReactionBackdrop"></div>
   <div id="pageReaction">
     <button id="pageReactionClose" class="ghost-btn" type="button">chiudi ✕</button>
-    <div id="pageReactionTitle"></div>
-    <canvas id="pageReaction3D"></canvas>
-    <canvas id="pageReactionCanvas"></canvas>
-    <div id="pageReactionText"></div>
-    <div id="pageReactionAi"></div>
+    <div class="pr-grid">
+      <section id="prData" class="pr-step">
+        <div class="pr-label">come la legge la macchina</div>
+        <canvas id="prPixels" width="280" height="360"></canvas>
+        <div id="prPalette"></div>
+      </section>
+      <div class="pr-side">
+        <section id="prChroma" class="pr-step">
+          <div class="pr-label">cosa vede CHROMA</div>
+          <div class="pr-chroma-row">
+            <img src="chroma.png" alt="CHROMA">
+            <div id="pageReactionAi"></div>
+          </div>
+        </section>
+        <section id="prCard" class="pr-step">
+          <div class="pr-label">cosa racconta la carta</div>
+          <div id="pageReactionTitle"></div>
+          <div id="pageReactionText"></div>
+        </section>
+      </div>
+    </div>
   </div>
 
   <script src="script.js"></script>
