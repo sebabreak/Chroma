@@ -20,7 +20,7 @@
 //  sola quando il telefono è online), ma pulisce la cache vecchia invece
 //  di lasciarla lì a occupare spazio inutilmente.
 // ══════════════════════════════════════════════════════════════════
-const CACHE_NAME = 'sovrainterpretazione-v27'; // ricorda di alzare questo numero ad ogni modifica di index.html/style.css/script.js (vedi commento sopra)
+const CACHE_NAME = 'sovrainterpretazione-v28'; // ricorda di alzare questo numero ad ogni modifica di index.html/style.css/script.js (vedi commento sopra)
 
 const ASSETS = [
   './',
@@ -62,6 +62,20 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   const req = event.request;
   if (req.method !== 'GET' || new URL(req.url).origin !== location.origin) return;
+
+  // opencv.js (10 MB) e le immagini delle carte non cambiano quasi mai:
+  // si prendono dalla cache se ci sono, e si scaricano una volta sola
+  const path = new URL(req.url).pathname;
+  if (path.endsWith('/opencv.js') || path.includes('/carte/')) {
+    event.respondWith(
+      caches.match(req).then(hit => hit || fetch(req).then(res => {
+        const copy = res.clone();
+        caches.open(CACHE_NAME).then(cache => cache.put(req, copy));
+        return res;
+      }))
+    );
+    return;
+  }
 
   event.respondWith(
     // { cache: 'no-store' }: ignora completamente la cache HTTP del browser
