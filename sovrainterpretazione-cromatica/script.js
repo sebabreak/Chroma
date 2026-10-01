@@ -159,7 +159,7 @@ let camActive   = false;
 // un'installazione che "osserva" persone/oggetti davanti a chi la usa.
 let facingMode  = 'environment';
 let autoTimer   = 0;
-const AUTO_INTERVAL = 1800; // ogni quanti frame il sistema chiede un giudizio da solo (≈60s a 30fps). Abbassa per giudizi automatici più frequenti.
+const AUTO_INTERVAL = 7200; // ogni quanti passi (1/120 s, vedi loop) il sistema chiede un giudizio da solo: 7200 = 60 secondi. Abbassa per giudizi automatici più frequenti.
 // se un giudizio fallisce (sezione 10), l'auto-giudizio smette di ritentare
 // da solo finché l'osservatore non clicca manualmente GIUDICA: altrimenti,
 // se il problema è strutturale (es. PC spento, Ollama non avviato, tunnel
@@ -296,7 +296,8 @@ function updateAndDrawAmbient() {
 
   ambientBlobs.forEach((blob, i) => {
     const target = currentPalette[i] || AMBIENT_IDLE_COLORS[i];
-    blob.color = blob.color.map((v, c) => v + (target[c] - v) * AMBIENT_COLOR_EASE);
+    const ease = 1 - Math.pow(1 - AMBIENT_COLOR_EASE, loopSteps);
+    blob.color = blob.color.map((v, c) => v + (target[c] - v) * ease);
 
     const x = w * (0.5 + 0.34 * Math.sin(t*blob.freqX*6 + blob.phaseX));
     const y = h * (0.5 + 0.34 * Math.cos(t*blob.freqY*6 + blob.phaseY));
@@ -353,7 +354,7 @@ window.addEventListener("resize", () => {
 function updateAndDrawParticles(pr, pg, pb, beat) {
   particlesCtx.clearRect(0, 0, particlesCanvas.width, particlesCanvas.height);
   const alpha = 0.25 + beat*0.45;
-  particles.forEach(p => {
+  for (let step = 0; step < loopSteps; step++) particles.forEach(p => {
     const dx = mouse.x - p.x, dy = mouse.y - p.y;
     const dist = Math.sqrt(dx*dx + dy*dy) + 1;
     const force = Math.min(0.5, 100/dist);
@@ -635,18 +636,24 @@ const PALETTE_FORCE_RESEED_EVERY = 5; // ogni quanti RICALCOLI (non frame) si ri
                                        // dimenticare il passato e ripartire da un k-means++ fresco sui pixel attuali.
 let paletteRecomputeCount = 0;
 
-// il loop gira a 30 fotogrammi al secondo fissi, anche su schermi a 60, 120
-// o 144 Hz: tutti i tempi del programma (movimento di CHROMA, nebulosa,
-// ricalcolo della palette, auto-giudizio) sono contati in fotogrammi, quindi
-// così restano uguali su ogni dispositivo, e il lavoro per secondo si dimezza
-// (o più) sugli schermi veloci
-const LOOP_FPS = 30;
-let lastLoopAt = 0;
+// tutti i tempi del programma (movimento di CHROMA, nebulosa, particelle,
+// battito, ricalcolo della palette, auto-giudizio) sono contati in "passi"
+// da 1/120 di secondo, indipendenti dallo schermo: su uno schermo a 120 Hz
+// ogni fotogramma è un passo, a 60 Hz ogni fotogramma vale due passi. Così
+// la velocità è la stessa su ogni dispositivo, ma si disegna solo quando lo
+// schermo può mostrarlo.
+const SIM_HZ = 120;
+const MAX_STEPS = 8;
+let lastLoopAt = null, stepAcc = 0, loopSteps = 1;
 let frameCount = 0;
+let paletteTimer = 0;
 function loop(now = performance.now()) {
-  if (now - lastLoopAt < 1000 / LOOP_FPS - 2) { requestAnimationFrame(loop); return; }
+  stepAcc += lastLoopAt === null ? 1 : (now - lastLoopAt) * SIM_HZ / 1000;
   lastLoopAt = now;
-  frameCount++;
+  loopSteps = Math.min(MAX_STEPS, Math.floor(stepAcc));
+  stepAcc = Math.min(stepAcc - loopSteps, 1);
+  if (loopSteps < 1) { requestAnimationFrame(loop); return; }
+  frameCount += loopSteps;
   updateAndDrawAmbient(); // nebulosa di sfondo: sempre attiva, anche prima del primo click (sezione 5)
   if(!camActive || video.videoWidth===0) {
     // camera spenta/non pronta: anima comunque le particelle di sfondo (grigio neutro, nessun battito)
@@ -668,7 +675,9 @@ function loop(now = performance.now()) {
   r=(r/pc)|0; g=(g/pc)|0; b=(b/pc)|0;
 
   // ricalcola la palette di k colori dominanti ogni PALETTE_RECOMPUTE_EVERY frame (sezione 7)
-  if(frameCount % PALETTE_RECOMPUTE_EVERY === 0) {
+  paletteTimer += loopSteps;
+  if(paletteTimer >= PALETTE_RECOMPUTE_EVERY) {
+    paletteTimer = 0;
     paletteRecomputeCount++;
     // ogni PALETTE_FORCE_RESEED_EVERY ricalcoli, forza un reseed "da zero"
     // (passando [] come palette precedente) per evitare che la palette
@@ -734,9 +743,10 @@ function loop(now = performance.now()) {
   }
 
   // smorza il colore corrente verso quello appena campionato (evita scatti bruschi)
-  currentR+=(r-currentR)*0.1;
-  currentG+=(g-currentG)*0.1;
-  currentB+=(b-currentB)*0.1;
+  const colorEase = 1 - Math.pow(0.9, loopSteps);
+  currentR+=(r-currentR)*colorEase;
+  currentG+=(g-currentG)*colorEase;
+  currentB+=(b-currentB)*colorEase;
 
   // ── quanto è cambiato il colore rispetto al frame precedente → aggiorna "umore" e velocità del battito ──
   if(prevR!==null){
@@ -756,7 +766,7 @@ function loop(now = performance.now()) {
   // ── battito cardiaco: curva "sistole → decadimento → eco" con
   //    transizioni ad accelerazione/decelerazione (ease) invece che
   //    lineari, per un movimento del cerchio più morbido e organico ──
-  heartbeatPhase++;
+  heartbeatPhase += loopSteps;
   let beat=0;
   const beatPeak     = BEAT_ATTACK;
   const beatDecayEnd = beatPeak + BEAT_DECAY;
@@ -813,7 +823,7 @@ function loop(now = performance.now()) {
 
   // ── auto-giudizio: ogni AUTO_INTERVAL frame, chiede un giudizio all'AI locale senza bisogno del click ──
   // (sospeso dopo un fallimento, vedi autoJudgmentSuspended qui sopra e nel catch di requestJudgment, sezione 10)
-  autoTimer++;
+  autoTimer += loopSteps;
   if(autoTimer>=AUTO_INTERVAL && !analyzing && !autoJudgmentSuspended){ autoTimer=0; requestJudgment(true); }
 
   requestAnimationFrame(loop);
