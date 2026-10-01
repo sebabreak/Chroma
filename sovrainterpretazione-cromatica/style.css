@@ -802,8 +802,8 @@ video { display: none; }
   pointer-events: none;
   transition: opacity 0.5s ease;
   text-align: center;
-  width: min(560px, 80vw);
-  max-height: 85vh; /* in orizzontale su telefono l'altezza dello schermo è poca: meglio scorrere che tagliare il testo */
+  width: min(820px, 90vw);
+  max-height: 88vh; /* in orizzontale su telefono l'altezza dello schermo è poca: meglio scorrere che tagliare il testo */
   overflow-y: auto;
   padding: 2.6rem 2.8rem 2.2rem;
   background: rgba(0,0,0,0.9);
@@ -820,52 +820,92 @@ video { display: none; }
   top: 0;
   margin: -0.8rem -0.8rem 0.4rem 0;
 }
-#pageReactionText {
-  font-family: 'Cormorant Garamond', serif;
-  font-style: italic;
-  font-weight: 300;
-  font-size: clamp(1.1rem, 2.8vw, 1.9rem);
-  line-height: 1.6;
-  color: #fff;
-  margin-top: 0.6rem;
+#pageReaction .pr-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+  gap: 2rem;
+  align-items: start;
+  text-align: left;
 }
-
-#pageReactionTitle {
+.pr-side { display: flex; flex-direction: column; gap: 1.8rem; }
+.pr-step {
+  opacity: 0;
+  transform: translateY(10px);
+  transition: opacity 0.7s ease, transform 0.7s ease;
+}
+.pr-step.shown { opacity: 1; transform: none; }
+.pr-label {
+  font-family: 'Courier New', monospace;
+  font-size: 10px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.45);
+  margin-bottom: 0.7rem;
+}
+#prPixels {
+  display: block;
+  width: 100%;
+  max-width: 240px;
+  aspect-ratio: 7 / 9;
+  height: auto;
+  border-radius: 6px;
+  image-rendering: pixelated;
+}
+#prPalette { margin-top: 0.9rem; max-width: 240px; }
+.pr-bar { display: flex; height: 14px; border-radius: 3px; overflow: hidden; }
+.pr-bar span { display: block; flex-basis: 0; animation: prGrow 0.9s ease both; }
+@keyframes prGrow { from { flex-grow: 0; } }
+.pr-legend {
+  display: flex; flex-wrap: wrap; gap: 0.35rem 0.9rem;
+  margin-top: 0.6rem;
   font-family: 'Courier New', monospace;
   font-size: 11px;
-  letter-spacing: 0.2em;
-  text-transform: uppercase;
-  color: rgba(255,255,255,0.55);
+  color: rgba(255,255,255,0.8);
 }
-#pageReactionCanvas {
-  width: min(260px, 60vw, 34vh);
-  height: min(260px, 60vw, 34vh);
-  margin: 1rem auto 0.4rem;
-  border-radius: 50%;
-  display: block;
+.pr-legend i {
+  display: inline-block; width: 9px; height: 9px; border-radius: 50%;
+  margin-right: 0.35rem; vertical-align: -1px;
 }
+.pr-note {
+  margin-top: 0.6rem;
+  font-family: 'Courier New', monospace;
+  font-size: 10.5px;
+  line-height: 1.5;
+  color: rgba(255,255,255,0.45);
+}
+.pr-chroma-row { display: flex; gap: 1rem; align-items: flex-start; }
+.pr-chroma-row img { width: 64px; height: auto; flex: none; }
 #pageReactionAi {
-  margin-top: 1rem;
+  font-family: 'Cormorant Garamond', serif;
+  font-style: italic;
+  font-size: clamp(1.15rem, 2.2vw, 1.6rem);
+  line-height: 1.45;
+  color: #fff;
+}
+#pageReactionAi.thinking::after {
+  content: 'sta guardando la carta…';
+  font-family: 'Courier New', monospace;
+  font-style: normal;
+  font-size: 12px;
+  color: rgba(255,255,255,0.5);
+  animation: prBlink 1.2s ease-in-out infinite;
+}
+@keyframes prBlink { 50% { opacity: 0.3; } }
+#pageReactionTitle {
   font-family: 'Courier New', monospace;
   font-size: 12px;
-  line-height: 1.6;
-  letter-spacing: 0.04em;
-  color: rgba(255,255,255,0.7);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.8);
 }
-#pageReactionAi:empty { display: none; }
-/* forma 3D generata dai dati del capitolo (script.js, sezione 19).
-   display:none di default: JS la mostra solo quando la forma è pronta,
-   così non lascia un riquadro vuoto se WebGL non è disponibile o se la
-   libreria Three.js non si è caricata (rete assente, CDN irraggiungibile). */
-#pageReaction3D {
-  display: none;
-  width: 200px;
-  height: 200px;
-  margin: 0 auto;
-  cursor: grab;
-  touch-action: none; /* evita che trascinare la forma faccia anche scorrere la pagina sotto, su telefono */
+#pageReactionText {
+  font-family: 'Cormorant Garamond', serif;
+  font-weight: 300;
+  font-size: clamp(1.05rem, 2vw, 1.4rem);
+  line-height: 1.55;
+  color: rgba(255,255,255,0.88);
+  margin-top: 0.5rem;
 }
-#pageReaction3D.dragging { cursor: grabbing; }
 
 /* ── SCANLINES ───────────────────────────────────────────────────── */
 /* leggerissime righe orizzontali sopra tutto, effetto "schermo vecchio" */
@@ -1093,8 +1133,8 @@ body {
   }
 
   #pageReaction {
-    width: min(620px, 90vw);
-    max-height: 88dvh;
+    width: min(820px, 92vw);
+    max-height: 90dvh;
   }
 }
 @media (max-width: 600px) {
@@ -1162,8 +1202,9 @@ body {
   #portraitCanvas { width: 55vw; height: 55vw; }
 
   #pageReaction { padding: 2rem 1.6rem 1.7rem; width: min(560px, 90vw); }
-  #pageReactionText { font-size: 1.05rem; }
-  #pageReaction3D { width: 150px; height: 150px; }
+  #pageReaction .pr-grid { grid-template-columns: 1fr; gap: 1.4rem; }
+  #prPixels, #prPalette { max-width: 200px; margin-left: auto; margin-right: auto; }
+  .pr-chroma-row img { width: 48px; }
 }
 
 /* ── TELEFONO VERTICALE ─────────────────────────────────────────── */
@@ -1429,8 +1470,8 @@ body {
   }
 
   #pageReaction {
-    width: min(620px, 78vw);
-    max-height: 86dvh;
+    width: min(820px, 90vw);
+    max-height: 90dvh;
     padding: 1.2rem 1.5rem 1rem;
   }
 }
