@@ -681,9 +681,9 @@ function loop() {
   if (manualSelection?.type === 'point') {
     const mx = manualSelection.xFrac * previewCanvas.width;
     const my = manualSelection.yFrac * previewCanvas.height;
-    const r    = previewCanvas.width * 0.045; // raggio del cerchietto
-    const gap  = previewCanvas.width * 0.03;  // spazio vuoto attorno al cerchietto, prima dei bracci
-    const reach = previewCanvas.width * 0.075; // quanto si allungano i bracci dal centro
+    const r    = previewCanvas.width * 0.022; // raggio del cerchietto
+    const gap  = previewCanvas.width * 0.014; // spazio vuoto attorno al cerchietto, prima dei bracci
+    const reach = previewCanvas.width * 0.04; // quanto si allungano i bracci dal centro
     pctx.strokeStyle = 'rgba(255,255,255,0.9)';
     pctx.lineWidth = 1;
     pctx.beginPath();
@@ -1839,6 +1839,7 @@ const pageReactionCloseBtn = document.getElementById('pageReactionClose');
 
 let activePageId      = null; // id della firma il cui popup è attualmente mostrato (null = nessuno)
 let pageRequestSeq    = 0;    // numero incrementale: se una pagina nuova sostituisce quella in corso mentre Ollama sta ancora rispondendo, la risposta vecchia (in arrivo in ritardo) viene scartata invece di sovrascrivere il popup nuovo
+const PAGE_REOPEN_COOLDOWN = 4000; // dopo la chiusura, quanti ms la stessa carta viene ignorata (evita che si riapra subito se è ancora inquadrata)
 const pageCooldownUntil = {}; // { [id]: timestamp fino a cui ignorare quella firma dopo la chiusura }
 
 // quanta parte dell'inquadratura occupa ciascun colore delle carte:
@@ -2123,18 +2124,25 @@ qrModalBackdrop.addEventListener('click', closeQrModal); // clic fuori dal popup
 // uguale su tutte le carte, sono esclusi.
 // La decisione unisce le due letture: molti punti in comune bastano da soli;
 // pochi punti valgono solo se anche i colori indicano la stessa carta.
-// OpenCV (opencv.js, circa 10 MB) si carica dopo l'avvio: finché non è
-// pronto, o se non si carica, resta attivo solo il riconoscimento per colore.
-const IMG_REC_INTERVAL = 450;  // ogni quanti ms confrontare l'inquadratura con le carte
+// Il confronto è pesante, quindi gira in un "worker" separato
+// (riconoscimento.js): la pagina, CHROMA e GIUDICA restano fluidi anche sul
+// telefono. Un nuovo confronto parte solo quando il precedente è finito, e
+// si ferma durante la sequenza di GIUDICA. Finché OpenCV non è pronto, o se
+// non si carica, resta attivo solo il riconoscimento per colore.
+const IMG_REC_INTERVAL = 350;  // pausa minima tra un confronto e il successivo (ms)
 const IMG_FRAME_WIDTH  = 320;  // larghezza a cui viene ridotta l'inquadratura per il confronto
 const IMG_MIN_INLIERS  = 8;    // punti in comune sufficienti da soli
 const IMG_WEAK_INLIERS = 4;    // punti in comune sufficienti se anche i colori concordano
 const IMG_MARGIN       = 1.5;  // quante volte la prima carta deve superare la seconda
 const IMG_STABLE_HITS  = 2;    // letture consecutive uguali prima di reagire
+const IMG_REF_SIZE     = [280, 360];
 
-const imgRec = { ready: false, busy: false, orb: null, bf: null, des: null, owner: [], pts: [], last: null };
+const imgRec = { ready: false, busy: false, worker: null, last: null };
 const imgRecCanvas = document.createElement('canvas');
 const imgRecCtx = imgRecCanvas.getContext('2d', { willReadFrequently: true });
+const colorCheckCanvas = document.createElement('canvas');
+colorCheckCanvas.width = 96; colorCheckCanvas.height = 72;
+const colorCheckCtx = colorCheckCanvas.getContext('2d', { willReadFrequently: true });
 
 function loadImage(src) {
   return new Promise((ok, ko) => {
@@ -2145,118 +2153,74 @@ function loadImage(src) {
   });
 }
 
-function loadOpenCV() {
-  return new Promise((ok, ko) => {
-    const s = document.createElement('script');
-    s.src = 'opencv.js';
-    s.async = true;
-    s.onerror = ko;
-    s.onload = () => {
-      if (window.cv && window.cv.Mat) ok();
-      else if (window.cv && typeof window.cv.then === 'function') window.cv.then(m => { window.cv = m; ok(); });
-      else window.cv.onRuntimeInitialized = ok;
-    };
-    document.head.appendChild(s);
-  });
-}
-
 async function initImageRecognition() {
+  if (!window.Worker) return;
   try {
-    await loadOpenCV();
-    imgRec.orb = new cv.ORB(700);
-    imgRec.bf = new cv.BFMatcher(cv.NORM_HAMMING, false);
-    const W = 280, H = 360;
+    const [W, H] = IMG_REF_SIZE;
     const c = document.createElement('canvas');
     c.width = W; c.height = H;
     const cx = c.getContext('2d', { willReadFrequently: true });
-    const all = new cv.MatVector();
-    for (let k = 0; k < PAGE_SIGNATURES.length; k++) {
-      const img = await loadImage(PAGE_SIGNATURES[k].img);
+    const cards = [];
+    for (const sig of PAGE_SIGNATURES) {
+      const img = await loadImage(sig.img);
       cx.clearRect(0, 0, W, H);
       cx.drawImage(img, 0, 0, W, H);
-      const rgba = cv.imread(c), gray = new cv.Mat();
-      cv.cvtColor(rgba, gray, cv.COLOR_RGBA2GRAY);
-      const mask = new cv.Mat(H, W, cv.CV_8UC1, new cv.Scalar(255));
-      cv.rectangle(mask, new cv.Point(0, 0), new cv.Point(W, 45), new cv.Scalar(0), -1);
-      const kp = new cv.KeyPointVector(), des = new cv.Mat();
-      imgRec.orb.detectAndCompute(gray, mask, kp, des);
-      if (des.rows > 0) {
-        for (let i = 0; i < kp.size(); i++) {
-          const p = kp.get(i).pt;
-          imgRec.pts.push([p.x, p.y]);
-          imgRec.owner.push(k);
-        }
-        all.push_back(des);
-      }
-      rgba.delete(); gray.delete(); mask.delete(); kp.delete(); des.delete();
+      cards.push(cx.getImageData(0, 0, W, H));
     }
-    imgRec.des = new cv.Mat();
-    cv.vconcat(all, imgRec.des);
-    all.delete();
-    imgRec.ready = true;
-    setInterval(imageRecognitionTick, IMG_REC_INTERVAL);
+    const worker = new Worker('riconoscimento.js');
+    imgRec.worker = worker;
+    worker.onmessage = e => {
+      const msg = e.data;
+      if (msg.type === 'ready') {
+        imgRec.ready = true;
+        scheduleImageRecognition();
+      } else if (msg.type === 'result') {
+        handleImageResult(msg);
+      } else if (msg.type === 'error') {
+        console.error('Riconoscimento per immagine:', msg.message);
+        imgRec.busy = false;
+        scheduleImageRecognition();
+      }
+    };
+    worker.onerror = e => {
+      console.error('Riconoscimento per immagine non disponibile, resta quello per colore:', e.message);
+      imgRec.ready = false;
+    };
+    worker.postMessage({ type: 'refs', cards }, cards.map(d => d.data.buffer));
   } catch (e) {
     console.error('Riconoscimento per immagine non disponibile, resta quello per colore:', e);
   }
 }
 
-// confronta un'inquadratura con tutte le carte: restituisce la carta con più
-// punti in comune "geometricamente coerenti" (inliers) e il valore della seconda
-function matchCardImage(canvas) {
-  const rgba = cv.imread(canvas), gray = new cv.Mat();
-  cv.cvtColor(rgba, gray, cv.COLOR_RGBA2GRAY);
-  const kp = new cv.KeyPointVector(), des = new cv.Mat(), noMask = new cv.Mat();
-  imgRec.orb.detectAndCompute(gray, noMask, kp, des);
-  const perCard = PAGE_SIGNATURES.map(() => []);
-  if (des.rows > 0) {
-    const pairs = new cv.DMatchVectorVector();
-    imgRec.bf.knnMatch(des, imgRec.des, pairs, 2);
-    for (let i = 0; i < pairs.size(); i++) {
-      const pr = pairs.get(i);
-      if (pr.size() < 2) continue;
-      const a = pr.get(0), b = pr.get(1);
-      if (a.distance < 0.8 * b.distance) {
-        const q = kp.get(a.queryIdx).pt;
-        perCard[imgRec.owner[a.trainIdx]].push([imgRec.pts[a.trainIdx], [q.x, q.y]]);
-      }
-    }
-    pairs.delete();
-  }
-  const candidates = perCard.map((p, k) => [p.length, k]).sort((x, y) => y[0] - x[0]).slice(0, 3);
-  const scores = candidates.map(([n, k]) => {
-    if (n < 6) return [0, k];
-    const src = cv.matFromArray(n, 1, cv.CV_32FC2, perCard[k].flatMap(p => p[0]));
-    const dst = cv.matFromArray(n, 1, cv.CV_32FC2, perCard[k].flatMap(p => p[1]));
-    const inl = new cv.Mat();
-    const Hm = cv.findHomography(src, dst, cv.RANSAC, 6, inl);
-    let count = 0;
-    if (!Hm.empty()) for (let i = 0; i < inl.rows; i++) count += inl.data[i];
-    src.delete(); dst.delete(); inl.delete(); Hm.delete();
-    return [count, k];
-  }).sort((x, y) => y[0] - x[0]);
-  rgba.delete(); gray.delete(); kp.delete(); des.delete(); noMask.delete();
-  return { sig: PAGE_SIGNATURES[scores[0][1]], best: scores[0][0], second: scores[1] ? scores[1][0] : 0 };
+function scheduleImageRecognition() {
+  setTimeout(imageRecognitionTick, IMG_REC_INTERVAL);
 }
 
 function imageRecognitionTick() {
-  if (!camActive || video.videoWidth === 0 || imgRec.busy) return;
-  imgRec.busy = true;
-  try {
-    const w = IMG_FRAME_WIDTH, h = Math.round(IMG_FRAME_WIDTH * video.videoHeight / video.videoWidth);
-    imgRecCanvas.width = w; imgRecCanvas.height = h;
-    imgRecCtx.drawImage(video, 0, 0, w, h);
-    const img = matchCardImage(imgRecCanvas);
-    const color = matchPageSignature(imgRecCtx.getImageData(0, 0, w, h));
-    let sig = null;
-    if (img.best >= IMG_MIN_INLIERS && img.best >= IMG_MARGIN * img.second) sig = img.sig;
-    else if (color && color.id === img.sig.id && img.best >= IMG_WEAK_INLIERS) sig = color;
-    imgRec.last = { image: img.sig.id, inliers: img.best, second: img.second, color: color ? color.id : null, card: sig ? sig.id : null };
-    registerCardCandidate(sig, IMG_STABLE_HITS);
-  } catch (e) {
-    console.error(e);
-  } finally {
-    imgRec.busy = false;
+  const sequenceRunning = analyzing && !pageReactionEl.classList.contains('visible');
+  if (!camActive || video.videoWidth === 0 || sequenceRunning || document.hidden) {
+    scheduleImageRecognition();
+    return;
   }
+  const w = IMG_FRAME_WIDTH, h = Math.round(IMG_FRAME_WIDTH * video.videoHeight / video.videoWidth);
+  imgRecCanvas.width = w; imgRecCanvas.height = h;
+  imgRecCtx.drawImage(video, 0, 0, w, h);
+  const frame = imgRecCtx.getImageData(0, 0, w, h);
+  colorCheckCtx.drawImage(imgRecCanvas, 0, 0, colorCheckCanvas.width, colorCheckCanvas.height);
+  const color = matchPageSignature(colorCheckCtx.getImageData(0, 0, colorCheckCanvas.width, colorCheckCanvas.height));
+  imgRec.busy = true;
+  imgRec.worker.postMessage({ type: 'frame', frame, color: color ? color.id : null }, [frame.data.buffer]);
+}
+
+function handleImageResult(msg) {
+  imgRec.busy = false;
+  const imgSig = PAGE_SIGNATURES[msg.index];
+  let sig = null;
+  if (msg.best >= IMG_MIN_INLIERS && msg.best >= IMG_MARGIN * msg.second) sig = imgSig;
+  else if (msg.color === imgSig.id && msg.best >= IMG_WEAK_INLIERS) sig = imgSig;
+  imgRec.last = { image: imgSig.id, inliers: msg.best, second: msg.second, color: msg.color, card: sig ? sig.id : null, ms: Math.round(msg.ms) };
+  registerCardCandidate(sig, IMG_STABLE_HITS);
+  scheduleImageRecognition();
 }
 
 initImageRecognition();
