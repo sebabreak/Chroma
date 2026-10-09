@@ -20,7 +20,7 @@
 //  sola quando il telefono è online), ma pulisce la cache vecchia invece
 //  di lasciarla lì a occupare spazio inutilmente.
 // ══════════════════════════════════════════════════════════════════
-const CACHE_NAME = 'sovrainterpretazione-v31'; // ricorda di alzare questo numero ad ogni modifica di index.html/style.css/script.js (vedi commento sopra)
+const CACHE_NAME = 'sovrainterpretazione-v32'; // ricorda di alzare questo numero ad ogni modifica di index.html/style.css/script.js (vedi commento sopra)
 
 const ASSETS = [
   './',
@@ -32,6 +32,11 @@ const ASSETS = [
   './icons/icon-512.png',
   './qr-telefono.png',
   './chroma.png',
+  './chroma-lettering.png',
+  './fonts/inter-latin-400-normal.woff2',
+  './fonts/inter-latin-500-normal.woff2',
+  './fonts/inter-latin-600-normal.woff2',
+  './fonts/inter-latin-700-normal.woff2',
 ];
 
 // all'installazione, scarica e mette in cache tutti i file dell'interfaccia
