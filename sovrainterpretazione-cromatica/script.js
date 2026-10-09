@@ -28,6 +28,7 @@
 //  17. RICONOSCIMENTO CARTE/PAGINE .. riconosce i colori di una carta del mazzo e apre il popup: la carta scomposta in dati, la lettura di CHROMA, il contenuto vero
 //  18. QR INGRANDITO ................ un clic sul QR lo ingrandisce al centro, per mostrarlo a tutta la sala durante l'esposizione
 //  19. RICONOSCIMENTO PER IMMAGINE .. confronta l'inquadratura con le immagini delle 25 carte (OpenCV), insieme ai colori della sezione 17
+//  20. ARCHIVIO PALETTE ............. le ultime palette rilevate (a ogni giudizio + tasto "+"), pannello "le tue palette" (tasto "P") e card da salvare
 //
 //  MODIFICHE PIÙ COMUNI — dove intervenire:
 //  - Cambiare modello Ollama o i suoi parametri  → sezione 10, dentro fetchAIJudgment()
@@ -1090,6 +1091,7 @@ async function requestJudgment(silent=false) {
   try {
     const snapshot = captureObjectiveSnapshot();
     const txt = await fetchAIJudgment(snapshot);
+    archivePalette(snapshot, 'auto', txt);
     judgeCount++;
     hudJudge.textContent=String(judgeCount).padStart(3,'0');
     await showJudgment(txt);
@@ -1129,6 +1131,7 @@ async function runFullSequence() {
 
     judgeBtn.innerHTML='<span class="spin"></span>'; // resta "in caricamento" mentre l'AI risponde
     const text = await fetchAIJudgment(snapshot);
+    archivePalette(snapshot, 'giudizio', text);
     judgeCount++;
     hudJudge.textContent=String(judgeCount).padStart(3,'0');
 
@@ -1776,7 +1779,7 @@ const CARD_REF = Object.entries(CARD_COLORS).map(([name, hex]) => {
 // img: l'immagine della carta (cartella carte/), aggiunta subito sotto.
 const PAGE_SIGNATURES = [
   { id: 'intro', label: 'Introduzione', thesis: true, colors: ['rosso', 'arancio', 'verde', 'azzurro'],
-    text: 'Una webcam osserva. Non riconosce volti: misura soltanto luce. Da qui parte tutto, dal salto tra un numero e un giudizio.',
+    text: 'Una webcam osserva. Non riconosce volti: misura soltanto la luce. Da qui parte tutto, dal salto tra un numero e un giudizio.',
     topic: 'l\'introduzione di una tesi sul momento in cui un colore misurato riceve un significato' },
   { id: 'cap1', minShare: 0.05, label: 'Capitolo 1 — Il colore', thesis: true, colors: ['giallo', 'azzurro', 'arancio', 'rosso', 'lime', 'verde', 'magenta', 'viola'],
     text: 'Tre modi di guardarmi: come sistema, come esperienza dell\'occhio, come significato culturale. Nessuno basta da solo.',
@@ -1785,10 +1788,10 @@ const PAGE_SIGNATURES = [
     text: 'Newton mi ha fatto passare attraverso un prisma: la luce bianca conteneva già tutti i colori.',
     topic: 'Newton e la scomposizione della luce bianca con il prisma' },
   { id: 'goethe', label: 'Johann Wolfgang von Goethe', thesis: false, colors: ['arancio', 'lime', 'blu', 'magenta'],
-    text: 'Per Goethe nasco dall\'incontro tra luce e oscurità, e nel tuo occhio. Fissami a lungo e vedrai il mio opposto.',
+    text: 'Per Goethe nasco dall\'incontro tra luce, oscurità e il tuo occhio. Fissami a lungo, poi guarda una superficie bianca: vedrai il mio opposto.',
     topic: 'Goethe, la Teoria dei colori, luce e oscurità e le immagini residue' },
   { id: 'itten', label: 'Johannes Itten', thesis: false, colors: ['rosso', 'arancio', 'azzurro', 'magenta'],
-    text: 'Itten mi ha disposto su un cerchio di dodici parti e ha cercato le mie armonie con la geometria: coppie, triadi, quadrati.',
+    text: 'Itten mi ha disposto su un cerchio di dodici parti e ha cercato le mie armonie con la geometria: una linea per i complementari, un triangolo per le triadi, un quadrato per le tetradi.',
     topic: 'Itten, il cerchio cromatico in dodici parti e le armonie geometriche' },
   { id: 'albers', label: 'Josef Albers', thesis: false, colors: ['arancio', 'giallo', 'azzurro', 'viola'],
     text: 'Albers ha dimostrato che non mi vedi mai da solo: lo stesso grigio cambia a seconda di chi gli sta accanto.',
@@ -1815,10 +1818,10 @@ const PAGE_SIGNATURES = [
     text: 'Grau racconta un desiderio antico: entrare dentro l\'immagine. Dagli affreschi di Pompei ai panorami, fino al digitale.',
     topic: 'Oliver Grau, la storia dell\'immersione nell\'immagine' },
   { id: 'avolve', label: 'Christa Sommerer e Laurent Mignonneau', thesis: false, colors: ['azzurro', 'acqua'],
-    text: 'In A-Volve disegni una creatura su uno schermo e la vedi nuotare in una vasca d\'acqua insieme alle altre. La sua forma nasce dal tuo gesto.',
+    text: 'In A-Volve disegni una creatura su uno schermo e la vedi nuotare in una vasca d\'acqua insieme alle altre. La sua forma nasce dal tuo gesto, il suo colore lo decide il programma.',
     topic: 'A-Volve di Sommerer e Mignonneau, creature virtuali nate da un disegno' },
   { id: 'hoffman', label: 'Donald Hoffman', thesis: false, colors: ['giallo', 'magenta', 'azzurro', 'verde', 'acqua'],
-    text: 'Per Hoffman vedere è costruire: davanti allo stesso cubo di Necker, il tuo occhio sceglie ogni volta una forma diversa.',
+    text: 'Per Hoffman vedere è costruire: davanti al cubo di Necker il tuo sguardo passa da una forma all\'altra, anche se il disegno resta identico.',
     topic: 'Hoffman, l\'intelligenza visiva e il cubo di Necker' },
   { id: 'gregory', label: 'Richard Gregory', thesis: false, colors: ['azzurro', 'verde', 'arancio'],
     text: 'Per Gregory la visione non è una fotografia: il cervello interpreta ciò che l\'occhio riceve, e a volte si inganna.',
@@ -1833,7 +1836,7 @@ const PAGE_SIGNATURES = [
     text: 'In Room for one colour Eliasson mi riduce a un solo giallo: quando esci, il mondo ti sembra tendere al blu.',
     topic: 'Olafur Eliasson, la luce e la percezione condivisa' },
   { id: 'rokeby', label: 'David Rokeby', thesis: false, colors: ['viola', 'giallo', 'arancio', 'rosso'],
-    text: 'In Very Nervous System i movimenti del corpo diventano suono: il sistema osserva e risponde a modo suo.',
+    text: 'In Very Nervous System i movimenti del corpo diventano suono. In The Giver of Names il sistema guarda un oggetto e gli dà un nome: non rileva soltanto, interpreta.',
     topic: 'David Rokeby e i sistemi interattivi che trasformano il movimento in suono' },
   { id: 'lozano', label: 'Rafael Lozano-Hemmer', thesis: false, colors: ['blu', 'rosso', 'lime', 'verde'],
     text: 'In Pulse Index il battito e l\'impronta del pubblico diventano immagini: un dato del corpo trasformato in opera.',
@@ -2282,11 +2285,294 @@ document.addEventListener('keydown', e => {
   if (e.key === 'e' || e.key === 'E') exportResponseLog();
   if (e.key === 's' || e.key === 'S') toggleStats();
   if (e.key === 'R' && e.shiftKey) clearResponseLog();
+  if (e.key === 'p' || e.key === 'P') { if (paletteArchiveEl.classList.contains('visible')) closePaletteArchive(); else openPaletteArchive(); }
   if (e.key === 'Escape') {
     closeQrModal(); // innocuo anche se già chiuso
+    if (paletteCardEl.classList.contains('visible')) closePaletteCard();
+    else closePaletteArchive();
     // closePageReaction() invece NON va chiamata a vuoto: resetta anche
     // "analyzing" e riabilita GIUDICA, il che interromperebbe un giudizio
     // AI normale in corso se il popup pagina non è nemmeno aperto
     if (pageReactionEl.classList.contains('visible')) closePageReaction();
   }
 });
+
+// ── 20. ARCHIVIO PALETTE ────────────────────────────────────────────
+const paletteSaveBtn        = document.getElementById('paletteSaveBtn');
+const paletteArchiveBtn     = document.getElementById('paletteArchiveBtn');
+const paletteArchiveCount   = document.getElementById('paletteArchiveCount');
+const paletteArchiveEl      = document.getElementById('paletteArchive');
+const paletteArchiveBg      = document.getElementById('paletteArchiveBackdrop');
+const paletteArchiveList    = document.getElementById('paletteArchiveList');
+const paletteArchiveTotal   = document.getElementById('paletteArchiveTotal');
+const paletteArchiveMsg     = document.getElementById('paletteArchiveMsg');
+const paletteCardEl         = document.getElementById('paletteCard');
+const paletteCardBg         = document.getElementById('paletteCardBackdrop');
+const paletteCardImg        = document.getElementById('paletteCardImg');
+const paletteCardSave       = document.getElementById('paletteCardSave');
+const paletteCardShare      = document.getElementById('paletteCardShare');
+
+const PALETTE_ARCHIVE_KEY  = 'sovrainterpretazione-palette';
+const PALETTE_ARCHIVE_MAX  = 24;
+const PALETTE_SAME_DIST    = 60;
+const PALETTE_SITE         = 'sebabreak.github.io/Chroma/sovrainterpretazione-cromatica';
+const PALETTE_SOURCES      = { salvata: 'SALVATA DA TE', giudizio: 'DOPO UN GIUDIZIO', auto: 'OSSERVAZIONE AUTOMATICA' };
+
+let paletteArchive = [];
+try { paletteArchive = JSON.parse(localStorage.getItem(PALETTE_ARCHIVE_KEY)) || []; } catch { paletteArchive = []; }
+
+function savePaletteArchive() {
+  try { localStorage.setItem(PALETTE_ARCHIVE_KEY, JSON.stringify(paletteArchive)); } catch {}
+  const n = paletteArchive.length;
+  paletteArchiveCount.textContent = n ? String(n) : '';
+  paletteArchiveTotal.textContent = n ? `· ${n}` : '';
+}
+
+function samePalette(a, b) {
+  if (!a || !b || a.length !== b.length) return false;
+  return a.every((c, i) => colorDist(c, b[i]) < PALETTE_SAME_DIST);
+}
+
+function archivePalette(snapshot, source, text = '') {
+  if (!snapshot || !snapshot.hasPalette) return null;
+  const palette = snapshot.palette.map(c => c.map(v => Math.round(v)));
+  if (source === 'auto') {
+    const lastAuto = paletteArchive.find(p => p.source === 'auto');
+    if (lastAuto && samePalette(lastAuto.palette, palette)) return null;
+  }
+  const entry = {
+    id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+    time: Date.now(),
+    palette,
+    weights: snapshot.weights.map(w => (w == null ? null : Math.round(w * 1000) / 1000)),
+    source,
+    text: (text || '').trim(),
+  };
+  paletteArchive.unshift(entry);
+  while (paletteArchive.length > PALETTE_ARCHIVE_MAX) {
+    let drop = -1;
+    for (let i = paletteArchive.length - 1; i >= 0; i--) if (paletteArchive[i].source !== 'salvata') { drop = i; break; }
+    paletteArchive.splice(drop >= 0 ? drop : paletteArchive.length - 1, 1);
+  }
+  savePaletteArchive();
+  if (paletteArchiveEl.classList.contains('visible')) renderPaletteArchive();
+  return entry;
+}
+
+function paletteDate(time, withYear = true) {
+  const d = new Date(time);
+  const day = d.toLocaleDateString('it-IT', withYear ? { day: 'numeric', month: 'long', year: 'numeric' } : { day: 'numeric', month: 'short' });
+  const hour = d.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+  return { day, hour };
+}
+
+function renderPaletteArchive() {
+  paletteArchiveMsg.textContent = '';
+  if (!paletteArchive.length) {
+    paletteArchiveList.innerHTML = '<div class="pa-empty">Nessuna palette ancora. Premi <b>+</b> accanto ai colori per salvare quella che CHROMA sta vedendo, oppure premi GIUDICA: ogni giudizio viene archiviato da solo.</div>';
+    return;
+  }
+  paletteArchiveList.innerHTML = paletteArchive.map(p => {
+    const { day, hour } = paletteDate(p.time, false);
+    const total = p.weights.every(w => w != null) ? p.weights.reduce((a, b) => a + b, 0) || 1 : null;
+    const bar = p.palette.map((c, i) => {
+      const flex = total ? Math.max(p.weights[i] / total, 0.04) : 1;
+      return `<i style="flex:${flex};background:${toHex(c)}"></i>`;
+    }).join('');
+    const chips = p.palette.map(c => `<button class="pa-hex" type="button" data-hex="${toHex(c).toUpperCase()}"><i style="background:${toHex(c)}"></i>${toHex(c).toUpperCase()}</button>`).join('');
+    return `<div class="pa-item" data-id="${p.id}">
+      <div class="pa-meta"><span>${day} · ${hour}</span><span class="pa-src${p.source === 'salvata' ? ' mine' : ''}">${PALETTE_SOURCES[p.source] || ''}</span></div>
+      <div class="pa-bar">${bar}</div>
+      <div class="pa-hexes">${chips}</div>
+      ${p.text ? `<div class="pa-text">«${escapeHtmlPalette(p.text)}»</div>` : ''}
+      <div class="pa-actions"><button class="pa-card-btn" type="button" data-card="${p.id}">CREA LA CARD</button><button class="ghost-btn" type="button" data-remove="${p.id}">elimina</button></div>
+    </div>`;
+  }).join('');
+}
+
+function escapeHtmlPalette(s) {
+  return s.replace(/[&<>"]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
+}
+
+function openPaletteArchive() {
+  renderPaletteArchive();
+  paletteArchiveEl.scrollTop = 0;
+  paletteArchiveEl.classList.add('visible');
+  paletteArchiveBg.classList.add('visible');
+}
+function closePaletteArchive() {
+  paletteArchiveEl.classList.remove('visible');
+  paletteArchiveBg.classList.remove('visible');
+}
+
+async function copyPaletteHex(hex) {
+  let ok = false;
+  try { await navigator.clipboard.writeText(hex); ok = true; } catch {}
+  if (!ok) {
+    const ta = document.createElement('textarea');
+    ta.value = hex; ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select();
+    try { ok = document.execCommand('copy'); } catch {}
+    ta.remove();
+  }
+  paletteArchiveMsg.textContent = ok ? `${hex} copiato` : hex;
+}
+
+paletteArchiveList.addEventListener('click', e => {
+  const hexBtn = e.target.closest('[data-hex]');
+  if (hexBtn) { copyPaletteHex(hexBtn.dataset.hex); return; }
+  const cardBtn = e.target.closest('[data-card]');
+  if (cardBtn) { const p = paletteArchive.find(x => x.id === cardBtn.dataset.card); if (p) openPaletteCard(p); return; }
+  const rmBtn = e.target.closest('[data-remove]');
+  if (rmBtn) {
+    paletteArchive = paletteArchive.filter(x => x.id !== rmBtn.dataset.remove);
+    savePaletteArchive();
+    renderPaletteArchive();
+  }
+});
+
+const PALETTE_FONT = 'Inter, "Helvetica Neue", Arial, sans-serif';
+let paletteFontsReady = null;
+function loadPaletteFonts() {
+  if (!paletteFontsReady) {
+    const faces = [400, 500, 600, 700].map(w => new FontFace('Inter', `url(fonts/inter-latin-${w}-normal.woff2)`, { weight: String(w) }));
+    paletteFontsReady = Promise.all(faces.map(f => f.load().then(ff => document.fonts.add(ff)).catch(() => {})))
+      .then(() => Promise.all([
+        document.fonts.load('italic 400 40px "Cormorant Garamond"', 'Aa'),
+        document.fonts.load('italic 300 40px "Cormorant Garamond"', 'Aa'),
+      ]).catch(() => {}));
+  }
+  return paletteFontsReady;
+}
+
+function loadPaletteImage(src) {
+  return new Promise((ok, fail) => { const i = new Image(); i.onload = () => ok(i); i.onerror = fail; i.src = src; });
+}
+
+function paletteRoundRect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  if (ctx.roundRect) ctx.roundRect(x, y, w, h, r); else ctx.rect(x, y, w, h);
+}
+
+function paletteFit(ctx, text, max, size, weight, family = PALETTE_FONT, style = '') {
+  do ctx.font = `${style} ${weight} ${size--}px ${family}`.trim(); while (ctx.measureText(text).width > max && size > 18);
+}
+
+function paletteOnColor([r, g, b]) {
+  const lin = v => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); };
+  const L = 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
+  return L > 0.36 ? '#111111' : '#ffffff';
+}
+
+function paletteWrap(ctx, text, max) {
+  const words = text.split(/\s+/), lines = [];
+  let line = '';
+  for (const w of words) {
+    const test = line ? line + ' ' + w : w;
+    if (ctx.measureText(test).width > max && line) { lines.push(line); line = w; } else line = test;
+  }
+  if (line) lines.push(line);
+  return lines;
+}
+
+async function renderPaletteCard(p) {
+  await loadPaletteFonts();
+  const W = 1080, H = 1350, cx = W / 2;
+  const c = document.createElement('canvas'), ctx = c.getContext('2d');
+  c.width = W; c.height = H;
+  const bg = ctx.createLinearGradient(0, 0, 0, H);
+  bg.addColorStop(0, '#1b1830'); bg.addColorStop(1, '#0d0c14');
+  ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
+  const glow = ctx.createRadialGradient(W * .85, H * .08, 0, W * .85, H * .08, W * .8);
+  const [gr, gg, gb] = p.palette[0];
+  glow.addColorStop(0, `rgba(${gr},${gg},${gb},.38)`); glow.addColorStop(1, `rgba(${gr},${gg},${gb},0)`);
+  ctx.fillStyle = glow; ctx.fillRect(0, 0, W, H);
+  try { ctx.drawImage(await loadPaletteImage('chroma-lettering.png'), (W - 380) / 2, 70, 380, 100); } catch {}
+
+  const { day, hour } = paletteDate(p.time);
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#fff'; paletteFit(ctx, 'La mia palette', 900, 76, 700); ctx.fillText('La mia palette', cx, 280);
+  ctx.fillStyle = 'rgba(255,255,255,.6)'; ctx.font = `500 30px ${PALETTE_FONT}`;
+  ctx.fillText(`Rilevata da CHROMA · ${day}, ${hour}`, cx, 330);
+
+  ctx.font = 'italic 400 38px "Cormorant Garamond", serif';
+  const quote = p.text ? paletteWrap(ctx, `«${p.text}»`, 860).slice(0, 3) : [];
+  const top = 390, bottom = quote.length ? 1150 - quote.length * 46 : 1180, h = (bottom - top) / p.palette.length;
+  const total = p.weights.every(w => w != null) ? p.weights.reduce((a, b) => a + b, 0) || 1 : null;
+  p.palette.forEach((rgb, i) => {
+    const y = top + i * h, on = paletteOnColor(rgb), hex = toHex(rgb).toUpperCase();
+    ctx.fillStyle = toHex(rgb); paletteRoundRect(ctx, 90, y, 900, h - 14, 26); ctx.fill();
+    ctx.fillStyle = on; ctx.textBaseline = 'middle';
+    const name = colorName(rgb);
+    const label = name.charAt(0).toUpperCase() + name.slice(1);
+    ctx.textAlign = 'left'; ctx.font = `700 ${Math.min(46, h * .34)}px ${PALETTE_FONT}`;
+    ctx.fillText(label, 130, y + (h - 14) / 2 + 2);
+    if (total) {
+      const lw = ctx.measureText(label).width;
+      ctx.globalAlpha = .7; ctx.font = `500 ${Math.min(32, h * .26)}px ${PALETTE_FONT}`;
+      ctx.fillText(`${Math.round(p.weights[i] / total * 100)}%`, 130 + lw + 22, y + (h - 14) / 2 + 3);
+      ctx.globalAlpha = 1;
+    }
+    ctx.textAlign = 'right'; ctx.font = `600 ${Math.min(38, h * .3)}px ui-monospace, Menlo, Consolas, monospace`;
+    ctx.fillText(hex, 950, y + (h - 14) / 2 + 2);
+  });
+  ctx.textBaseline = 'alphabetic';
+  if (quote.length) {
+    ctx.textAlign = 'center'; ctx.fillStyle = '#cfc9ff'; ctx.font = 'italic 400 38px "Cormorant Garamond", serif';
+    quote.forEach((l, i) => ctx.fillText(i === 2 && paletteWrap(ctx, `«${p.text}»`, 860).length > 3 ? l + '…' : l, cx, bottom + 52 + i * 46));
+    ctx.fillStyle = 'rgba(255,255,255,.45)'; ctx.font = `500 22px ${PALETTE_FONT}`;
+    ctx.fillText('LA LETTURA DI CHROMA', cx, bottom + 52 + quote.length * 46 + 14);
+  }
+  ctx.textAlign = 'center'; ctx.fillStyle = 'rgba(255,255,255,.55)'; ctx.font = `500 28px ${PALETTE_FONT}`;
+  ctx.fillText(PALETTE_SITE, cx, H - 60);
+  return c;
+}
+
+let paletteCardCanvas = null;
+async function openPaletteCard(p) {
+  paletteCardEl.classList.add('loading');
+  paletteCardEl.classList.add('visible');
+  paletteCardBg.classList.add('visible');
+  paletteCardImg.removeAttribute('src');
+  const canvas = await renderPaletteCard(p);
+  paletteCardCanvas = canvas;
+  const d = new Date(p.time), pad = n => String(n).padStart(2, '0');
+  const filename = `chroma-palette-${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}.png`;
+  const url = canvas.toDataURL('image/png');
+  paletteCardImg.src = url;
+  paletteCardSave.href = url;
+  paletteCardSave.download = filename;
+  paletteCardShare.hidden = !(navigator.canShare && navigator.canShare({ files: [new File([new Blob()], filename, { type: 'image/png' })] }));
+  paletteCardShare.onclick = () => canvas.toBlob(async blob => {
+    const file = new File([blob], filename, { type: 'image/png' });
+    if (navigator.canShare?.({ files: [file] })) { try { await navigator.share({ files: [file], title: 'La mia palette CHROMA' }); } catch {} }
+    else paletteCardSave.click();
+  });
+  paletteCardEl.classList.remove('loading');
+}
+function closePaletteCard() {
+  paletteCardEl.classList.remove('visible');
+  paletteCardBg.classList.remove('visible');
+}
+
+paletteSaveBtn.addEventListener('click', () => {
+  const entry = archivePalette(captureObjectiveSnapshot(), 'salvata');
+  if (!entry) { showDebug('Accendi la webcam: CHROMA non vede ancora nessun colore da salvare.', 4000); return; }
+  paletteSaveBtn.classList.add('saved');
+  setTimeout(() => paletteSaveBtn.classList.remove('saved'), 900);
+  openPaletteCard(entry);
+});
+paletteArchiveBtn.addEventListener('click', openPaletteArchive);
+document.getElementById('paletteArchiveClose').addEventListener('click', closePaletteArchive);
+paletteArchiveBg.addEventListener('click', closePaletteArchive);
+document.getElementById('paletteCardClose').addEventListener('click', closePaletteCard);
+paletteCardBg.addEventListener('click', closePaletteCard);
+document.getElementById('paletteArchiveClear').addEventListener('click', () => {
+  if (!paletteArchive.length) return;
+  if (!confirm(`Cancellare le ${paletteArchive.length} palette salvate su questo dispositivo?`)) return;
+  paletteArchive = [];
+  savePaletteArchive();
+  renderPaletteArchive();
+});
+
+savePaletteArchive();
