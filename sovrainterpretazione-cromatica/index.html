@@ -62,6 +62,8 @@
     <div class="swatch" data-index="3"></div>
     <div class="swatch" data-index="4"></div>
     <div class="swatch auto" title="Torna alla scelta automatica">AUTO</div>
+    <button class="pal-tool" id="paletteSaveBtn" type="button" title="Salva questa palette">+</button>
+    <button class="pal-tool" id="paletteArchiveBtn" type="button" title="Le tue palette">▤<span id="paletteArchiveCount"></span></button>
   </div>
 
   <!-- CHROMA al centro: il personaggio con la sua aura cromatica che pulsa, il "cuore" dell'installazione -->
@@ -171,6 +173,28 @@
        dai colori) e #prCard (che cosa racconta davvero la carta). -->
   <!-- riepilogo del registro risposte, visibile solo premendo "S" (script.js, sezione 16) -->
   <div id="statsPanel"></div>
+  <div id="paletteArchiveBackdrop"></div>
+  <div id="paletteArchive" role="dialog" aria-label="Le tue palette">
+    <div class="pa-head">
+      <div class="data-title">LE TUE PALETTE <span id="paletteArchiveTotal"></span></div>
+      <button id="paletteArchiveClose" class="ghost-btn" type="button">chiudi ✕</button>
+    </div>
+    <div class="pa-note">Le ultime palette rilevate da CHROMA, salvate su questo dispositivo. Tocca un colore per copiarne il codice.</div>
+    <div id="paletteArchiveList"></div>
+    <div class="pa-foot">
+      <span id="paletteArchiveMsg"></span>
+      <button id="paletteArchiveClear" class="ghost-btn" type="button">svuota</button>
+    </div>
+  </div>
+  <div id="paletteCardBackdrop"></div>
+  <div id="paletteCard" role="dialog" aria-label="Card della palette">
+    <img id="paletteCardImg" alt="Card della palette">
+    <div class="pc-row">
+      <button id="paletteCardShare" type="button">CONDIVIDI</button>
+      <a id="paletteCardSave">SALVA</a>
+    </div>
+    <button id="paletteCardClose" class="ghost-btn" type="button">chiudi</button>
+  </div>
 
   <div id="pageReactionBackdrop"></div>
   <div id="pageReaction">
