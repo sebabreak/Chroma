@@ -1,18 +1,18 @@
 // Service worker che decifra: con il codice salvato nel browser, ogni richiesta della app
 // viene servita dal blocco cifrato corrispondente in _/ (anche offline, dalla cache).
-const SCOPE = new URL('./', self.location).pathname, BLOCCHI = 'cifra-blocchi', MAPPE = 'cifra-mappe';
+const SCOPE = new URL('./', self.location).pathname, ID = new URL('../', self.location).pathname, BLOCCHI = 'cifra-blocchi', MAPPE = 'cifra-mappe';
 let mappa = null;
 
 const chiave = () => new Promise(ok => {
   const r = indexedDB.open('cifra', 1);
   r.onupgradeneeded = () => r.result.createObjectStore('k');
   r.onerror = () => ok(null);
-  r.onsuccess = () => { const g = r.result.transaction('k').objectStore('k').get('k'); g.onsuccess = () => ok(g.result || null); g.onerror = () => ok(null); };
+  r.onsuccess = () => { const g = r.result.transaction('k').objectStore('k').get(ID); g.onsuccess = () => ok(g.result || null); g.onerror = () => ok(null); };
 });
 const togliChiave = () => new Promise(ok => {
   const r = indexedDB.open('cifra', 1);
   r.onupgradeneeded = () => r.result.createObjectStore('k');
-  r.onsuccess = () => { const t = r.result.transaction('k', 'readwrite'); t.objectStore('k').delete('k'); t.oncomplete = ok; t.onerror = ok; };
+  r.onsuccess = () => { const t = r.result.transaction('k', 'readwrite'); t.objectStore('k').delete(ID); t.oncomplete = ok; t.onerror = ok; };
   r.onerror = ok;
 });
 const apri = async (k, buf) => crypto.subtle.decrypt({ name: 'AES-GCM', iv: buf.slice(0, 12) }, k, buf.slice(12));

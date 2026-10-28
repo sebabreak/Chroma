@@ -36,47 +36,53 @@
   <a id="r" hidden>Non hai il codice? Chiedilo qui</a>
 </main>
 <script>
-const C = {"root":"./","salt":"y/8tt/HuEJkZnb4SvG1ozw==","iter":600000,"titolo":"CHROMA","ritorno":"https://profili-cv.github.io/sebastyan-buryas/#laboratorio"};
-const root = new URL(C.root, location.href), f = document.getElementById('f'), err = document.getElementById('err'), b = document.getElementById('b');
+const C = {"root":"./","progetto":"../","salt":"y/8tt/HuEJkZnb4SvG1ozw==","iter":600000,"titolo":"CHROMA","ritorno":"https://profili-cv.github.io/sebastyan-buryas/#laboratorio"};
+const root = new URL(C.root, location.href), id = new URL(C.progetto, location.href).pathname, f = document.getElementById('f'), err = document.getElementById('err'), b = document.getElementById('b');
 if (C.ritorno) { const r = document.getElementById('r'); r.href = C.ritorno; r.hidden = false; }
 const db = () => new Promise((ok, ko) => { const r = indexedDB.open('cifra', 1); r.onupgradeneeded = () => r.result.createObjectStore('k'); r.onsuccess = () => ok(r.result); r.onerror = () => ko(r.error); });
-const leggi = async () => { const d = await db(); return new Promise(ok => { const g = d.transaction('k').objectStore('k').get('k'); g.onsuccess = () => ok(g.result || null); g.onerror = () => ok(null); }); };
-const salva = async k => { const d = await db(); return new Promise((ok, ko) => { const t = d.transaction('k', 'readwrite'); t.objectStore('k').put(k, 'k'); t.oncomplete = ok; t.onerror = () => ko(t.error); }); };
+const leggi = async () => { const d = await db(); return new Promise(ok => { const g = d.transaction('k').objectStore('k').get(id); g.onsuccess = () => ok(g.result || null); g.onerror = () => ok(null); }); };
+const salva = async k => { const d = await db(); return new Promise((ok, ko) => { const t = d.transaction('k', 'readwrite'); t.objectStore('k').put(k, id); t.oncomplete = ok; t.onerror = () => ko(t.error); }); };
 const b64 = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
 
 async function avvia() {
   // se il service worker c'è già ma la pagina è ancora questa, non ricaricare all'infinito
-  const ora = Date.now(), prima = +sessionStorage.getItem('cifra-avvio') || 0;
+  const ora = Date.now(), prima = +sessionStorage.getItem('cifra-avvio' + location.pathname) || 0;
   if (ora - prima < 8000) throw new Error('loop');
-  sessionStorage.setItem('cifra-avvio', ora);
+  sessionStorage.setItem('cifra-avvio' + location.pathname, ora);
   await navigator.serviceWorker.register(new URL('sw.js', root), { scope: root.pathname, updateViaCache: 'none' });
   if (navigator.serviceWorker.controller) return location.reload();
   navigator.serviceWorker.addEventListener('controllerchange', () => location.reload());
 }
 
-f.onsubmit = async e => {
-  e.preventDefault(); err.textContent = ''; b.disabled = true; b.textContent = 'Controllo…';
+f.onsubmit = e => { e.preventDefault(); prova(document.getElementById('c').value.trim()); };
+async function prova(codice) {
+  err.textContent = ''; b.disabled = true; b.textContent = 'Controllo…';
   try {
-    const base = await crypto.subtle.importKey('raw', new TextEncoder().encode(document.getElementById('c').value.trim()), 'PBKDF2', false, ['deriveKey']);
+    const base = await crypto.subtle.importKey('raw', new TextEncoder().encode(codice), 'PBKDF2', false, ['deriveKey']);
     const k = await crypto.subtle.deriveKey({ name: 'PBKDF2', salt: b64(C.salt), iterations: C.iter, hash: 'SHA-256' }, base, { name: 'AES-GCM', length: 256 }, false, ['decrypt']);
     const m = await (await fetch(new URL('_/m', root), { cache: 'no-cache' })).arrayBuffer();
     try { await crypto.subtle.decrypt({ name: 'AES-GCM', iv: m.slice(0, 12) }, k, m.slice(12)); }
     catch { throw new Error('codice'); }
     await salva(k);
-    sessionStorage.removeItem('cifra-avvio');
+    try { localStorage.setItem('cifra-codice', codice); } catch {}
+    sessionStorage.removeItem('cifra-avvio' + location.pathname);
     b.textContent = 'Apro…';
     await avvia();
   } catch (x) {
     err.textContent = x.message === 'codice' ? 'Codice non valido.' : 'Non riesco ad aprirlo adesso. Controlla la connessione e riprova.';
-    b.disabled = false; b.textContent = 'Apri';
+    b.disabled = false; b.textContent = 'Apri'; f.hidden = false;
   }
-};
+}
 
 (async () => {
   if (!('serviceWorker' in navigator) || !window.crypto?.subtle || !window.indexedDB) {
     err.textContent = 'Questo browser non può aprire il progetto. Prova con Chrome o Safari, fuori dalla navigazione privata.';
     f.hidden = false; b.disabled = true; return;
   }
+  addEventListener('hashchange', () => location.reload()); // link magico aperto su questa stessa pagina
+  // link magico: #k=<codice>, tolto subito dalla barra degli indirizzi
+  const h = new URLSearchParams(location.hash.slice(1)).get('k');
+  if (h) { history.replaceState(null, '', location.pathname + location.search); return prova(h); }
   try { if (await leggi()) return await avvia(); } catch {}
   f.hidden = false; document.getElementById('c').focus();
 })();
